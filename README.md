@@ -8,6 +8,11 @@ MVP that fetches normalized congressional securities disclosures from [Bargo](ht
 - Supabase (Postgres + Edge Functions + Cron)
 - Bargo Congress Trades API
 
+## Features
+
+- **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination
+- **Trending** — tickers ranked by congressional disclosure activity (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
+
 ## Setup
 
 1. Copy `.env.example` to `.env.local` and fill in Supabase + optional `BARGO_API_KEY`.

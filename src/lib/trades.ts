@@ -138,7 +138,7 @@ export async function fetchTrades(
   };
 }
 
-async function fetchSyncState(): Promise<SyncState | null> {
+export async function fetchSyncState(): Promise<SyncState | null> {
   // congress_sync_state has RLS with no anon read policy; use service role server-side.
   if (!hasServiceSupabaseConfig()) {
     return null;

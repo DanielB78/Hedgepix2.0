@@ -122,7 +122,12 @@ Deno.serve(async (req) => {
 
   try {
     const bargo = await fetchBargoTrades(page, limit);
-    const rows = await Promise.all(bargo.page.trades.map(toUpsertRow));
+    const deduped = new Map<string, Awaited<ReturnType<typeof toUpsertRow>>>();
+    for (const trade of bargo.page.trades) {
+      const row = await toUpsertRow(trade);
+      deduped.set(row.source_hash, row);
+    }
+    const rows = [...deduped.values()];
     const now = new Date().toISOString();
 
     let upserted = 0;
@@ -145,7 +150,7 @@ Deno.serve(async (req) => {
       provider: "bargo",
       last_attempt_at: attemptedAt,
       last_success_at: now,
-      last_rows_received: rows.length,
+      last_rows_received: bargo.page.trades.length,
       last_rows_upserted: upserted,
       last_error: null,
     };
@@ -166,7 +171,7 @@ Deno.serve(async (req) => {
       .from("congress_sync_runs")
       .update({
         status: "success",
-        rows_received: rows.length,
+        rows_received: bargo.page.trades.length,
         rows_upserted: upserted,
         rate_limit_requests_remaining: bargo.rateLimitRequestsRemaining,
         rate_limit_rows_remaining: bargo.rateLimitRowsRemaining,
@@ -179,7 +184,8 @@ Deno.serve(async (req) => {
       mode,
       page,
       limit,
-      rows_received: rows.length,
+      rows_received: bargo.page.trades.length,
+      rows_unique: rows.length,
       rows_upserted: upserted,
       rate_limit_requests_remaining: bargo.rateLimitRequestsRemaining,
       rate_limit_rows_remaining: bargo.rateLimitRowsRemaining,

@@ -44,3 +44,21 @@ export type SyncState = {
   last_rows_upserted: number | null;
   last_error: string | null;
 };
+
+export type TrendingMode = "all" | "buys" | "sales";
+export type TrendingPeriodDays = 7 | 30 | 90;
+
+export type TrendingFilters = {
+  mode: TrendingMode;
+  periodDays: TrendingPeriodDays;
+};
+
+export type TrendingTicker = {
+  ticker: string;
+  asset: string | null;
+  totalTrades: number;
+  buyCount: number;
+  sellCount: number;
+  uniqueMembers: number;
+  latestDisclosure: string | null;
+};
