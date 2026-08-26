@@ -1,0 +1,14 @@
+# A string used to distinguish different Supabase projects on the same host. Defaults to the working
+# directory name when running `supabase init`.
+project_id = "congress-trade-monitor"
+
+[api]
+enabled = true
+port = 54321
+
+[db]
+port = 54322
+major_version = 15
+
+[functions.sync-congress-trades]
+verify_jwt = true
