@@ -36,6 +36,19 @@ MVP that fetches normalized congressional securities disclosures from [Bargo](ht
    npm run dev
    ```
 
+## Deploy (Vercel)
+
+1. Framework Preset: **Next.js**
+2. Root Directory: repository root (blank)
+3. Output Directory: **leave blank** (do not set `.next` or `out`)
+4. Build Command: `next build` (default)
+5. Environment variables (Project → Settings → Environment Variables):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+6. After deploy, open the **Production** domain (`*.vercel.app`), not a protected preview deployment URL.
+7. If you still see Vercel `NOT_FOUND`, open Deployments → latest → **Promote to Production**, and confirm Domains lists the production hostname.
+
 ## Docs
 
 See `docs/` for the schema, implementation plan, and Cursor master prompt. Specs `00`, `01`, `03`, and `04` were not included in the initial upload.
