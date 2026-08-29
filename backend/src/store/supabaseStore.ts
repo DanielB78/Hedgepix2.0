@@ -62,6 +62,23 @@ export function toDbRow(trade: CongressTrade, nowIso: string): DbTradeRow {
 
 const UPSERT_CHUNK = 200;
 
+let extendedColumns: boolean | null = null;
+
+async function hasExtendedColumns(supabase: SupabaseClient): Promise<boolean> {
+  if (extendedColumns !== null) return extendedColumns;
+  const { error } = await supabase
+    .from("congress_trades")
+    .select("asset_type, owner")
+    .limit(1);
+  extendedColumns = !error;
+  if (!extendedColumns) {
+    console.warn(
+      "[store] asset_type/owner columns missing — upserting without them. Apply supabase/migrations/20260829150000_local_pipeline_columns.sql when convenient.",
+    );
+  }
+  return extendedColumns;
+}
+
 export async function upsertTrades(
   supabase: SupabaseClient,
   trades: CongressTrade[],
@@ -70,8 +87,23 @@ export async function upsertTrades(
     return { fetched: 0, newCount: 0, updatedCount: 0, errors: 0 };
   }
 
+  const includeExtended = await hasExtendedColumns(supabase);
   const nowIso = new Date().toISOString();
-  const rows = trades.map((t) => toDbRow(t, nowIso));
+
+  // Deduplicate within the batch — Postgres rejects ON CONFLICT when the
+  // same source_hash appears twice in a single INSERT.
+  const byHash = new Map<string, ReturnType<typeof toDbRow> | Omit<ReturnType<typeof toDbRow>, "asset_type" | "owner">>();
+  for (const trade of trades) {
+    const row = toDbRow(trade, nowIso);
+    const payload = includeExtended
+      ? row
+      : (() => {
+          const { asset_type: _a, owner: _o, ...rest } = row;
+          return rest;
+        })();
+    byHash.set(payload.source_hash, payload);
+  }
+  const rows = [...byHash.values()];
   const hashes = rows.map((r) => r.source_hash);
 
   const existing = new Set<string>();
