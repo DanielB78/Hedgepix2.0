@@ -1,12 +1,15 @@
 # Congress Trade Monitor
 
-MVP that fetches normalized congressional securities disclosures from [Bargo](https://www.bargo.ai/free-apis/congress), stores them in Supabase, syncs hourly via a Supabase Edge Function + Cron, and displays them in a Next.js frontend.
+MVP that fetches House and Senate STOCK Act securities disclosures from official
+U.S. government sources (via a local manual updater derived from
+[congress-trading-pipeline](https://github.com/seralifatih/congress-trading-pipeline)),
+stores them in Supabase, and displays them in a Next.js frontend.
 
 ## Stack
 
 - Next.js (App Router, TypeScript)
-- Supabase (Postgres + Edge Functions + Cron)
-- Bargo Congress Trades API
+- Supabase (Postgres)
+- Local Node.js backend updater (`backend/`)
 
 ## Features
 
@@ -15,26 +18,49 @@ MVP that fetches normalized congressional securities disclosures from [Bargo](ht
 
 ## Setup
 
-1. Copy `.env.example` to `.env.local` and fill in Supabase + optional `BARGO_API_KEY`.
-2. In the Supabase SQL Editor, run `docs/02_DATABASE_SCHEMA.sql` (also at `supabase/migrations/20260326120000_congress_trade_monitor.sql`).
-3. Deploy the Edge Function:
+1. Copy `.env.example` to `.env.local` and fill in public Supabase keys (and optional `SUPABASE_SERVICE_ROLE_KEY` for sync-status display).
+2. In the Supabase SQL Editor, run `docs/02_DATABASE_SCHEMA.sql`, then apply `supabase/migrations/20260829150000_local_pipeline_columns.sql`.
+3. Configure the backend updater:
    ```bash
-   npx supabase functions deploy sync-congress-trades
+   cd backend
+   cp .env.example .env
+   # set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+   npm install
    ```
-4. Set Edge Function secrets: `SUPABASE_SERVICE_ROLE_KEY`, optional `BARGO_API_KEY`.
-5. Manually invoke sync once before enabling Cron:
-   ```bash
-   curl -X POST "$NEXT_PUBLIC_SUPABASE_URL/functions/v1/sync-congress-trades" \
-     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "Content-Type: application/json" \
-     -d '{"mode":"manual"}'
-   ```
-6. After a successful manual sync, apply `supabase/cron_hourly_sync.sql` (replace project ref and service role key).
-7. Run the frontend:
+4. Run the frontend:
    ```bash
    npm install
    npm run dev
    ```
+
+## Updating congressional trade data
+
+The updater fetches the most recent House and Senate disclosures,
+deduplicates them, and writes new transactions to Supabase.
+
+The website reads directly from Supabase, so no frontend redeployment
+is required after an update.
+
+### Option 1 — Windows
+
+Double-click:
+
+```text
+update.bat
+```
+
+### Option 2 — Terminal
+
+```bash
+cd backend
+npm run update-data
+```
+
+Or from the repo root:
+
+```bash
+npm run update-data
+```
 
 ## Deploy (Vercel)
 
@@ -45,14 +71,15 @@ MVP that fetches normalized congressional securities disclosures from [Bargo](ht
 5. Environment variables (Project → Settings → Environment Variables):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only; for last-sync display)
 6. After deploy, open the **Production** domain (`*.vercel.app`), not a protected preview deployment URL.
-7. If you still see Vercel `NOT_FOUND`, open Deployments → latest → **Promote to Production**, and confirm Domains lists the production hostname.
+
+Do **not** put `SUPABASE_SERVICE_ROLE_KEY` in any `NEXT_PUBLIC_*` variable.
 
 ## Docs
 
-See `docs/` for the schema, implementation plan, and Cursor master prompt. Specs `00`, `01`, `03`, and `04` were not included in the initial upload.
+See `docs/` for the schema and historical planning notes. Third-party attribution: `THIRD_PARTY_NOTICES.md`.
 
 ## Scope
 
-No auth, notifications, AI, market-price APIs, portfolios, PDF scraping, queues, or Redis.
+No auth, notifications, AI, market-price APIs, portfolios, OCR, always-on backend server, or scheduled cloud cron in this MVP. Scheduling can later wrap `npm run update-data` on a VPS.

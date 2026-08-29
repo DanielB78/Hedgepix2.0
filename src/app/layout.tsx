@@ -16,7 +16,7 @@ const sans = IBM_Plex_Sans({
 export const metadata: Metadata = {
   title: "Congress Trade Monitor",
   description:
-    "Recent U.S. House and Senate STOCK Act securities disclosures, stored from Bargo.",
+    "Recent U.S. House and Senate STOCK Act securities disclosures from official government sources.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
