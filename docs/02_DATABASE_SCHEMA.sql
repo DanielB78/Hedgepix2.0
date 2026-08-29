@@ -11,6 +11,7 @@ create table if not exists public.congress_trades (
   state text,
   ticker text,
   asset text,
+  asset_type text,
   transaction_type text check (
     transaction_type in ('purchase', 'sale', 'exchange')
     or transaction_type is null
@@ -22,6 +23,11 @@ create table if not exists public.congress_trades (
 
   transaction_date date,
   disclosure_date date,
+
+  owner text check (
+    owner in ('self', 'joint', 'spouse', 'child')
+    or owner is null
+  ),
 
   est_price numeric,
   recent_price numeric,
@@ -66,13 +72,13 @@ create table if not exists public.congress_sync_state (
 );
 
 insert into public.congress_sync_state (provider)
-values ('bargo')
+values ('local-pipeline')
 on conflict (provider) do nothing;
 
 create table if not exists public.congress_sync_runs (
   id uuid primary key default gen_random_uuid(),
-  provider text not null default 'bargo',
-  mode text not null default 'hourly'
+  provider text not null default 'local-pipeline',
+  mode text not null default 'manual'
     check (mode in ('hourly', 'backfill', 'manual')),
   status text not null
     check (status in ('running', 'success', 'failed')),
@@ -131,12 +137,14 @@ select
   state,
   ticker,
   asset,
+  asset_type,
   transaction_type,
   amount_low,
   amount_high,
   amount_range,
   transaction_date,
   disclosure_date,
+  owner,
   est_price,
   recent_price,
   recent_price_date,

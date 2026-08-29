@@ -56,9 +56,13 @@ export type TrendingFilters = {
 export type TrendingTicker = {
   ticker: string;
   asset: string | null;
-  totalTrades: number;
-  buyCount: number;
-  sellCount: number;
+  /** Distinct members with any matching activity (primary ranking metric). */
   uniqueMembers: number;
+  /** Distinct members with at least one purchase. */
+  buyMembers: number;
+  /** Distinct members with at least one sale. */
+  sellMembers: number;
+  /** Matching disclosure/transaction rows (secondary). */
+  totalTrades: number;
   latestDisclosure: string | null;
 };

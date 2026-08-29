@@ -150,7 +150,7 @@ export async function fetchSyncState(): Promise<SyncState | null> {
     .select(
       "provider, last_attempt_at, last_success_at, latest_seen_disclosure_date, latest_seen_transaction_date, last_rows_received, last_rows_upserted, last_error",
     )
-    .eq("provider", "bargo")
+    .eq("provider", "local-pipeline")
     .maybeSingle();
 
   if (error) {

@@ -119,14 +119,23 @@ export async function fetchTrending(
   };
 }
 
+function memberIdentity(row: RawTradeRow): string | null {
+  const slug = row.member_slug?.trim();
+  return slug || null;
+}
+
+/**
+ * Rank tickers by breadth of congressional participation:
+ * distinct members first, then disclosure volume as a tie-breaker.
+ */
 export function rankTrending(rows: RawTradeRow[]): TrendingTicker[] {
   type Acc = {
     ticker: string;
     asset: string | null;
     totalTrades: number;
-    buyCount: number;
-    sellCount: number;
     members: Set<string>;
+    buyMembers: Set<string>;
+    sellMembers: Set<string>;
     latestDisclosure: string | null;
   };
 
@@ -136,24 +145,28 @@ export function rankTrending(rows: RawTradeRow[]): TrendingTicker[] {
     const ticker = row.ticker?.trim();
     if (!ticker) continue;
 
+    const member = memberIdentity(row);
+
     let acc = byTicker.get(ticker);
     if (!acc) {
       acc = {
         ticker,
         asset: row.asset,
         totalTrades: 0,
-        buyCount: 0,
-        sellCount: 0,
         members: new Set(),
+        buyMembers: new Set(),
+        sellMembers: new Set(),
         latestDisclosure: null,
       };
       byTicker.set(ticker, acc);
     }
 
     acc.totalTrades += 1;
-    if (row.transaction_type === "purchase") acc.buyCount += 1;
-    if (row.transaction_type === "sale") acc.sellCount += 1;
-    if (row.member_slug) acc.members.add(row.member_slug);
+    if (member) {
+      acc.members.add(member);
+      if (row.transaction_type === "purchase") acc.buyMembers.add(member);
+      if (row.transaction_type === "sale") acc.sellMembers.add(member);
+    }
     if (row.asset && !acc.asset) acc.asset = row.asset;
     if (
       row.disclosure_date &&
@@ -167,17 +180,17 @@ export function rankTrending(rows: RawTradeRow[]): TrendingTicker[] {
     .map((acc) => ({
       ticker: acc.ticker,
       asset: acc.asset,
-      totalTrades: acc.totalTrades,
-      buyCount: acc.buyCount,
-      sellCount: acc.sellCount,
       uniqueMembers: acc.members.size,
+      buyMembers: acc.buyMembers.size,
+      sellMembers: acc.sellMembers.size,
+      totalTrades: acc.totalTrades,
       latestDisclosure: acc.latestDisclosure,
     }))
     .sort((a, b) => {
-      if (b.totalTrades !== a.totalTrades) return b.totalTrades - a.totalTrades;
       if (b.uniqueMembers !== a.uniqueMembers) {
         return b.uniqueMembers - a.uniqueMembers;
       }
+      if (b.totalTrades !== a.totalTrades) return b.totalTrades - a.totalTrades;
       const aDate = a.latestDisclosure ?? "";
       const bDate = b.latestDisclosure ?? "";
       if (bDate !== aDate) return bDate.localeCompare(aDate);

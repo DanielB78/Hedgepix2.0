@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync": "node --env-file=.env.local scripts/sync-congress-trades.mjs"
+    "update-data": "npm run update-data --prefix backend"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

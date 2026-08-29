@@ -47,11 +47,10 @@ export default async function TrendingPage({ searchParams }: PageProps) {
             Trending — {periodLabel(filters.periodDays)}
           </h2>
           <p className="max-w-3xl text-sm text-stone-700">
-            Ranked by congressional trade disclosures that became public in this
-            window (using disclosure date, not transaction date). A ticker ranks
-            higher when more members of Congress have recently disclosed
-            transactions involving it — not because of stock-market trading
-            volume or price moves.
+            Ranked by how many distinct members of Congress disclosed activity
+            in each stock during this window (using disclosure date, not
+            transaction date). One politician making many trades does not
+            outrank several members each trading once.
           </p>
           <p className="text-sm text-stone-600">
             Showing <span className="font-medium text-stone-800">{modeLabel}</span>

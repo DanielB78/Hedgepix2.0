@@ -28,22 +28,22 @@ export function SiteHeader({ syncState }: Props) {
           Congress Trade Monitor
         </h1>
         <p className="max-w-2xl text-base text-stone-700">
-          Recent House and Senate STOCK Act securities disclosures. Data is
-          ingested from Bargo and retained locally so history remains available
-          after it leaves Bargo&apos;s rolling window.
+          Recent House and Senate STOCK Act securities disclosures, fetched from
+          official U.S. government disclosure systems and stored in Supabase.
         </p>
         <p className="rounded border border-teal-800/20 bg-teal-50 px-3 py-2 text-sm text-teal-950">
-          Trade data provided by{" "}
+          Independent, unofficial monitor of public STOCK Act filings — not an
+          official congressional API and not investment advice. House and Senate
+          ingestion is derived from the open-source{" "}
           <a
-            href="https://www.bargo.ai/free-apis/congress"
+            href="https://github.com/seralifatih/congress-trading-pipeline"
             target="_blank"
             rel="noopener noreferrer"
             className="font-semibold underline"
           >
-            Bargo
+            congress-trading-pipeline
           </a>
-          . Independent, unofficial normalized STOCK Act filings — not an
-          official congressional API and not investment advice.
+          .
         </p>
       </header>
 
