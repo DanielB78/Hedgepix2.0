@@ -1,23 +1,40 @@
 -- Add asset_type and owner columns for local congress-trading-pipeline ingestion.
--- Safe / additive: does not destroy existing data.
+-- Safe / additive: does not destroy existing trade rows.
 
 alter table public.congress_trades
   add column if not exists asset_type text;
 
 alter table public.congress_trades
-  add column if not exists owner text
-  check (
-    owner in ('self', 'joint', 'spouse', 'child')
-    or owner is null
-  );
+  add column if not exists owner text;
+
+-- Named check so re-runs are idempotent if the constraint already exists.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'congress_trades_owner_check'
+      and conrelid = 'public.congress_trades'::regclass
+  ) then
+    alter table public.congress_trades
+      add constraint congress_trades_owner_check
+      check (
+        owner in ('self', 'joint', 'spouse', 'child')
+        or owner is null
+      );
+  end if;
+end $$;
 
 -- Track the local manual updater separately from legacy Bargo sync.
 insert into public.congress_sync_state (provider)
 values ('local-pipeline')
 on conflict (provider) do nothing;
 
--- Refresh public view to expose new display-safe columns (still no raw_source).
-create or replace view public.congress_trades_public as
+-- CREATE OR REPLACE VIEW cannot insert/reorder columns (Postgres treats that as
+-- renaming). Drop + recreate instead.
+drop view if exists public.congress_trades_public;
+
+create view public.congress_trades_public as
 select
   id,
   member,
