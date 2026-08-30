@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TickerLink } from "@/components/TickerLink";
 import type { CongressTrade } from "@/lib/types";
 import type { TradeDisclosureGroup } from "@/lib/groupTrades";
 
@@ -63,7 +64,7 @@ function TradeRows({ trades }: { trades: CongressTrade[] }) {
           {trades.map((trade) => (
             <tr key={trade.id} className="align-top">
               <td className="px-3 py-2 font-mono font-medium whitespace-nowrap text-stone-900">
-                {trade.ticker ?? "—"}
+                {trade.ticker ? <TickerLink ticker={trade.ticker} /> : "—"}
               </td>
               <td className="max-w-[14rem] px-3 py-2 text-stone-700 sm:max-w-xs">
                 <span className="line-clamp-2">{trade.asset ?? "—"}</span>

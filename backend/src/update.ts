@@ -1,4 +1,7 @@
 import { format, subDays } from "date-fns";
+import { pathToFileURL } from "node:url";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { runHouseUpdate } from "./house.js";
 import { runSenateUpdate } from "./senate.js";
@@ -10,6 +13,19 @@ import {
   startSyncRun,
 } from "./store/supabaseStore.js";
 import type { ChamberRunStats } from "./types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+type PriceSummary = {
+  status: string;
+  tickersChecked: number;
+  tickersUpdated: number;
+  newDailyBars: number;
+  skippedUnsupported: number;
+  skippedNoHistory: number;
+  errors: number;
+  errorMessages?: string[];
+};
 
 function isoDate(d: Date): string {
   return format(d, "yyyy-MM-dd");
@@ -53,11 +69,29 @@ function printChamberBlock(label: string, stats: ChamberRunStats): void {
   console.log("");
 }
 
+function printPriceBlock(prices: PriceSummary): void {
+  console.log("STOCK PRICE DATA");
+  console.log(`Status: ${prices.status}`);
+  console.log(`Tickers checked: ${prices.tickersChecked}`);
+  console.log(`Tickers updated: ${prices.tickersUpdated}`);
+  console.log(`New daily bars: ${prices.newDailyBars}`);
+  console.log(`Skipped unsupported assets: ${prices.skippedUnsupported}`);
+  console.log(`Skipped (no Alpaca history): ${prices.skippedNoHistory}`);
+  console.log(`Errors: ${prices.errors}`);
+  if (prices.errorMessages?.length) {
+    for (const message of prices.errorMessages.slice(0, 8)) {
+      console.log(`  - ${message}`);
+    }
+  }
+  console.log("");
+}
+
 function printSummary(
   fromDate: string,
   toDate: string,
   house: ChamberRunStats,
   senate: ChamberRunStats,
+  prices: PriceSummary,
 ): void {
   const totalNew = house.newCount + senate.newCount;
   const anySuccess = house.status === "success" || senate.status === "success";
@@ -76,6 +110,7 @@ function printSummary(
   printChamberBlock("SENATE", senate);
   console.log(`TOTAL NEW TRADES: ${totalNew}`);
   console.log("");
+  printPriceBlock(prices);
 
   if (bothFailed) {
     console.log("BOTH CHAMBERS FAILED — Supabase may be unchanged.");
@@ -84,10 +119,52 @@ function printSummary(
   } else if (house.status === "failed" || senate.status === "failed") {
     console.log("PARTIAL SUCCESS — one chamber failed (see above).");
     console.log("Valid transactions from the successful chamber were kept.");
+  } else if (prices.status === "FAILED") {
+    console.log("Congress trades: SUCCESS");
+    console.log("Stock prices: FAILED");
+    console.log(
+      "Congressional data was stored; price ingest did not roll back trades.",
+    );
+  } else if (prices.status === "SKIPPED") {
+    console.log(
+      "Congressional data stored. Stock prices skipped (Alpaca keys not set).",
+    );
   } else {
     console.log("Supabase successfully updated.");
   }
   console.log("========================================");
+}
+
+async function syncPricesAfterTrades(
+  supabase: ReturnType<typeof createSupabase>,
+): Promise<PriceSummary> {
+  try {
+    const modulePath = resolve(
+      __dirname,
+      "../../scripts/lib/sync-stock-prices.mjs",
+    );
+    const mod = (await import(pathToFileURL(modulePath).href)) as {
+      syncStockPrices: (
+        client: ReturnType<typeof createSupabase>,
+        opts: { apiKey?: string; apiSecret?: string },
+      ) => Promise<PriceSummary>;
+    };
+    return await mod.syncStockPrices(supabase, {
+      apiKey: process.env.ALPACA_API_KEY,
+      apiSecret: process.env.ALPACA_API_SECRET,
+    });
+  } catch (err) {
+    return {
+      status: "FAILED",
+      tickersChecked: 0,
+      tickersUpdated: 0,
+      newDailyBars: 0,
+      skippedUnsupported: 0,
+      skippedNoHistory: 0,
+      errors: 1,
+      errorMessages: [err instanceof Error ? err.message : String(err)],
+    };
+  }
 }
 
 async function main(): Promise<void> {
@@ -156,7 +233,23 @@ async function main(): Promise<void> {
       });
     }
 
-    printSummary(fromDate, toDate, house, senate);
+    // Price sync is independent: chamber success is not rolled back if Alpaca fails.
+    let prices: PriceSummary = {
+      status: "SKIPPED",
+      tickersChecked: 0,
+      tickersUpdated: 0,
+      newDailyBars: 0,
+      skippedUnsupported: 0,
+      skippedNoHistory: 0,
+      errors: 0,
+    };
+    if (!bothFailed) {
+      console.log("Syncing stock price bars (Alpaca IEX)…");
+      prices = await syncPricesAfterTrades(supabase);
+      console.log("");
+    }
+
+    printSummary(fromDate, toDate, house, senate, prices);
 
     if (bothFailed) {
       process.exitCode = 1;

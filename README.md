@@ -5,26 +5,34 @@ U.S. government sources (via a local manual updater derived from
 [congress-trading-pipeline](https://github.com/seralifatih/congress-trading-pipeline)),
 stores them in Supabase, and displays them in a Next.js frontend.
 
+Historical stock prices are cached from Alpaca Market Data (IEX daily bars) during
+the same manual update, then read from Supabase by the website.
+
 ## Stack
 
 - Next.js (App Router, TypeScript)
 - Supabase (Postgres)
 - Local Node.js backend updater (`backend/`)
+- Alpaca Market Data (IEX daily bars, cached in Supabase)
 
 ## Features
 
-- **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination
-- **Trending** — tickers ranked by congressional disclosure activity (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
+- **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination and same-member/same-disclosure-date groups
+- **Trending** — tickers ranked by distinct members active (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
+- **Stock detail** (`/stocks/[ticker]`) — cached daily closing-price chart with congressional purchase/sale markers on **transaction date**
 
 ## Setup
 
-1. Copy `.env.example` to `.env.local` and fill in public Supabase keys (and optional `SUPABASE_SERVICE_ROLE_KEY` for sync-status display).
-2. In the Supabase SQL Editor, run `docs/02_DATABASE_SCHEMA.sql`, then apply `supabase/migrations/20260829150000_local_pipeline_columns.sql`.
+1. Copy `.env.example` to `.env.local` and fill in public Supabase keys, optional `SUPABASE_SERVICE_ROLE_KEY`, and `ALPACA_API_KEY` / `ALPACA_API_SECRET`.
+2. In the Supabase SQL Editor, run `docs/02_DATABASE_SCHEMA.sql`, then apply:
+   - `supabase/migrations/20260829150000_local_pipeline_columns.sql`
+   - `supabase/migrations/20260830140000_stock_price_bars.sql`
 3. Configure the backend updater:
    ```bash
    cd backend
    cp .env.example .env
    # set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+   # set ALPACA_API_KEY + ALPACA_API_SECRET for price sync
    npm install
    ```
 4. Run the frontend:
@@ -36,10 +44,12 @@ stores them in Supabase, and displays them in a Next.js frontend.
 ## Updating congressional trade data
 
 The updater fetches the most recent House and Senate disclosures,
-deduplicates them, and writes new transactions to Supabase.
+deduplicates them, writes new transactions to Supabase, then incrementally
+fetches missing Alpaca daily bars for listed stock/ETF tickers.
 
-The website reads directly from Supabase, so no frontend redeployment
-is required after an update.
+The website reads congressional trades and stock prices from Supabase only
+(no browser calls to Alpaca), so no frontend redeployment is required after
+an update.
 
 ### Option 1 — Windows
 
@@ -60,6 +70,8 @@ Or from the repo root:
 
 ```bash
 npm run update-data
+# prices only:
+npm run sync:prices
 ```
 
 ## Deploy (Vercel)
@@ -74,7 +86,8 @@ npm run update-data
    - `SUPABASE_SERVICE_ROLE_KEY` (server-only; for last-sync display)
 6. After deploy, open the **Production** domain (`*.vercel.app`), not a protected preview deployment URL.
 
-Do **not** put `SUPABASE_SERVICE_ROLE_KEY` in any `NEXT_PUBLIC_*` variable.
+Do **not** put `SUPABASE_SERVICE_ROLE_KEY` or Alpaca keys in any `NEXT_PUBLIC_*` variable.
+Alpaca keys are only needed for the local/backend updater, not for Vercel serving pages.
 
 ## Docs
 
@@ -82,4 +95,4 @@ See `docs/` for the schema and historical planning notes. Third-party attributio
 
 ## Scope
 
-No auth, notifications, AI, market-price APIs, portfolios, OCR, always-on backend server, or scheduled cloud cron in this MVP. Scheduling can later wrap `npm run update-data` on a VPS.
+No auth, notifications, AI, live browser market-price calls, portfolios, OCR, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. Scheduling can later wrap `npm run update-data` on a VPS.

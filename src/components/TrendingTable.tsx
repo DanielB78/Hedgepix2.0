@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { TickerLink } from "@/components/TickerLink";
 import type { TrendingTicker } from "@/lib/types";
 
 type Props = {
@@ -59,12 +59,10 @@ export function TrendingTable({ rows }: Props) {
                 <td className="px-3 py-3 text-stone-500">{index + 1}</td>
                 <td className="px-3 py-3">
                   <div className="font-mono text-base font-semibold text-stone-900">
-                    <Link
-                      href={`/?ticker=${encodeURIComponent(row.ticker)}`}
-                      className="hover:underline"
-                    >
-                      {row.ticker}
-                    </Link>
+                    <TickerLink
+                      ticker={row.ticker}
+                      className="font-mono text-base font-semibold text-teal-800 hover:underline"
+                    />
                   </div>
                   <div className="max-w-xs truncate text-xs text-stone-500">
                     {row.asset ?? "—"}
@@ -101,12 +99,10 @@ export function TrendingTable({ rows }: Props) {
             <div className="flex items-baseline justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-xs text-stone-500">#{index + 1}</div>
-                <Link
-                  href={`/?ticker=${encodeURIComponent(row.ticker)}`}
-                  className="font-mono text-lg font-semibold text-stone-900 hover:underline"
-                >
-                  {row.ticker}
-                </Link>
+                <TickerLink
+                  ticker={row.ticker}
+                  className="font-mono text-lg font-semibold text-teal-800 hover:underline"
+                />
                 <div className="truncate text-xs text-stone-500">
                   {row.asset ?? "—"}
                 </div>

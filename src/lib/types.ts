@@ -66,3 +66,15 @@ export type TrendingTicker = {
   totalTrades: number;
   latestDisclosure: string | null;
 };
+
+export type StockPriceBar = {
+  ticker: string;
+  bar_date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+};
+
+export type ChartRange = "3m" | "6m" | "1y" | "all";

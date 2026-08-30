@@ -7,6 +7,10 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import {
+  formatUpdateSummary,
+  syncStockPrices,
+} from "./lib/sync-stock-prices.mjs";
 
 const BARGO_BASE = "https://www.bargo.ai/free-apis/congress/v1";
 
@@ -221,6 +225,36 @@ async function main() {
       })
       .eq("id", run.id);
 
+    let prices = {
+      status: "SKIPPED",
+      tickersChecked: 0,
+      tickersUpdated: 0,
+      newDailyBars: 0,
+      skippedUnsupported: 0,
+      skippedNoHistory: 0,
+      errors: 0,
+      errorMessages: [],
+    };
+    try {
+      prices = await syncStockPrices(supabase, {
+        apiKey: process.env.ALPACA_API_KEY,
+        apiSecret: process.env.ALPACA_API_SECRET,
+      });
+    } catch (priceErr) {
+      prices = {
+        status: "FAILED",
+        tickersChecked: 0,
+        tickersUpdated: 0,
+        newDailyBars: 0,
+        skippedUnsupported: 0,
+        skippedNoHistory: 0,
+        errors: 1,
+        errorMessages: [
+          priceErr instanceof Error ? priceErr.message : String(priceErr),
+        ],
+      };
+    }
+
     console.log(
       JSON.stringify(
         {
@@ -236,10 +270,26 @@ async function main() {
           rate_limit_requests_remaining: bargo.rateLimitRequestsRemaining,
           rate_limit_rows_remaining: bargo.rateLimitRowsRemaining,
           run_id: run.id,
+          stock_prices: prices,
         },
         null,
         2,
       ),
+    );
+    console.log(
+      formatUpdateSummary({
+        trades: {
+          status: "SUCCESS",
+          rowsReceived: bargo.page.trades.length,
+          rowsUpserted: upserted,
+          tradeCountAfter: after.count ?? null,
+          houseReceived: bargo.page.trades.filter((t) => t.chamber === "house")
+            .length,
+          senateReceived: bargo.page.trades.filter((t) => t.chamber === "senate")
+            .length,
+        },
+        prices,
+      }),
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
