@@ -191,9 +191,7 @@ async function upsertTickerBars(supabase, job, alpacaBars, summary) {
     console.warn(`No Alpaca daily bars for ${job.ticker} from ${job.start}`);
     return;
   }
-  const rows = toBarRows(job.ticker, alpacaBars).filter(
-    (row) => row.bar_date >= job.start,
-  );
+  const rows = toBarRows(job.ticker, alpacaBars);
   if (rows.length === 0) return;
 
   const { error } = await supabase
@@ -321,22 +319,29 @@ export async function syncStockPrices(supabase, { apiKey, apiSecret, tickers } =
     }
   }
 
-  // New tickers use their own start (earliest trade − 30d) so we never
-  // re-download years of history for symbols that are already cached.
-  for (const job of fresh) {
+  // New tickers: batch by shared request start = min(earliest − 30d).
+  // Extra history for newer names is useful chart context, not wasted work.
+  for (let i = 0; i < fresh.length; i += BATCH_SIZE) {
+    const batch = fresh.slice(i, i + BATCH_SIZE);
+    const start = batch.reduce(
+      (min, job) => (job.start < min ? job.start : min),
+      batch[0].start,
+    );
     const barsByTicker = await fetchBarsForJobs(
-      [job],
-      job.start,
+      batch,
+      start,
       apiKey,
       apiSecret,
       summary,
     );
-    await upsertTickerBars(
-      supabase,
-      job,
-      barsByTicker.get(job.ticker) ?? [],
-      summary,
-    );
+    for (const job of batch) {
+      await upsertTickerBars(
+        supabase,
+        job,
+        barsByTicker.get(job.ticker) ?? [],
+        summary,
+      );
+    }
   }
 
   if (summary.errors > 0 && summary.tickersUpdated === 0) {

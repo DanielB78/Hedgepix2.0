@@ -338,33 +338,35 @@ function json(body: unknown, status = 200) {
 }
 
 const TICKER_RE = /^[A-Z]{1,5}(\.[A-Z])?$/;
-const ASSET_SKIP = [
-  "bond",
-  "treasury",
-  " municipal",
-  "muni ",
-  "note due",
-  "notes due",
-  "go utx",
-  "certificate of deposit",
-  "ctf dep",
-  "act/365",
-  "t-bill",
-  "t bill",
-  "ust ",
-  "fnma",
-  "gnma",
-  "private placement",
-  "limited partnership",
-  "coupon",
+const ASSET_ALLOW =
+  /\b(etf|etn)\b|common stock|ordinary shares|class [a-z] common/i;
+const ASSET_DENY = [
+  /\bcertificate of deposit\b/i,
+  /\bctf dep\b/i,
+  /\bact\/365\b/i,
+  /\bgo utx\b/i,
+  /\bmunicipal\b/,
+  /\bmuni\b/,
+  /\bprivate placement\b/i,
+  /\blimited partnership\b/i,
+  /\bt-bills?\b/i,
+  /\bt bills?\b/i,
+  /\bfnma\b/i,
+  /\bgnma\b/i,
+  /\bnotes? due\b/i,
+  /\bsuccessor agency\b/i,
 ];
 
 function isLikelyListedEquity(ticker: string | null, asset: string | null) {
   const symbol = ticker?.trim().toUpperCase() ?? "";
   if (!TICKER_RE.test(symbol)) return false;
-  const name = (asset ?? "").toLowerCase();
-  if (/%/.test(name) && /(due|mat |maturity|note|bond)/.test(name)) return false;
-  return !ASSET_SKIP.some((needle) => name.includes(needle));
+  const name = asset ?? "";
+  if (ASSET_ALLOW.test(name)) return true;
+  const lower = name.toLowerCase();
+  if (/%/.test(lower) && /(due|mat(?:urity)?|\bnote\b|\bbond\b)/.test(lower)) {
+    return false;
+  }
+  return !ASSET_DENY.some((re) => re.test(name));
 }
 
 function addDays(isoDate: string, days: number) {
