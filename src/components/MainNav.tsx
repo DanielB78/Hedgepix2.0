@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 type Props = {
-  active: "latest" | "trending";
+  active?: "latest" | "trending";
 };
 
 export function MainNav({ active }: Props) {

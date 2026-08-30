@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync": "node --env-file=.env.local scripts/sync-congress-trades.mjs"
+    "sync": "node --env-file=.env.local scripts/sync-congress-trades.mjs",
+    "sync:prices": "node --env-file=.env.local scripts/sync-stock-prices.mjs",
+    "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

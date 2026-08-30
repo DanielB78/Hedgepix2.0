@@ -1,3 +1,4 @@
+import { TickerLink } from "@/components/TickerLink";
 import type { CongressTrade } from "@/lib/types";
 
 type Props = {
@@ -51,7 +52,7 @@ export function TradeTable({ trades }: Props) {
                 {trade.chamber ?? "—"}
               </td>
               <td className="px-3 py-2 font-mono font-medium text-stone-900">
-                {trade.ticker ?? "—"}
+                {trade.ticker ? <TickerLink ticker={trade.ticker} /> : "—"}
               </td>
               <td className="px-3 py-2 capitalize text-stone-700">
                 {trade.transaction_type ?? "—"}

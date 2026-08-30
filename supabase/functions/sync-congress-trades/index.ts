@@ -179,6 +179,19 @@ Deno.serve(async (req) => {
       })
       .eq("id", runId);
 
+    let stock_prices: Record<string, unknown> | null = null;
+    try {
+      stock_prices = await catchUpPricesForTickers(
+        supabase,
+        rows.map((row) => ({ ticker: row.ticker, asset: row.asset, transaction_date: row.transaction_date })),
+      );
+    } catch (priceErr) {
+      stock_prices = {
+        status: "FAILED",
+        error: priceErr instanceof Error ? priceErr.message : String(priceErr),
+      };
+    }
+
     return json({
       ok: true,
       mode,
@@ -190,6 +203,7 @@ Deno.serve(async (req) => {
       rate_limit_requests_remaining: bargo.rateLimitRequestsRemaining,
       rate_limit_rows_remaining: bargo.rateLimitRowsRemaining,
       run_id: runId,
+      stock_prices,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -321,4 +335,146 @@ function json(body: unknown, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+const TICKER_RE = /^[A-Z]{1,5}(\.[A-Z])?$/;
+const ASSET_SKIP = [
+  "bond",
+  "treasury",
+  " municipal",
+  "muni ",
+  "note due",
+  "notes due",
+  "go utx",
+  "certificate of deposit",
+  "ctf dep",
+  "act/365",
+  "t-bill",
+  "t bill",
+  "ust ",
+  "fnma",
+  "gnma",
+  "private placement",
+  "limited partnership",
+  "coupon",
+];
+
+function isLikelyListedEquity(ticker: string | null, asset: string | null) {
+  const symbol = ticker?.trim().toUpperCase() ?? "";
+  if (!TICKER_RE.test(symbol)) return false;
+  const name = (asset ?? "").toLowerCase();
+  if (/%/.test(name) && /(due|mat |maturity|note|bond)/.test(name)) return false;
+  return !ASSET_SKIP.some((needle) => name.includes(needle));
+}
+
+function addDays(isoDate: string, days: number) {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function catchUpPricesForTickers(
+  supabase: ReturnType<typeof createClient>,
+  rows: Array<{
+    ticker: string | null;
+    asset: string | null;
+    transaction_date: string | null;
+  }>,
+) {
+  const apiKey = Deno.env.get("ALPACA_API_KEY");
+  const apiSecret = Deno.env.get("ALPACA_API_SECRET");
+  if (!apiKey || !apiSecret) {
+    return { status: "SKIPPED", reason: "ALPACA credentials not set" };
+  }
+
+  const byTicker = new Map<string, string | null>();
+  for (const row of rows) {
+    const ticker = row.ticker?.trim().toUpperCase() ?? "";
+    if (!isLikelyListedEquity(ticker, row.asset)) continue;
+    const prev = byTicker.get(ticker);
+    if (!prev || (row.transaction_date && row.transaction_date < prev)) {
+      byTicker.set(ticker, row.transaction_date);
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  let tickersUpdated = 0;
+  let newDailyBars = 0;
+  const errors: string[] = [];
+
+  for (const [ticker, earliest] of byTicker) {
+    try {
+      const { data: latest } = await supabase
+        .from("stock_price_bars")
+        .select("bar_date")
+        .eq("ticker", ticker)
+        .order("bar_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const start = latest?.bar_date
+        ? addDays(latest.bar_date, 1)
+        : addDays(earliest || today, -30);
+      if (start > today) continue;
+
+      const endpoint = new URL("https://data.alpaca.markets/v2/stocks/bars");
+      endpoint.searchParams.set("symbols", ticker);
+      endpoint.searchParams.set("timeframe", "1Day");
+      endpoint.searchParams.set("start", start);
+      endpoint.searchParams.set("end", today);
+      endpoint.searchParams.set("feed", "iex");
+      endpoint.searchParams.set("adjustment", "split");
+      endpoint.searchParams.set("limit", "10000");
+      endpoint.searchParams.set("sort", "asc");
+
+      const response = await fetch(endpoint, {
+        headers: {
+          "APCA-API-KEY-ID": apiKey,
+          "APCA-API-SECRET-KEY": apiSecret,
+          Accept: "application/json",
+        },
+      });
+      if (!response.ok) {
+        errors.push(`${ticker}: HTTP ${response.status}`);
+        continue;
+      }
+      const body = await response.json();
+      const list = body.bars?.[ticker] ?? [];
+      const upserts = [];
+      for (const bar of list) {
+        const barDate = String(bar.t ?? "").slice(0, 10);
+        if (!barDate || barDate < start) continue;
+        upserts.push({
+          ticker,
+          bar_date: barDate,
+          open: bar.o ?? null,
+          high: bar.h ?? null,
+          low: bar.l ?? null,
+          close: bar.c ?? null,
+          volume: bar.v ?? null,
+          source: "alpaca_iex",
+        });
+      }
+      if (upserts.length === 0) continue;
+      const { error } = await supabase
+        .from("stock_price_bars")
+        .upsert(upserts, { onConflict: "ticker,bar_date" });
+      if (error) {
+        errors.push(`${ticker}: ${error.message}`);
+        continue;
+      }
+      tickersUpdated += 1;
+      newDailyBars += upserts.length;
+    } catch (err) {
+      errors.push(`${ticker}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return {
+    status: errors.length && !tickersUpdated ? "FAILED" : "SUCCESS",
+    tickersChecked: byTicker.size,
+    tickersUpdated,
+    newDailyBars,
+    errors: errors.length,
+  };
 }
