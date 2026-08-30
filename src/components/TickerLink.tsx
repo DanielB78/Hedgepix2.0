@@ -15,10 +15,13 @@ export function TickerLink({ ticker, className }: Props) {
       href={stockHref(ticker)}
       className={
         className ??
-        "font-mono font-medium text-teal-800 hover:text-teal-950 hover:underline"
+        "inline-flex items-center gap-1 font-medium tracking-tight text-[color:var(--deep-navy)] transition-opacity duration-200 hover:opacity-70"
       }
     >
-      {ticker}
+      <span className="font-mono">{ticker}</span>
+      <span aria-hidden className="text-[color:var(--muted)]">
+        ›
+      </span>
     </Link>
   );
 }

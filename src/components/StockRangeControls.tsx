@@ -15,7 +15,7 @@ type Props = {
 
 export function StockRangeControls({ ticker, range }: Props) {
   return (
-    <div className="inline-flex gap-1 rounded-lg border border-stone-200 bg-white p-1">
+    <div className="inline-flex gap-1 rounded-[16px] bg-[color:var(--surface)] p-1">
       {RANGES.map((item) => {
         const href =
           item.value === "1y"
@@ -28,8 +28,8 @@ export function StockRangeControls({ ticker, range }: Props) {
             href={href}
             className={
               active
-                ? "rounded-md bg-stone-900 px-3 py-1.5 text-sm font-medium text-white"
-                : "rounded-md px-3 py-1.5 text-sm font-medium text-stone-700 hover:bg-stone-200/80"
+                ? "rounded-[12px] bg-[#1B2632] px-3 py-1.5 text-sm font-medium !text-[#EEE9DF]"
+                : "rounded-[12px] px-3 py-1.5 text-sm font-medium text-[#2C3B4D] hover:bg-[#C9C1B1]/45"
             }
             aria-current={active ? "page" : undefined}
           >

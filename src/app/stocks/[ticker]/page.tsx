@@ -16,11 +16,32 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function cleanAssetName(asset: string | null) {
+  if (!asset) return null;
+  return asset
+    .replace(/\s*-\s*Common Stock.*$/i, "")
+    .replace(/\s*Common Stock.*$/i, "")
+    .trim();
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPct(value: number) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { ticker: rawTicker } = await params;
   const ticker = decodeURIComponent(rawTicker ?? "").trim().toUpperCase();
   return {
-    title: ticker ? `${ticker} · Congress Trade Monitor` : "Congress Trade Monitor",
+    title: ticker ? `${ticker} · Congress Trades` : "Congress Trades",
   };
 }
 
@@ -40,50 +61,72 @@ export default async function StockPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
+  const closes = stock.bars
+    .filter((bar) => bar.close != null)
+    .map((bar) => Number(bar.close));
+  const latest = closes.length ? closes[closes.length - 1]! : null;
+  const previous = closes.length > 1 ? closes[closes.length - 2]! : null;
+  const changePct =
+    latest != null && previous != null && previous !== 0
+      ? ((latest - previous) / previous) * 100
+      : null;
+
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-      <SiteHeader syncState={syncState} />
-      <MainNav />
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
+      <SiteHeader syncState={syncState} compact />
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/"
+          className="text-sm text-[color:var(--navy)] transition-opacity duration-200 hover:opacity-70"
+        >
+          ← Latest
+        </Link>
+        <MainNav />
+      </div>
 
       {stock.error ? (
-        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--rust)]">
           {stock.error}
         </div>
       ) : null}
 
       <section className="space-y-3">
-        <p className="text-sm font-medium tracking-wide text-teal-800 uppercase">
-          Stock detail
-        </p>
-        <p>
-          <Link href="/" className="text-sm text-teal-800 hover:underline">
-            ← Latest disclosures
-          </Link>
-        </p>
-        <h2 className="font-[family-name:var(--font-display)] text-3xl text-stone-900 sm:text-4xl">
-          {stock.ticker}
-        </h2>
-        <p className="text-stone-700">{stock.asset ?? "Listed security"}</p>
-        <p className="max-w-3xl text-sm text-stone-600">
-          Line is the daily closing price from cached Alpaca IEX data —
-          approximate market context around congressional transaction dates,
-          not an exact purchase or sale price. Markers use{" "}
-          <span className="font-medium">transaction date</span>, not disclosure
-          date. ▲ purchases, ▼ sales.
-        </p>
+        <div>
+          <h2 className="text-4xl font-medium tracking-tight text-[color:var(--deep-navy)]">
+            {stock.ticker}
+          </h2>
+          <p className="mt-1 text-[color:var(--muted)]">
+            {cleanAssetName(stock.asset) ?? "Listed security"}
+          </p>
+        </div>
+
+        {latest != null ? (
+          <div className="flex items-baseline gap-3">
+            <div className="text-3xl font-medium tracking-tight text-[color:var(--deep-navy)]">
+              {formatMoney(latest)}
+            </div>
+            {changePct != null ? (
+              <div
+                className={
+                  changePct >= 0
+                    ? "text-sm text-[color:var(--orange)]"
+                    : "text-sm text-[color:var(--rust)]"
+                }
+              >
+                {formatPct(changePct)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <StockRangeControls ticker={stock.ticker} range={range} />
       </section>
 
-      <section className="space-y-3">
-        <h3 className="text-lg font-semibold text-stone-900">
-          Daily closing price
-        </h3>
-        <PriceChart bars={stock.bars} trades={stock.trades} />
-      </section>
+      <PriceChart bars={stock.bars} trades={stock.trades} />
 
-      <section className="space-y-3">
-        <h3 className="text-lg font-semibold text-stone-900">
-          Congressional disclosures
+      <section className="space-y-4">
+        <h3 className="text-lg font-medium text-[color:var(--deep-navy)]">
+          Recent activity
         </h3>
         <TradeTable trades={stock.trades} />
       </section>

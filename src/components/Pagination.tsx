@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { buildHref } from "@/components/TradeFiltersForm";
+import { buildHref } from "@/lib/filterHref";
 import type { TradeFilters } from "@/lib/types";
 
 type Props = {
@@ -17,37 +17,33 @@ export function Pagination({ filters, page, pageSize, totalCount }: Props) {
   const to = Math.min(page * pageSize, totalCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-700">
+    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--muted)]">
       <p>
-        Showing {from}–{to} of {totalCount}
+        {from}–{to} of {totalCount}
       </p>
       <div className="flex items-center gap-2">
         {page > 1 ? (
           <Link
             href={buildHref(filters, page - 1)}
-            className="rounded border border-stone-300 px-3 py-1.5 hover:bg-stone-100"
+            className="rounded-[14px] bg-[color:var(--surface)] px-3 py-1.5 text-[color:var(--deep-navy)] hover:bg-[color:var(--surface-strong)]"
           >
             Previous
           </Link>
         ) : (
-          <span className="rounded border border-stone-200 px-3 py-1.5 text-stone-400">
-            Previous
-          </span>
+          <span className="rounded-[14px] px-3 py-1.5 opacity-40">Previous</span>
         )}
         <span>
-          Page {page} of {totalPages}
+          {page} / {totalPages}
         </span>
         {page < totalPages ? (
           <Link
             href={buildHref(filters, page + 1)}
-            className="rounded border border-stone-300 px-3 py-1.5 hover:bg-stone-100"
+            className="rounded-[14px] bg-[color:var(--surface)] px-3 py-1.5 text-[color:var(--deep-navy)] hover:bg-[color:var(--surface-strong)]"
           >
             Next
           </Link>
         ) : (
-          <span className="rounded border border-stone-200 px-3 py-1.5 text-stone-400">
-            Next
-          </span>
+          <span className="rounded-[14px] px-3 py-1.5 opacity-40">Next</span>
         )}
       </div>
     </div>

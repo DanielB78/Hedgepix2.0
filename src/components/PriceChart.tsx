@@ -1,14 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type PointerEvent } from "react";
 import type { CongressTrade, StockPriceBar } from "@/lib/types";
+
+type ChartPoint = {
+  date: string;
+  close: number;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  x: number;
+  y: number;
+};
 
 type MarkerGroup = {
   date: string;
   x: number;
   y: number;
-  purchases: CongressTrade[];
-  sales: CongressTrade[];
+  close: number;
+  trades: CongressTrade[];
+  hasPurchase: boolean;
+  hasSale: boolean;
 };
 
 type Props = {
@@ -20,7 +32,7 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: value >= 100 ? 0 : 2,
+    maximumFractionDigits: value >= 100 ? 2 : 2,
   }).format(value);
 }
 
@@ -47,95 +59,195 @@ function nearestBarIndex(dates: string[], target: string) {
   return idx;
 }
 
+function nearestPointIndex(points: ChartPoint[], clientX: number, svg: SVGSVGElement) {
+  const rect = svg.getBoundingClientRect();
+  const x = ((clientX - rect.left) / rect.width) * Number(svg.viewBox.baseVal.width || 840);
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < points.length; i += 1) {
+    const dist = Math.abs(points[i]!.x - x);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
+}
+
 export function PriceChart({ bars, trades }: Props) {
-  const [active, setActive] = useState<MarkerGroup | null>(null);
-  const [pinned, setPinned] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [activeMarker, setActiveMarker] = useState<MarkerGroup | null>(null);
+  const [pinnedMarker, setPinnedMarker] = useState(false);
 
   const chart = useMemo(() => {
-    const points = bars
+    const raw = bars
       .filter((bar) => bar.close != null && bar.bar_date)
-      .map((bar) => ({ date: bar.bar_date, close: Number(bar.close) }));
-    if (points.length === 0) return null;
+      .map((bar) => ({
+        date: bar.bar_date,
+        close: Number(bar.close),
+        open: bar.open == null ? null : Number(bar.open),
+        high: bar.high == null ? null : Number(bar.high),
+        low: bar.low == null ? null : Number(bar.low),
+      }));
+    if (raw.length === 0) return null;
 
     const width = 840;
-    const height = 320;
-    const pad = { top: 40, right: 16, bottom: 36, left: 56 };
+    const height = 340;
+    const pad = { top: 24, right: 20, bottom: 28, left: 52 };
     const innerW = width - pad.left - pad.right;
     const innerH = height - pad.top - pad.bottom;
-    const min = Math.min(...points.map((p) => p.close));
-    const max = Math.max(...points.map((p) => p.close));
+    const min = Math.min(...raw.map((p) => p.close));
+    const max = Math.max(...raw.map((p) => p.close));
     const span = max - min || 1;
     const xAt = (i: number) =>
-      pad.left + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+      pad.left + (raw.length === 1 ? innerW / 2 : (i / (raw.length - 1)) * innerW);
     const yAt = (price: number) =>
       pad.top + (1 - (price - min) / span) * innerH;
 
+    const points: ChartPoint[] = raw.map((p, i) => ({
+      ...p,
+      x: xAt(i),
+      y: yAt(p.close),
+    }));
+
     const line = points
-      .map((p, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(2)} ${yAt(p.close).toFixed(2)}`)
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
       .join(" ");
 
     const dates = points.map((p) => p.date);
     const grouped = new Map<string, MarkerGroup>();
     for (const trade of trades) {
       if (!trade.transaction_date) continue;
+      if (
+        trade.transaction_type !== "purchase" &&
+        trade.transaction_type !== "sale"
+      ) {
+        continue;
+      }
       const idx = nearestBarIndex(dates, trade.transaction_date);
       if (idx < 0) continue;
-      const date = dates[idx]!;
-      let group = grouped.get(date);
+      const point = points[idx]!;
+      let group = grouped.get(point.date);
       if (!group) {
         group = {
-          date,
-          x: xAt(idx),
-          y: yAt(points[idx]!.close),
-          purchases: [],
-          sales: [],
+          date: point.date,
+          x: point.x,
+          y: point.y,
+          close: point.close,
+          trades: [],
+          hasPurchase: false,
+          hasSale: false,
         };
-        grouped.set(date, group);
+        grouped.set(point.date, group);
       }
-      if (trade.transaction_type === "sale") group.sales.push(trade);
-      else if (trade.transaction_type === "purchase") group.purchases.push(trade);
+      group.trades.push(trade);
+      if (trade.transaction_type === "purchase") group.hasPurchase = true;
+      if (trade.transaction_type === "sale") group.hasSale = true;
     }
 
-    const ticks = 4;
-    const yTicks = Array.from({ length: ticks + 1 }, (_, i) => {
-      const price = min + (span * i) / ticks;
-      return { price, y: yAt(price) };
-    });
-
-    const first = points[0]!.date;
-    const last = points[points.length - 1]!.date;
+    const yTicks = [min, min + span / 2, max].map((price) => ({
+      price,
+      y: yAt(price),
+    }));
 
     return {
       width,
       height,
       pad,
       line,
+      points,
       yTicks,
-      first,
-      last,
       markers: [...grouped.values()],
+      first: points[0]!.date,
+      last: points[points.length - 1]!.date,
     };
   }, [bars, trades]);
 
   if (!chart) {
     return (
-      <p className="rounded border border-dashed border-stone-300 bg-stone-50 px-4 py-8 text-center text-stone-600">
-        No cached daily prices for this ticker yet. Run the updater after
-        adding Alpaca keys to ingest bars.
+      <p className="rounded-[20px] bg-[color:var(--surface)] px-5 py-12 text-center text-[color:var(--muted)]">
+        No price data yet.
       </p>
     );
   }
 
+  const hoverPoint =
+    hoverIndex != null && !activeMarker ? chart.points[hoverIndex] : null;
+
+  function onPointerMove(event: PointerEvent<SVGSVGElement>) {
+    if (activeMarker && pinnedMarker) return;
+    const svg = svgRef.current;
+    if (!svg || !chart) return;
+    const idx = nearestPointIndex(chart.points, event.clientX, svg);
+    setHoverIndex(idx);
+  }
+
+  function clearHover() {
+    if (!pinnedMarker) {
+      setHoverIndex(null);
+      setActiveMarker(null);
+    }
+  }
+
+  const tooltip = activeMarker ? (
+    <div className="pointer-events-none absolute top-4 left-4 z-10 max-w-xs rounded-[16px] bg-[color:var(--deep-navy)] px-4 py-3 text-sm text-[color:var(--cream)] shadow-[var(--shadow-soft)]">
+      <div className="font-medium">
+        {activeMarker.trades.length > 1
+          ? `${activeMarker.trades.length} congressional transactions`
+          : (activeMarker.trades[0]?.member ?? "Congressional trade")}
+      </div>
+      <ul className="mt-2 space-y-2">
+        {activeMarker.trades.slice(0, 6).map((trade) => (
+          <li key={trade.id} className="text-[color:color-mix(in_srgb,var(--cream)_82%,transparent)]">
+            <div>
+              {activeMarker.trades.length > 1
+                ? `${trade.member ?? "Unknown"} — `
+                : ""}
+              <span className="capitalize">{trade.transaction_type}</span>
+              {trade.amount_range ? ` · ${trade.amount_range}` : ""}
+            </div>
+            <div className="text-xs opacity-80">
+              {formatDate(trade.transaction_date)}
+              {trade.disclosure_date
+                ? ` · Disclosed ${formatDate(trade.disclosure_date)}`
+                : ""}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {activeMarker.trades.length > 6 ? (
+        <div className="mt-2 text-xs opacity-70">
+          +{activeMarker.trades.length - 6} more
+        </div>
+      ) : null}
+      <div className="mt-2 text-xs opacity-70">
+        Market close: {formatMoney(activeMarker.close)}
+      </div>
+    </div>
+  ) : hoverPoint ? (
+    <div className="pointer-events-none absolute top-4 left-4 z-10 rounded-[16px] bg-[color:var(--deep-navy)] px-4 py-3 text-sm text-[color:var(--cream)] shadow-[var(--shadow-soft)]">
+      <div className="opacity-80">{formatDate(hoverPoint.date)}</div>
+      <div className="mt-1 text-lg font-medium tracking-tight">
+        {formatMoney(hoverPoint.close)}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div className="space-y-3">
+    <div className="relative overflow-hidden rounded-[24px] bg-[color:var(--surface)]">
+      {tooltip}
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${chart.width} ${chart.height}`}
-        className="h-auto w-full rounded border border-stone-200 bg-white"
+        className="h-auto w-full touch-pan-y"
         role="img"
-        aria-label="Daily closing price with congressional transaction markers"
+        aria-label="Interactive daily closing price chart"
+        onPointerMove={onPointerMove}
+        onPointerLeave={clearHover}
         onClick={() => {
-          setPinned(false);
-          setActive(null);
+          setPinnedMarker(false);
+          setActiveMarker(null);
         }}
       >
         {chart.yTicks.map((tick) => (
@@ -145,156 +257,120 @@ export function PriceChart({ bars, trades }: Props) {
               x2={chart.width - chart.pad.right}
               y1={tick.y}
               y2={tick.y}
-              stroke="#e7e5e4"
+              stroke="color-mix(in srgb, var(--oatmeal) 55%, transparent)"
               strokeWidth="1"
             />
             <text
-              x={chart.pad.left - 8}
+              x={chart.pad.left - 10}
               y={tick.y + 4}
               textAnchor="end"
-              className="fill-stone-500"
+              fill="var(--navy)"
+              opacity="0.55"
               fontSize="11"
             >
               {formatMoney(tick.price)}
             </text>
           </g>
         ))}
-        <path d={chart.line} fill="none" stroke="#0f766e" strokeWidth="2" />
-        {chart.markers.map((group) => {
-          const purchaseCount = group.purchases.length;
-          const saleCount = group.sales.length;
-          const purchaseMembers = new Set(
-            group.purchases.map((t) => t.member_slug ?? t.member),
-          ).size;
-          const saleMembers = new Set(
-            group.sales.map((t) => t.member_slug ?? t.member),
-          ).size;
-          return (
-          <g key={group.date}>
-            {purchaseCount > 0 ? (
-              <g
-                className="cursor-pointer"
-                onMouseEnter={() => setActive(group)}
-                onMouseLeave={() => {
-                  if (!pinned) setActive(null);
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPinned(true);
-                  setActive(group);
-                }}
-              >
-                <polygon
-                  points={`${group.x},${group.y - 14} ${group.x - 7},${group.y - 2} ${group.x + 7},${group.y - 2}`}
-                  fill="#0f766e"
-                />
-                {purchaseCount > 1 ? (
-                  <text
-                    x={group.x}
-                    y={group.y - 18}
-                    textAnchor="middle"
-                    className="fill-teal-800"
-                    fontSize="10"
-                  >
-                    {purchaseMembers > 1
-                      ? `${purchaseMembers} members`
-                      : `${purchaseCount} txns`}
-                  </text>
-                ) : null}
-              </g>
-            ) : null}
-            {saleCount > 0 ? (
-              <g
-                className="cursor-pointer"
-                onMouseEnter={() => setActive(group)}
-                onMouseLeave={() => {
-                  if (!pinned) setActive(null);
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPinned(true);
-                  setActive(group);
-                }}
-              >
-                <polygon
-                  points={`${group.x},${group.y + 14} ${group.x - 7},${group.y + 2} ${group.x + 7},${group.y + 2}`}
-                  fill="#b45309"
-                />
-                {saleCount > 1 ? (
-                  <text
-                    x={group.x}
-                    y={group.y + 28}
-                    textAnchor="middle"
-                    className="fill-amber-800"
-                    fontSize="10"
-                  >
-                    {saleMembers > 1
-                      ? `${saleMembers} members`
-                      : `${saleCount} txns`}
-                  </text>
-                ) : null}
-              </g>
-            ) : null}
+
+        <path
+          d={chart.line}
+          fill="none"
+          stroke="var(--deep-navy)"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {hoverPoint ? (
+          <g>
+            <line
+              x1={hoverPoint.x}
+              x2={hoverPoint.x}
+              y1={chart.pad.top}
+              y2={chart.height - chart.pad.bottom}
+              stroke="var(--oatmeal)"
+              strokeWidth="1.5"
+            />
+            <circle
+              cx={hoverPoint.x}
+              cy={hoverPoint.y}
+              r="4.5"
+              fill="var(--cream)"
+              stroke="var(--deep-navy)"
+              strokeWidth="2"
+            />
           </g>
+        ) : null}
+
+        {chart.markers.map((group) => {
+          const fill = group.hasSale && !group.hasPurchase
+            ? "var(--rust)"
+            : group.hasPurchase && !group.hasSale
+              ? "var(--orange)"
+              : "var(--orange)";
+          const ring = group.hasSale && group.hasPurchase ? "var(--rust)" : fill;
+          return (
+            <g key={group.date}>
+              {/* Larger invisible hit target */}
+              <circle
+                cx={group.x}
+                cy={group.y}
+                r="14"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => {
+                  setActiveMarker(group);
+                  setHoverIndex(null);
+                }}
+                onMouseLeave={() => {
+                  if (!pinnedMarker) setActiveMarker(null);
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setPinnedMarker(true);
+                  setActiveMarker(group);
+                }}
+                onTouchEnd={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setPinnedMarker(true);
+                  setActiveMarker(group);
+                }}
+              />
+              <circle
+                cx={group.x}
+                cy={group.y}
+                r={activeMarker?.date === group.date ? 6.5 : 5}
+                fill={fill}
+                stroke={ring}
+                strokeWidth={group.hasPurchase && group.hasSale ? 2 : 0}
+                className="pointer-events-none transition-[r] duration-200"
+              />
+            </g>
           );
         })}
+
         <text
           x={chart.pad.left}
-          y={chart.height - 10}
-          className="fill-stone-500"
+          y={chart.height - 8}
+          fill="var(--navy)"
+          opacity="0.5"
           fontSize="11"
         >
           {formatDate(chart.first)}
         </text>
         <text
           x={chart.width - chart.pad.right}
-          y={chart.height - 10}
+          y={chart.height - 8}
           textAnchor="end"
-          className="fill-stone-500"
+          fill="var(--navy)"
+          opacity="0.5"
           fontSize="11"
         >
           {formatDate(chart.last)}
         </text>
       </svg>
-
-      {active ? (
-        <div className="rounded border border-stone-200 bg-stone-50 px-3 py-3 text-sm text-stone-800">
-          <div className="font-medium text-stone-900">
-            {formatDate(active.date)}
-            {active.purchases.length + active.sales.length > 1
-              ? ` · ${active.purchases.length + active.sales.length} transactions`
-              : ""}
-          </div>
-          <ul className="mt-2 space-y-2">
-            {[...active.purchases, ...active.sales].map((trade) => (
-              <li key={trade.id}>
-                <span className="font-medium">{trade.member ?? "Unknown member"}</span>
-                {" · "}
-                <span className="capitalize">{trade.transaction_type}</span>
-                {trade.amount_range ? ` · ${trade.amount_range}` : ""}
-                <div className="text-xs text-stone-600">
-                  Transaction {formatDate(trade.transaction_date)} · Disclosed{" "}
-                  {formatDate(trade.disclosure_date)}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="text-xs text-stone-500">
-          Hover a marker for member, type, amount range, and dates. Daily close
-          is approximate market context, not an exact execution price.
-        </p>
-      )}
-      <p className="flex flex-wrap gap-4 text-xs text-stone-600">
-        <span>
-          <span className="font-medium text-teal-800">▲</span> Purchase
-        </span>
-        <span>
-          <span className="font-medium text-amber-800">▼</span> Sale
-        </span>
-        <span>Same-day trades share one marker.</span>
-      </p>
     </div>
   );
 }

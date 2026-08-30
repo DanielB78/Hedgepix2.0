@@ -3,11 +3,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { TrendingControls } from "@/components/TrendingControls";
 import { TrendingTable } from "@/components/TrendingTable";
 import { fetchSyncState } from "@/lib/trades";
-import {
-  fetchTrending,
-  parseTrendingFilters,
-  periodLabel,
-} from "@/lib/trending";
+import { fetchTrending, parseTrendingFilters } from "@/lib/trending";
 
 export const dynamic = "force-dynamic";
 
@@ -23,42 +19,23 @@ export default async function TrendingPage({ searchParams }: PageProps) {
     fetchSyncState(),
   ]);
 
-  const modeLabel =
-    filters.mode === "buys"
-      ? "Buys"
-      : filters.mode === "sales"
-        ? "Sales"
-        : "All activity";
-
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
       <SiteHeader syncState={syncState} />
       <MainNav active="trending" />
 
       {!result.configured || result.error ? (
-        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--rust)]">
           {result.error ?? "Configuration incomplete."}
         </div>
       ) : null}
 
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <h2 className="font-[family-name:var(--font-display)] text-2xl text-stone-900 sm:text-3xl">
-            Trending — {periodLabel(filters.periodDays)}
+      <section className="space-y-5">
+        <div className="flex items-end justify-between gap-4">
+          <h2 className="text-2xl font-medium tracking-tight text-[color:var(--deep-navy)]">
+            Trending
           </h2>
-          <p className="max-w-3xl text-sm text-stone-700">
-            Ranked by how many distinct members of Congress disclosed activity
-            in each stock during this window (using disclosure date, not
-            transaction date). One politician making many trades does not
-            outrank several members each trading once.
-          </p>
-          <p className="text-sm text-stone-600">
-            Showing <span className="font-medium text-stone-800">{modeLabel}</span>
-            {" · "}
-            cutoff {result.cutoffDate} UTC
-          </p>
         </div>
-
         <TrendingControls filters={filters} />
         <TrendingTable rows={result.rows} />
       </section>
