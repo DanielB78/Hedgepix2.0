@@ -120,26 +120,16 @@ function printHouseYearSummary(
   console.log("");
 }
 
-function printWindowSummary(
-  label: string,
-  fromDate: string,
-  toDate: string,
-  house: ChamberRunStats,
-  senate: ChamberRunStats,
-): void {
-  console.log(`${label}: ${fromDate} → ${toDate}`);
-  console.log(
-    `  House — fetched ${house.fetched}, new ${house.newCount}, updated ${house.updatedCount}`,
-  );
-  console.log(
-    `  Senate — fetched ${senate.fetched}, new ${senate.newCount}, updated ${senate.updatedCount}`,
-  );
-  console.log("");
-}
-
 async function main(): Promise<void> {
-  console.log("START HISTORICAL BACKFILL");
+  const houseOnly = process.argv.includes("--house-only");
+
+  console.log(
+    houseOnly
+      ? "START HOUSE HISTORICAL BACKFILL"
+      : "START HISTORICAL BACKFILL",
+  );
   console.log(`Collecting stock transactions from ${HISTORY_START_DATE} onward`);
+  if (houseOnly) console.log("Mode: House archives only");
   console.log("");
 
   let runId: string | null = null;
@@ -182,25 +172,30 @@ async function main(): Promise<void> {
     console.log(`Senate windows: ${senateWindows.length}`);
     console.log("");
 
-    for (const [index, window] of senateWindows.entries()) {
-      console.log(
-        `Senate window ${index + 1}/${senateWindows.length}: ${window.fromDate} → ${window.toDate}`,
-      );
-      const senate = await runSenateUpdate(
-        supabase,
-        window.fromDate,
-        window.toDate,
-      );
+    if (!houseOnly) {
+      for (const [index, window] of senateWindows.entries()) {
+        console.log(
+          `Senate window ${index + 1}/${senateWindows.length}: ${window.fromDate} → ${window.toDate}`,
+        );
+        const senate = await runSenateUpdate(
+          supabase,
+          window.fromDate,
+          window.toDate,
+        );
 
-      console.log(`${window.fromDate} → ${window.toDate}`);
-      console.log(
-        `  Senate — fetched ${senate.fetched}, new ${senate.newCount}, updated ${senate.updatedCount}`,
-      );
+        console.log(`${window.fromDate} → ${window.toDate}`);
+        console.log(
+          `  Senate — fetched ${senate.fetched}, new ${senate.newCount}, updated ${senate.updatedCount}`,
+        );
+        console.log("");
+
+        totalNew += senate.newCount;
+        totalUpdated += senate.updatedCount;
+        totalFetched += senate.fetched;
+      }
+    } else {
+      console.log("Skipping Senate windows (--house-only)");
       console.log("");
-
-      totalNew += senate.newCount;
-      totalUpdated += senate.updatedCount;
-      totalFetched += senate.fetched;
     }
 
     console.log("Recomputing member holdings…");
@@ -215,10 +210,14 @@ async function main(): Promise<void> {
     });
 
     console.log("========================================");
-    console.log("HISTORICAL BACKFILL COMPLETE");
+    console.log(
+      houseOnly ? "HOUSE HISTORICAL BACKFILL COMPLETE" : "HISTORICAL BACKFILL COMPLETE",
+    );
     console.log("========================================");
     console.log(`House archive years: ${houseYears.length}`);
-    console.log(`Senate windows processed: ${senateWindows.length}`);
+    if (!houseOnly) {
+      console.log(`Senate windows processed: ${senateWindows.length}`);
+    }
     console.log(`Total fetched rows: ${totalFetched}`);
     console.log(`Total new trades: ${totalNew}`);
     console.log(`Total updated trades: ${totalUpdated}`);
