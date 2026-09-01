@@ -17,7 +17,7 @@ class MemoryStore {
     let newCount = 0;
     let updatedCount = 0;
     for (const trade of trades) {
-      const row = toDbRow(trade, now);
+      const row = toDbRow(trade, now, true);
       const existing = this.rows.get(row.source_hash);
       if (existing) {
         this.rows.set(row.source_hash, {

@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "update-data": "npm run update-data --prefix backend",
+    "backfill-history": "npm run backfill-history --prefix backend",
     "sync:prices": "node --env-file=.env.local scripts/sync-stock-prices.mjs",
-    "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs"
+    "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs && node scripts/lib/compute-holdings.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

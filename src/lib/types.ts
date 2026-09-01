@@ -78,3 +78,26 @@ export type StockPriceBar = {
 };
 
 export type ChartRange = "3m" | "6m" | "1y" | "all";
+
+export type MemberHolding = {
+  id: string;
+  member_slug: string;
+  member: string;
+  ticker: string;
+  asset: string | null;
+  position_low: number | null;
+  position_high: number | null;
+  last_activity_type: "purchase" | "sale" | null;
+  last_activity_date: string | null;
+  last_disclosure_date: string | null;
+  computed_at: string;
+};
+
+export type MemberProfile = {
+  slug: string;
+  name: string;
+  chamber: Chamber | null;
+  state: string | null;
+};
+
+export type MemberTab = "activity" | "holdings";

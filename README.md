@@ -20,6 +20,7 @@ the same manual update, then read from Supabase by the website.
 - **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination and same-member/same-disclosure-date groups
 - **Trending** — tickers ranked by distinct members active (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
 - **Stock detail** (`/stocks/[ticker]`) — cached daily closing-price chart with congressional purchase/sale markers on **transaction date**
+- **Member pages** (`/members/[slug]`) — activity feed and estimated current stock holdings since 2012
 
 ## Setup
 
@@ -27,6 +28,7 @@ the same manual update, then read from Supabase by the website.
 2. In the Supabase SQL Editor, run `docs/02_DATABASE_SCHEMA.sql`, then apply:
    - `supabase/migrations/20260829150000_local_pipeline_columns.sql`
    - `supabase/migrations/20260830140000_stock_price_bars.sql`
+   - `supabase/migrations/20260901150000_member_holdings.sql`
 3. Configure the backend updater:
    ```bash
    cd backend
@@ -70,9 +72,16 @@ Or from the repo root:
 
 ```bash
 npm run update-data
+# one-time historical backfill (2012 → present):
+npm run backfill-history
 # prices only:
 npm run sync:prices
+# tests:
+npm run test:prices
+cd backend && npm test
 ```
+
+Only **listed stocks** (valid tickers passing equity filters) appear in Latest, Trending, member pages, stock pages, and holdings. Bonds, funds, and other non-stock assets are stored with `is_listed_equity = false` and excluded from the UI.
 
 ## Deploy (Vercel)
 

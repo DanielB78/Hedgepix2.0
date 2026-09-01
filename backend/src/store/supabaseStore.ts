@@ -1,8 +1,34 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { pathToFileURL } from "node:url";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { BackendConfig } from "../config.js";
 import { PROVIDER } from "../config.js";
 import { amountRange, memberSlug } from "../normalize.js";
 import type { CongressTrade, UpsertStats } from "../types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+type EquityModule = {
+  isLikelyListedEquity: (ticker: string | null, asset: string | null) => boolean;
+};
+
+let equityModule: EquityModule | null = null;
+
+async function loadEquityModule(): Promise<EquityModule> {
+  if (equityModule) return equityModule;
+  const modulePath = resolve(__dirname, "../../../scripts/lib/equity-tickers.mjs");
+  equityModule = (await import(pathToFileURL(modulePath).href)) as EquityModule;
+  return equityModule;
+}
+
+export async function isListedEquityTrade(
+  ticker: string | null,
+  asset: string | null,
+): Promise<boolean> {
+  const mod = await loadEquityModule();
+  return mod.isLikelyListedEquity(ticker, asset);
+}
 
 export type DbTradeRow = {
   source_hash: string;
@@ -19,6 +45,7 @@ export type DbTradeRow = {
   transaction_date: string;
   disclosure_date: string;
   owner: string | null;
+  is_listed_equity: boolean;
   filing_portal: string;
   raw_source: unknown;
   last_seen_at: string;
@@ -37,7 +64,11 @@ function filingPortal(chamber: CongressTrade["chamber"]): string {
     : "https://efdsearch.senate.gov/search/";
 }
 
-export function toDbRow(trade: CongressTrade, nowIso: string): DbTradeRow {
+export function toDbRow(
+  trade: CongressTrade,
+  nowIso: string,
+  listedEquity: boolean,
+): DbTradeRow {
   return {
     source_hash: trade.sourceId,
     member: trade.member,
@@ -53,6 +84,7 @@ export function toDbRow(trade: CongressTrade, nowIso: string): DbTradeRow {
     transaction_date: trade.transactionDate,
     disclosure_date: trade.disclosureDate,
     owner: trade.owner,
+    is_listed_equity: listedEquity,
     filing_portal: filingPortal(trade.chamber),
     raw_source: trade.rawSource ?? null,
     last_seen_at: nowIso,
@@ -63,6 +95,7 @@ export function toDbRow(trade: CongressTrade, nowIso: string): DbTradeRow {
 const UPSERT_CHUNK = 200;
 
 let extendedColumns: boolean | null = null;
+let listedEquityColumn: boolean | null = null;
 
 async function hasExtendedColumns(supabase: SupabaseClient): Promise<boolean> {
   if (extendedColumns !== null) return extendedColumns;
@@ -79,6 +112,23 @@ async function hasExtendedColumns(supabase: SupabaseClient): Promise<boolean> {
   return extendedColumns;
 }
 
+async function hasListedEquityColumn(
+  supabase: SupabaseClient,
+): Promise<boolean> {
+  if (listedEquityColumn !== null) return listedEquityColumn;
+  const { error } = await supabase
+    .from("congress_trades")
+    .select("is_listed_equity")
+    .limit(1);
+  listedEquityColumn = !error;
+  if (!listedEquityColumn) {
+    console.warn(
+      "[store] is_listed_equity column missing — upserting without it. Apply supabase/migrations/20260901150000_member_holdings.sql when convenient.",
+    );
+  }
+  return listedEquityColumn;
+}
+
 export async function upsertTrades(
   supabase: SupabaseClient,
   trades: CongressTrade[],
@@ -88,22 +138,29 @@ export async function upsertTrades(
   }
 
   const includeExtended = await hasExtendedColumns(supabase);
+  const includeListedEquity = await hasListedEquityColumn(supabase);
+  const equity = await loadEquityModule();
   const nowIso = new Date().toISOString();
 
   // Deduplicate within the batch — Postgres rejects ON CONFLICT when the
   // same source_hash appears twice in a single INSERT.
-  const byHash = new Map<string, ReturnType<typeof toDbRow> | Omit<ReturnType<typeof toDbRow>, "asset_type" | "owner">>();
+  const byHash = new Map<string, Record<string, unknown>>();
   for (const trade of trades) {
-    const row = toDbRow(trade, nowIso);
-    const payload = includeExtended
-      ? row
-      : (() => {
-          const { asset_type: _a, owner: _o, ...rest } = row;
-          return rest;
-        })();
-    byHash.set(payload.source_hash, payload);
+    const listedEquity = equity.isLikelyListedEquity(trade.ticker, trade.assetName);
+    const row = toDbRow(trade, nowIso, listedEquity);
+    const payload: Record<string, unknown> = { ...row };
+    if (!includeExtended) {
+      delete payload.asset_type;
+      delete payload.owner;
+    }
+    if (!includeListedEquity) {
+      delete payload.is_listed_equity;
+    }
+    byHash.set(String(payload.source_hash), payload);
   }
-  const rows = [...byHash.values()];
+  const rows = [...byHash.values()] as Array<
+    ReturnType<typeof toDbRow> | Omit<ReturnType<typeof toDbRow>, "asset_type" | "owner" | "is_listed_equity">
+  >;
   const hashes = rows.map((r) => r.source_hash);
 
   const existing = new Set<string>();
@@ -168,6 +225,7 @@ export async function getLastSuccessAt(
 
 export async function startSyncRun(
   supabase: SupabaseClient,
+  mode: "manual" | "backfill" = "manual",
 ): Promise<string> {
   const attemptedAt = new Date().toISOString();
 
@@ -175,7 +233,7 @@ export async function startSyncRun(
     .from("congress_sync_runs")
     .insert({
       provider: PROVIDER,
-      mode: "manual",
+      mode,
       status: "running",
     })
     .select("id")

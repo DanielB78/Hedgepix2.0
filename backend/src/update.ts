@@ -86,12 +86,52 @@ function printPriceBlock(prices: PriceSummary): void {
   console.log("");
 }
 
+async function syncHoldingsAfterTrades(
+  supabase: ReturnType<typeof createSupabase>,
+): Promise<{ members: number; positions: number } | null> {
+  try {
+    const modulePath = resolve(
+      __dirname,
+      "../../scripts/lib/compute-holdings.mjs",
+    );
+    const mod = (await import(pathToFileURL(modulePath).href)) as {
+      refreshListedEquityFlags: (
+        client: ReturnType<typeof createSupabase>,
+      ) => Promise<{ updated: number }>;
+      syncMemberHoldings: (
+        client: ReturnType<typeof createSupabase>,
+      ) => Promise<{ members: number; positions: number }>;
+    };
+    await mod.refreshListedEquityFlags(supabase);
+    return await mod.syncMemberHoldings(supabase);
+  } catch (err) {
+    console.error(
+      `Holdings sync failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
+
+function printHoldingsBlock(holdings: { members: number; positions: number } | null): void {
+  console.log("MEMBER HOLDINGS");
+  if (!holdings) {
+    console.log("Status: FAILED");
+    console.log("");
+    return;
+  }
+  console.log("Status: SUCCESS");
+  console.log(`Members with positions: ${holdings.members}`);
+  console.log(`Open positions: ${holdings.positions}`);
+  console.log("");
+}
+
 function printSummary(
   fromDate: string,
   toDate: string,
   house: ChamberRunStats,
   senate: ChamberRunStats,
   prices: PriceSummary,
+  holdings: { members: number; positions: number } | null,
 ): void {
   const totalNew = house.newCount + senate.newCount;
   const anySuccess = house.status === "success" || senate.status === "success";
@@ -111,6 +151,7 @@ function printSummary(
   console.log(`TOTAL NEW TRADES: ${totalNew}`);
   console.log("");
   printPriceBlock(prices);
+  printHoldingsBlock(holdings);
 
   if (bothFailed) {
     console.log("BOTH CHAMBERS FAILED — Supabase may be unchanged.");
@@ -249,7 +290,14 @@ async function main(): Promise<void> {
       console.log("");
     }
 
-    printSummary(fromDate, toDate, house, senate, prices);
+    let holdings: { members: number; positions: number } | null = null;
+    if (!bothFailed) {
+      console.log("Recomputing member holdings…");
+      holdings = await syncHoldingsAfterTrades(supabase);
+      console.log("");
+    }
+
+    printSummary(fromDate, toDate, house, senate, prices, holdings);
 
     if (bothFailed) {
       process.exitCode = 1;

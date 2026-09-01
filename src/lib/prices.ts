@@ -1,6 +1,10 @@
 import type { CongressTrade, ChartRange, StockPriceBar } from "./types";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
 import { PUBLIC_TRADE_COLUMNS } from "./trades";
+import {
+  applyListedEquityFallback,
+  isMissingListedEquityColumn,
+} from "./stockFilter";
 
 const BAR_COLUMNS = "ticker, bar_date, open, high, low, close, volume";
 
@@ -62,16 +66,39 @@ export async function fetchStockPage(
     .order("bar_date", { ascending: true });
   if (cutoff) barsQuery = barsQuery.gte("bar_date", cutoff);
 
-  const [barsResult, tradesResult] = await Promise.all([
+  const [barsResult, tradesResultRaw] = await Promise.all([
     barsQuery,
     supabase
       .from("congress_trades")
       .select(PUBLIC_TRADE_COLUMNS)
       .eq("ticker", symbol)
+      .eq("is_listed_equity", true)
       .order("transaction_date", { ascending: false, nullsFirst: false })
       .order("disclosure_date", { ascending: false, nullsFirst: false })
       .limit(500),
   ]);
+
+  let tradesResult = tradesResultRaw;
+  if (isMissingListedEquityColumn(tradesResult.error)) {
+    tradesResult = await supabase
+      .from("congress_trades")
+      .select(PUBLIC_TRADE_COLUMNS)
+      .eq("ticker", symbol)
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .order("disclosure_date", { ascending: false, nullsFirst: false })
+      .limit(500);
+
+    if (!tradesResult.error && tradesResult.data) {
+      const filtered = applyListedEquityFallback(
+        tradesResult.data as unknown as CongressTrade[],
+        null,
+      );
+      tradesResult = {
+        ...tradesResult,
+        data: filtered.rows as unknown as typeof tradesResult.data,
+      };
+    }
+  }
 
   if (barsResult.error && /stock_price_bars/i.test(barsResult.error.message)) {
     // Table may not be applied yet.

@@ -5,6 +5,10 @@ import type {
   TrendingTicker,
 } from "./types";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
+import {
+  applyListedEquityFallback,
+  isMissingListedEquityColumn,
+} from "./stockFilter";
 
 type RawTradeRow = {
   ticker: string | null;
@@ -87,7 +91,8 @@ export async function fetchTrending(
 
   let query = supabase
     .from("congress_trades")
-    .select("ticker, asset, transaction_type, member_slug, disclosure_date")
+    .select("ticker, asset, transaction_type, member_slug, disclosure_date, is_listed_equity")
+    .eq("is_listed_equity", true)
     .not("ticker", "is", null)
     .gte("disclosure_date", cutoffDate);
 
@@ -98,7 +103,30 @@ export async function fetchTrending(
   }
 
   // Cap fetch for MVP; enough for ranking without a DB aggregate RPC.
-  const { data, error } = await query.limit(5000);
+  const primary = await query.limit(5000);
+  let rows = (primary.data ?? []) as RawTradeRow[];
+  let error = primary.error;
+
+  if (isMissingListedEquityColumn(error)) {
+    let fallback = supabase
+      .from("congress_trades")
+      .select("ticker, asset, transaction_type, member_slug, disclosure_date")
+      .not("ticker", "is", null)
+      .gte("disclosure_date", cutoffDate);
+
+    if (filters.mode === "buys") {
+      fallback = fallback.eq("transaction_type", "purchase");
+    } else if (filters.mode === "sales") {
+      fallback = fallback.eq("transaction_type", "sale");
+    }
+
+    const fallbackResult = await fallback.limit(5000);
+    rows = (fallbackResult.data ?? []) as RawTradeRow[];
+    error = fallbackResult.error;
+    if (!error) {
+      rows = applyListedEquityFallback(rows, null).rows;
+    }
+  }
 
   if (error) {
     return {
@@ -111,7 +139,7 @@ export async function fetchTrending(
   }
 
   return {
-    rows: rankTrending((data ?? []) as RawTradeRow[]),
+    rows: rankTrending(rows),
     filters,
     cutoffDate,
     configured: true,

@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { TickerLink } from "@/components/TickerLink";
 import type { CongressTrade } from "@/lib/types";
 import type { TradeDisclosureGroup } from "@/lib/groupTrades";
+import { memberHref } from "@/lib/holdings";
 
 type Props = {
   group: TradeDisclosureGroup;
@@ -104,9 +106,19 @@ export function TradeDisclosureGroupCard({ group, defaultOpen }: Props) {
         </span>
         <div className="flex min-w-0 flex-1 items-baseline justify-between gap-4">
           <div className="min-w-0">
-            <div className="truncate text-base font-medium text-[color:var(--deep-navy)]">
-              {group.member ?? "Unknown member"}
-            </div>
+            {group.memberSlug ? (
+              <Link
+                href={memberHref(group.memberSlug)}
+                className="block truncate text-base font-medium text-[color:var(--deep-navy)] transition hover:opacity-70"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {group.member ?? "Unknown member"}
+              </Link>
+            ) : (
+              <div className="truncate text-base font-medium text-[color:var(--deep-navy)]">
+                {group.member ?? "Unknown member"}
+              </div>
+            )}
             <div className="mt-0.5 text-sm text-[color:var(--muted)]">
               {count} transaction{count === 1 ? "" : "s"}
               {hint ? ` · ${hint}` : ""}

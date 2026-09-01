@@ -131,7 +131,7 @@ export async function collectEligibleTickers(supabase) {
   while (true) {
     const { data, error } = await supabase
       .from("congress_trades")
-      .select("ticker, asset, transaction_date")
+      .select("ticker, asset, transaction_date, is_listed_equity")
       .not("ticker", "is", null)
       .range(from, from + TRADE_PAGE_SIZE - 1);
 
@@ -144,7 +144,13 @@ export async function collectEligibleTickers(supabase) {
       if (!ticker) continue;
       if (!seenAssets.has(ticker)) seenAssets.set(ticker, false);
 
-      if (!isLikelyListedEquity(ticker, row.asset)) continue;
+      if (row.is_listed_equity === false) continue;
+      if (
+        row.is_listed_equity !== true &&
+        !isLikelyListedEquity(ticker, row.asset)
+      ) {
+        continue;
+      }
       seenAssets.set(ticker, true);
 
       let acc = byTicker.get(ticker);

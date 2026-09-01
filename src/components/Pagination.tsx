@@ -7,9 +7,31 @@ type Props = {
   page: number;
   pageSize: number;
   totalCount: number;
+  basePath?: string;
 };
 
-export function Pagination({ filters, page, pageSize, totalCount }: Props) {
+function pageHref(
+  filters: TradeFilters,
+  page: number,
+  basePath = "/",
+): string {
+  if (basePath === "/") {
+    return buildHref(filters, page);
+  }
+
+  const params = new URLSearchParams();
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
+}
+
+export function Pagination({
+  filters,
+  page,
+  pageSize,
+  totalCount,
+  basePath = "/",
+}: Props) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   if (totalCount === 0) return null;
 
@@ -24,7 +46,7 @@ export function Pagination({ filters, page, pageSize, totalCount }: Props) {
       <div className="flex items-center gap-2">
         {page > 1 ? (
           <Link
-            href={buildHref(filters, page - 1)}
+            href={pageHref(filters, page - 1, basePath)}
             className="rounded-[14px] bg-[color:var(--surface)] px-3 py-1.5 text-[color:var(--deep-navy)] hover:bg-[color:var(--surface-strong)]"
           >
             Previous
@@ -37,7 +59,7 @@ export function Pagination({ filters, page, pageSize, totalCount }: Props) {
         </span>
         {page < totalPages ? (
           <Link
-            href={buildHref(filters, page + 1)}
+            href={pageHref(filters, page + 1, basePath)}
             className="rounded-[14px] bg-[color:var(--surface)] px-3 py-1.5 text-[color:var(--deep-navy)] hover:bg-[color:var(--surface-strong)]"
           >
             Next

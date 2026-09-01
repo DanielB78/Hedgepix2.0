@@ -4,6 +4,10 @@ import {
   hasServiceSupabaseConfig,
 } from "./supabase-admin";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
+import {
+  applyListedEquityFallback,
+  isMissingListedEquityColumn,
+} from "./stockFilter";
 
 export const PAGE_SIZE = 50;
 
@@ -95,6 +99,7 @@ export async function fetchTrades(
   let query = supabase
     .from("congress_trades")
     .select(PUBLIC_TRADE_COLUMNS, { count: "exact" })
+    .eq("is_listed_equity", true)
     .order("disclosure_date", { ascending: false, nullsFirst: false })
     .order("transaction_date", { ascending: false, nullsFirst: false })
     .range(from, to);
@@ -112,7 +117,43 @@ export async function fetchTrades(
     query = query.eq("transaction_type", filters.type);
   }
 
-  const tradesResult = await query;
+  let tradesResult = await query;
+
+  if (isMissingListedEquityColumn(tradesResult.error)) {
+    let fallbackQuery = supabase
+      .from("congress_trades")
+      .select(PUBLIC_TRADE_COLUMNS, { count: "exact" })
+      .order("disclosure_date", { ascending: false, nullsFirst: false })
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .range(from, to);
+
+    if (filters.member) {
+      fallbackQuery = fallbackQuery.ilike("member", `%${filters.member}%`);
+    }
+    if (filters.ticker) {
+      fallbackQuery = fallbackQuery.eq("ticker", filters.ticker);
+    }
+    if (filters.chamber) {
+      fallbackQuery = fallbackQuery.eq("chamber", filters.chamber);
+    }
+    if (filters.type) {
+      fallbackQuery = fallbackQuery.eq("transaction_type", filters.type);
+    }
+
+    tradesResult = await fallbackQuery;
+    if (!tradesResult.error && tradesResult.data) {
+      const filtered = applyListedEquityFallback(
+        tradesResult.data as unknown as CongressTrade[],
+        tradesResult.count,
+      );
+      tradesResult = {
+        ...tradesResult,
+        data: filtered.rows as unknown as typeof tradesResult.data,
+        count: filtered.count,
+      };
+    }
+  }
+
   const syncState = await fetchSyncState();
 
   if (tradesResult.error) {

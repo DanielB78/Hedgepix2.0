@@ -1,8 +1,4 @@
-/**
- * Only listed stocks/ETFs with a usable ticker should hit Alpaca.
- * Direct bonds, Treasuries, CDs, and blank tickers are skipped.
- * Bond/Treasury ETFs (HYG, TLT, …) are listed products and should be priced.
- */
+/** Client-side mirror of scripts/lib/equity-tickers.mjs for fallback filtering. */
 
 const TICKER_RE = /^[A-Z]{1,5}(\.[A-Z])?$/;
 
@@ -31,13 +27,16 @@ const ASSET_DENY = [
   /\btreasury (?:bill|note|bond)\b/i,
 ];
 
-export function normalizeTicker(ticker) {
+export function normalizeTicker(ticker: string | null | undefined): string | null {
   if (!ticker || typeof ticker !== "string") return null;
   const trimmed = ticker.trim().toUpperCase();
   return trimmed || null;
 }
 
-export function isLikelyListedEquity(ticker, asset) {
+export function isLikelyListedEquity(
+  ticker: string | null | undefined,
+  asset: string | null | undefined,
+): boolean {
   const symbol = normalizeTicker(ticker);
   if (!symbol || !TICKER_RE.test(symbol)) return false;
 
@@ -51,12 +50,16 @@ export function isLikelyListedEquity(ticker, asset) {
   return !ASSET_DENY.some((re) => re.test(name));
 }
 
-export function addDays(isoDate, days) {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+export function isListedEquityColumnMissing(message: string): boolean {
+  return /is_listed_equity/i.test(message);
 }
 
-export function utcToday() {
-  return new Date().toISOString().slice(0, 10);
+export function filterListedEquityRows<
+  T extends { ticker?: string | null; asset?: string | null; is_listed_equity?: boolean | null },
+>(rows: T[]): T[] {
+  return rows.filter((row) => {
+    if (row.is_listed_equity === true) return true;
+    if (row.is_listed_equity === false) return false;
+    return isLikelyListedEquity(row.ticker, row.asset);
+  });
 }

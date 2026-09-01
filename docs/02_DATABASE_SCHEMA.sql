@@ -190,3 +190,34 @@ to anon, authenticated
 using (true);
 
 grant select on public.stock_price_bars to anon, authenticated;
+
+-- Listed-equity flag + precomputed member holdings (20260901150000_member_holdings.sql)
+alter table public.congress_trades
+  add column if not exists is_listed_equity boolean not null default false;
+
+create table if not exists public.member_stock_holdings (
+  id uuid primary key default gen_random_uuid(),
+  member_slug text not null,
+  member text not null,
+  ticker text not null,
+  asset text,
+  position_low numeric,
+  position_high numeric,
+  last_activity_type text,
+  last_activity_date date,
+  last_disclosure_date date,
+  computed_at timestamptz not null default now(),
+  unique (member_slug, ticker)
+);
+
+alter table public.member_stock_holdings enable row level security;
+
+drop policy if exists "public can read member stock holdings"
+  on public.member_stock_holdings;
+create policy "public can read member stock holdings"
+on public.member_stock_holdings
+for select
+to anon, authenticated
+using (true);
+
+grant select on public.member_stock_holdings to anon, authenticated;
