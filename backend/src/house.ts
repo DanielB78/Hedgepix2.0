@@ -6,15 +6,30 @@ import { normalizeAll } from "./normalize.js";
 import { upsertTrades } from "./store/supabaseStore.js";
 import type { ChamberRunStats, UpstreamTransaction } from "./types.js";
 
+export type HouseUpdateOptions = {
+  /** Annual House archives to download (defaults to current year only). */
+  archiveYears?: number[];
+};
+
 export async function runHouseUpdate(
   supabase: SupabaseClient,
   fromDate: string,
   toDate: string,
+  options: HouseUpdateOptions = {},
 ): Promise<ChamberRunStats> {
-  console.log("[House] Fetching disclosure index...");
+  const archiveYears = options.archiveYears;
+  console.log(
+    archiveYears
+      ? `[House] Fetching archives ${archiveYears.join(", ")}…`
+      : "[House] Fetching disclosure index…",
+  );
 
   try {
-    const fetchResult = await fetchAllHouse(fromDate, toDate);
+    const fetchResult = await fetchAllHouse(
+      fromDate,
+      toDate,
+      archiveYears ? { years: archiveYears } : undefined,
+    );
 
     if (!fetchResult.success && fetchResult.records.length === 0) {
       const msg = fetchResult.error ?? "House fetch failed with no records";

@@ -134,32 +134,49 @@ function isoDefaultStart(): string {
   return format(subDays(new Date(), config.FETCH_DAYS_BACK), 'yyyy-MM-dd');
 }
 
-export async function fetchAllHouse(
-  fromDate: string = isoDefaultStart(),
-  toDate: string = isoToday(),
+/** Calendar years spanned by an inclusive ISO date range. */
+export function yearsForDateRange(fromDate: string, toDate: string): number[] {
+  const startYear = Number.parseInt(fromDate.slice(0, 4), 10);
+  const endYear = Number.parseInt(toDate.slice(0, 4), 10);
+  const years: number[] = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+export type FetchAllHouseOptions = {
+  /** Annual House archives to download (defaults to the current calendar year). */
+  years?: number[];
+};
+
+async function fetchHouseForYear(
+  year: number,
+  fromDate: string,
+  toDate: string,
 ): Promise<FetchResult> {
-  log.info(`fetchAllHouse from=${fromDate} to=${toDate}`);
+  log.info(`fetchHouseForYear year=${year} from=${fromDate} to=${toDate}`);
 
-  const year = new Date().getFullYear();
-
-  // 1) Download + extract index
   let filings: FilingIndex[];
   try {
     const zipBuf = await withRetry(() => downloadZip(year), 3, 1000);
     const xml = extractIndexXml(zipBuf, year);
     filings = parseIndex(xml, year, fromDate, toDate);
-    log.info(`House index: ${filings.length} PTR filings in window`);
+    log.info(`House ${year} index: ${filings.length} PTR filings in window`);
   } catch (err) {
+    if (err instanceof AxiosError && err.response?.status === 404) {
+      log.warn(`House archive ${year}FD.zip not found — skipping`);
+      return { success: true, records: [] };
+    }
     const message = err instanceof AxiosError ? err.message : String(err);
-    log.error(`House index fetch failed: ${message}`);
-    return { success: false, records: [], error: `House index: ${message}` };
+    log.error(`House ${year} index fetch failed: ${message}`);
+    return { success: false, records: [], error: `House ${year} index: ${message}` };
   }
 
   if (filings.length === 0) {
     return { success: true, records: [] };
   }
 
-  // 2) Fetch each PDF, parse rows
   const records: RawTransaction[] = [];
   let errors = 0;
   let scanned = 0;
@@ -188,19 +205,54 @@ export async function fetchAllHouse(
     }
 
     if ((i + 1) % 25 === 0 || i === filingsToFetch.length - 1) {
-      log.info(`House progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${scanned} unparseable)`);
+      log.info(
+        `House ${year} progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${scanned} unparseable)`,
+      );
     }
     if (i < filingsToFetch.length - 1) await delay(PDF_DELAY_MS);
   }
 
   log.info(
-    `fetchAllHouse complete: ${filingsToFetch.length} filings → ${records.length} txs, ${scanned} unparseable, ${errors} errors`,
+    `fetchHouseForYear ${year} complete: ${filingsToFetch.length} filings → ${records.length} txs, ${scanned} unparseable, ${errors} errors`,
   );
 
   const partial = errors > filingsToFetch.length / 4;
   return {
     success: !partial,
     records,
-    error: partial ? `${errors}/${filings.length} House PDF fetches failed` : undefined,
+    error: partial ? `${errors}/${filings.length} House ${year} PDF fetches failed` : undefined,
+  };
+}
+
+export async function fetchAllHouse(
+  fromDate: string = isoDefaultStart(),
+  toDate: string = isoToday(),
+  options: FetchAllHouseOptions = {},
+): Promise<FetchResult> {
+  const years = options.years ?? [new Date().getFullYear()];
+  log.info(`fetchAllHouse from=${fromDate} to=${toDate} years=${years.join(',')}`);
+
+  if (years.length === 1) {
+    return fetchHouseForYear(years[0]!, fromDate, toDate);
+  }
+
+  const records: RawTransaction[] = [];
+  const errors: string[] = [];
+  let hadHardFailure = false;
+
+  for (const year of years) {
+    const result = await fetchHouseForYear(year, fromDate, toDate);
+    records.push(...result.records);
+    if (result.error) errors.push(result.error);
+    if (!result.success && result.records.length === 0) {
+      hadHardFailure = true;
+    }
+  }
+
+  const partial = errors.length > 0;
+  return {
+    success: !hadHardFailure,
+    records,
+    error: partial ? errors.join(' | ') : undefined,
   };
 }

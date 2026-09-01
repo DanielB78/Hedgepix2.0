@@ -27,7 +27,10 @@ function isoDate(d: Date): string {
   return format(d, "yyyy-MM-dd");
 }
 
-/** Split [start, end] into yearly windows for long-running backfills. */
+/** Earliest calendar year for one-time historical House archive backfill. */
+export const HISTORY_START_YEAR = 2012;
+
+/** Split [start, end] into yearly windows for Senate backfills. */
 export function historyDateWindows(
   startDate: string,
   endDate: string,
@@ -48,6 +51,32 @@ export function historyDateWindows(
   }
 
   return windows;
+}
+
+/** Inclusive list of House archive years to download. */
+export function houseArchiveYears(
+  startYear: number,
+  endYear: number,
+): number[] {
+  const years: number[] = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    years.push(year);
+  }
+  return years;
+}
+
+/** Clip an overall backfill range to one calendar year. */
+export function yearDateBounds(
+  year: number,
+  overallFrom: string,
+  overallTo: string,
+): { fromDate: string; toDate: string } {
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  return {
+    fromDate: overallFrom > yearStart ? overallFrom : yearStart,
+    toDate: overallTo < yearEnd ? overallTo : yearEnd,
+  };
 }
 
 async function syncHoldingsAfterTrades(
@@ -76,6 +105,19 @@ async function syncHoldingsAfterTrades(
     );
     return null;
   }
+}
+
+function printHouseYearSummary(
+  year: number,
+  fromDate: string,
+  toDate: string,
+  house: ChamberRunStats,
+): void {
+  console.log(`House ${year}: ${fromDate} → ${toDate}`);
+  console.log(
+    `  fetched ${house.fetched}, new ${house.newCount}, updated ${house.updatedCount}`,
+  );
+  console.log("");
 }
 
 function printWindowSummary(
@@ -109,20 +151,40 @@ async function main(): Promise<void> {
     runId = await startSyncRun(supabase, "backfill");
 
     const endDate = isoDate(new Date());
-    const windows = historyDateWindows(HISTORY_START_DATE, endDate);
+    const endYear = new Date().getFullYear();
+    const houseYears = houseArchiveYears(HISTORY_START_YEAR, endYear);
+    const senateWindows = historyDateWindows(HISTORY_START_DATE, endDate);
 
     let totalNew = 0;
     let totalUpdated = 0;
     let totalFetched = 0;
 
-    for (const [index, window] of windows.entries()) {
+    console.log(
+      `House archives: ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
+    );
+    console.log("");
+
+    for (const [index, year] of houseYears.entries()) {
+      const bounds = yearDateBounds(year, HISTORY_START_DATE, endDate);
       console.log(
-        `Window ${index + 1}/${windows.length}: ${window.fromDate} → ${window.toDate}`,
+        `House year ${index + 1}/${houseYears.length}: ${year} (${bounds.fromDate} → ${bounds.toDate})`,
       );
-      const house = await runHouseUpdate(
-        supabase,
-        window.fromDate,
-        window.toDate,
+      const house = await runHouseUpdate(supabase, bounds.fromDate, bounds.toDate, {
+        archiveYears: [year],
+      });
+      printHouseYearSummary(year, bounds.fromDate, bounds.toDate, house);
+
+      totalNew += house.newCount;
+      totalUpdated += house.updatedCount;
+      totalFetched += house.fetched;
+    }
+
+    console.log(`Senate windows: ${senateWindows.length}`);
+    console.log("");
+
+    for (const [index, window] of senateWindows.entries()) {
+      console.log(
+        `Senate window ${index + 1}/${senateWindows.length}: ${window.fromDate} → ${window.toDate}`,
       );
       const senate = await runSenateUpdate(
         supabase,
@@ -130,11 +192,15 @@ async function main(): Promise<void> {
         window.toDate,
       );
 
-      printWindowSummary("Done", window.fromDate, window.toDate, house, senate);
+      console.log(`${window.fromDate} → ${window.toDate}`);
+      console.log(
+        `  Senate — fetched ${senate.fetched}, new ${senate.newCount}, updated ${senate.updatedCount}`,
+      );
+      console.log("");
 
-      totalNew += house.newCount + senate.newCount;
-      totalUpdated += house.updatedCount + senate.updatedCount;
-      totalFetched += house.fetched + senate.fetched;
+      totalNew += senate.newCount;
+      totalUpdated += senate.updatedCount;
+      totalFetched += senate.fetched;
     }
 
     console.log("Recomputing member holdings…");
@@ -151,7 +217,8 @@ async function main(): Promise<void> {
     console.log("========================================");
     console.log("HISTORICAL BACKFILL COMPLETE");
     console.log("========================================");
-    console.log(`Windows processed: ${windows.length}`);
+    console.log(`House archive years: ${houseYears.length}`);
+    console.log(`Senate windows processed: ${senateWindows.length}`);
     console.log(`Total fetched rows: ${totalFetched}`);
     console.log(`Total new trades: ${totalNew}`);
     console.log(`Total updated trades: ${totalUpdated}`);

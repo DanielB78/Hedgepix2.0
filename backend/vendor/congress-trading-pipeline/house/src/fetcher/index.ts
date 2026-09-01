@@ -1,1 +1,2 @@
-export { fetchAllHouse } from './houseFetcher.js';
+export { fetchAllHouse, yearsForDateRange } from './houseFetcher.js';
+export type { FetchAllHouseOptions } from './houseFetcher.js';

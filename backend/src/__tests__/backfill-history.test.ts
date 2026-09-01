@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { historyDateWindows } from "../backfill-history.js";
+import {
+  historyDateWindows,
+  houseArchiveYears,
+  yearDateBounds,
+  HISTORY_START_YEAR,
+} from "../backfill-history.js";
 
 function testHistoryWindows() {
   const windows = historyDateWindows("2012-01-01", "2014-06-15");
@@ -15,5 +20,24 @@ function testHistoryWindows() {
   assert.equal(single[0].toDate, "2026-03-01");
 }
 
+function testHouseArchiveYears() {
+  const years = houseArchiveYears(2012, 2014);
+  assert.deepEqual(years, [2012, 2013, 2014]);
+  assert.equal(houseArchiveYears(HISTORY_START_YEAR, HISTORY_START_YEAR).length, 1);
+}
+
+function testYearDateBounds() {
+  assert.deepEqual(yearDateBounds(2012, "2012-01-01", "2026-09-01"), {
+    fromDate: "2012-01-01",
+    toDate: "2012-12-31",
+  });
+  assert.deepEqual(yearDateBounds(2026, "2012-01-01", "2026-09-01"), {
+    fromDate: "2026-01-01",
+    toDate: "2026-09-01",
+  });
+}
+
 testHistoryWindows();
+testHouseArchiveYears();
+testYearDateBounds();
 console.log("backfill-history tests passed");
