@@ -240,9 +240,13 @@ def parse_from_window(
     asset_name = MARKER_RE.sub(" ", asset_name)
     asset_name = re.sub(r"\bType Date Gains\b.*$", "", asset_name, flags=re.I)
     asset_name = re.sub(r"\$200\?", "", asset_name)
+    asset_name = re.sub(r"^(?:F|Filer|Asset|SP)\s+", "", asset_name, flags=re.I)
+    asset_name = re.sub(r"^SP(?=[A-Z])", "", asset_name)
     asset_name = re.sub(r"\s+", " ", asset_name).strip(" -:\t")
-    if not asset_name:
+    if not asset_name or asset_name.upper() in {"FILING ID", "FILING", "ID"}:
         asset_name = ticker or "Unknown asset"
+    if owner.upper() in {"FILING ID", "FILING", "ID", "STATUS"}:
+        owner = "self"
 
     return {
         "politician": member,
@@ -293,24 +297,31 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
 
 
 def expected_stock_count(lines: list[str]) -> int:
-    """Count identifiable stock/ETF transaction rows via marker-centered windows."""
+    """Count identifiable stock/ETF transaction rows.
+
+    A stock row is identifiable when an [ST]/[ET] marker appears with nearby
+    transaction context (type and/or dates). We intentionally do NOT require a
+    parseable amount here — missing amounts should fail coverage validation.
+    """
     count = 0
     for idx in find_marker_line_indexes(lines):
         marker_line = lines[idx]
         m = MARKER_RE.search(marker_line)
         if not m or m.group(2).upper() not in STOCK_CODES:
             continue
-        complete = False
-        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2)):
+        identifiable = False
+        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2), (3, 2)):
             block = window_text(lines, idx, before=before, after=after)
-            if (
-                len(DATE_RE.findall(block)) >= 2
-                and TYPE_RE.search(block)
-                and parse_amount(block)
-            ):
-                complete = True
+            dates = DATE_RE.findall(block)
+            has_type = bool(TYPE_RE.search(block))
+            # Real PTR rows almost always have type + at least one date nearby.
+            if has_type and len(dates) >= 1:
+                identifiable = True
                 break
-        if complete:
+            if len(dates) >= 2 and parse_amount(block):
+                identifiable = True
+                break
+        if identifiable:
             count += 1
     return count
 
