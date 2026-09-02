@@ -60,6 +60,21 @@ NOISE_RE = re.compile(
     r"^(F(?:iling)?\s*S(?:tatus)?|S(?:ubholding)?\s*O|D(?:escription)?)\s*:",
     re.I,
 )
+# Repeated PTR table headers that appear after page breaks
+PAGE_HEADER_RE = re.compile(
+    r"^(?:"
+    r"ID\s+Owner\s+Asset|"
+    r"Type\s+Date\s+Gains|"
+    r"\$200\?|"
+    r"Asset|"
+    r"Transaction\s+Type|"
+    r"Notification\s+Date|"
+    r"Amount|"
+    r"Cap\.?"
+    r")\b",
+    re.I,
+)
+EXACT_AMOUNT_RE = re.compile(r"\$\s*([\d,]+(?:\.\d{1,2})?)\b")
 
 
 def clean_nulls(s: str) -> str:
@@ -139,13 +154,27 @@ def parse_amount(block: str) -> tuple[int, int] | None:
     m = AMOUNT_RE.search(block)
     if not m:
         m = AMOUNT_FLEX_RE.search(block)
-    if not m:
-        return None
-    low = int(m.group(1).replace(",", ""))
-    high = int(m.group(2).replace(",", ""))
-    if high < low:
-        return None
-    return low, high
+    if m:
+        low = int(m.group(1).replace(",", ""))
+        high = int(m.group(2).replace(",", ""))
+        if high < low:
+            return None
+        return low, high
+
+    # Exact disclosed amounts (e.g. "$2,722.50" or "$15.00") — not a range start.
+    for m in EXACT_AMOUNT_RE.finditer(block):
+        after = block[m.end() : m.end() + 12]
+        if after.startswith("?") or re.match(r"\s*-\s*\$?", after):
+            continue
+        raw = m.group(1).replace(",", "")
+        try:
+            value = int(round(float(raw)))
+        except ValueError:
+            continue
+        if value <= 0:
+            continue
+        return value, value
+    return None
 
 
 def extract_member_and_doc(lines: list[str], fallback_doc: str | None) -> tuple[str, str]:
@@ -172,14 +201,56 @@ def is_description_noise(line: str) -> bool:
     return False
 
 
+def is_page_header_noise(line: str) -> bool:
+    text = line.strip()
+    if not text:
+        return True
+    if text in {"$200?", ">", "Cap.", "Cap"}:
+        return True
+    if PAGE_HEADER_RE.match(text):
+        return True
+    if re.fullmatch(r"Type Date Gains\s*>?", text, flags=re.I):
+        return True
+    return False
+
+
+def is_skippable_line(line: str) -> bool:
+    return is_description_noise(line) or is_page_header_noise(line)
+
+
 def window_text(lines: list[str], center: int, before: int = 1, after: int = 1) -> str:
-    start = max(0, center - before)
-    end = min(len(lines), center + after + 1)
-    parts = []
-    for ln in lines[start:end]:
-        if is_description_noise(ln):
-            continue
-        parts.append(ln)
+    """Collect nearby content lines, skipping page-break table headers.
+
+    ``before`` / ``after`` count non-skippable lines so a marker split across a
+    page break still joins with its asset / amount / date line.
+    """
+    parts: list[str] = []
+
+    collected = 0
+    i = center - 1
+    before_parts: list[str] = []
+    while i >= 0 and collected < before:
+        ln = lines[i]
+        if not is_skippable_line(ln):
+            before_parts.append(ln)
+            collected += 1
+        i -= 1
+    parts.extend(reversed(before_parts))
+
+    if 0 <= center < len(lines) and not is_page_header_noise(lines[center]):
+        parts.append(lines[center])
+    elif 0 <= center < len(lines):
+        parts.append(lines[center])
+
+    collected = 0
+    i = center + 1
+    while i < len(lines) and collected < after:
+        ln = lines[i]
+        if not is_skippable_line(ln):
+            parts.append(ln)
+            collected += 1
+        i += 1
+
     return clean_nulls(re.sub(r"\s+", " ", " ".join(parts))).strip()
 
 
@@ -287,6 +358,10 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
             block = window_text(lines, idx, before=1, after=1)
         if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
             block = window_text(lines, idx, before=2, after=1)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=2, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=3, after=2)
 
         row = parse_from_window(block, member, filing_date, doc_id, len(rows), idx)
         if not row:
