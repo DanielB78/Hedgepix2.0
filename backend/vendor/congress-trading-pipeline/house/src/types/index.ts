@@ -39,10 +39,18 @@ export type Transaction = z.infer<typeof TransactionSchema>;
 
 // ─── Fetch result returned by the fetcher layer ───────────────────────────────
 
+export interface HousePdfParseStats {
+  normalParsed: number;
+  ocrAttempted: number;
+  ocrSuccess: number;
+  stillUnparseable: number;
+}
+
 export interface FetchResult {
   success: boolean;
   records: RawTransaction[];
   error?: string;
+  housePdfStats?: HousePdfParseStats;
 }
 
 // ─── Query filters for the store / API layer ─────────────────────────────────

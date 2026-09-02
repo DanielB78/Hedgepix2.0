@@ -6,6 +6,15 @@ import { loadConfig } from "./config.js";
 import { runHouseUpdate } from "./house.js";
 import { runSenateUpdate } from "./senate.js";
 import {
+  checkOcrMyPdfAvailable,
+  printOcrSetupInstructions,
+} from "./house-ocr.js";
+import {
+  emptyHousePdfStats,
+  mergeHousePdfStats,
+  printHousePdfStats,
+} from "./house-pdf-stats.js";
+import {
   createSupabase,
   finishSyncRunFailed,
   finishSyncRunSuccess,
@@ -148,10 +157,24 @@ async function main(): Promise<void> {
     let totalNew = 0;
     let totalUpdated = 0;
     let totalFetched = 0;
+    let housePdfStats = emptyHousePdfStats();
 
     console.log(
       `House archives: ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
     );
+    console.log("");
+
+    const ocrAvailability = await checkOcrMyPdfAvailable();
+    if (ocrAvailability.available) {
+      console.log(
+        `OCRmyPDF available (${ocrAvailability.command?.label ?? "ocrmypdf"}${ocrAvailability.version ? `: ${ocrAvailability.version}` : ""})`,
+      );
+      console.log(
+        "Scanned House PDFs will use OCR only when normal text extraction finds no transactions.",
+      );
+    } else {
+      printOcrSetupInstructions();
+    }
     console.log("");
 
     for (const [index, year] of houseYears.entries()) {
@@ -161,13 +184,19 @@ async function main(): Promise<void> {
       );
       const house = await runHouseUpdate(supabase, bounds.fromDate, bounds.toDate, {
         archiveYears: [year],
+        enableOcrFallback: ocrAvailability.available,
       });
       printHouseYearSummary(year, bounds.fromDate, bounds.toDate, house);
 
       totalNew += house.newCount;
       totalUpdated += house.updatedCount;
       totalFetched += house.fetched;
+      if (house.housePdfStats) {
+        housePdfStats = mergeHousePdfStats(housePdfStats, house.housePdfStats);
+      }
     }
+
+    printHousePdfStats(housePdfStats);
 
     console.log(`Senate windows: ${senateWindows.length}`);
     console.log("");

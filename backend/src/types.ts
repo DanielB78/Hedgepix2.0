@@ -25,6 +25,14 @@ export type ChamberRunStats = {
   updatedCount: number;
   errors: number;
   errorMessage?: string;
+  housePdfStats?: HousePdfParseStats;
+};
+
+export type HousePdfParseStats = {
+  normalParsed: number;
+  ocrAttempted: number;
+  ocrSuccess: number;
+  stillUnparseable: number;
 };
 
 export type UpsertStats = {

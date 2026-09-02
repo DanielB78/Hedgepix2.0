@@ -7,7 +7,7 @@
     "update-data": "tsx src/update.ts",
     "backfill-history": "tsx src/backfill-history.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/backfill-history.test.ts"
+    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/backfill-history.test.ts && tsx src/__tests__/house-pdf-stats.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

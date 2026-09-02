@@ -83,6 +83,62 @@ cd backend && npm test
 
 Only **listed stocks** (valid tickers passing equity filters) appear in Latest, Trending, member pages, stock pages, and holdings. Bonds, funds, and other non-stock assets are stored with `is_listed_equity = false` and excluded from the UI.
 
+## Historical House PDF OCR setup
+
+Most recent House PTR filings include extractable text and are parsed directly with the normal PDF text extractor.
+
+Some older House filings (especially mid-2010s) are scanned image PDFs. For those, the historical backfill uses **OCRmyPDF as a fallback only**:
+
+1. Download the House PDF
+2. Run normal PDF text extraction
+3. If usable transaction markers are found → parse with the existing House parser
+4. If not → run OCRmyPDF, extract text again, then parse with the same House parser
+
+The normal incremental updater (`npm run update-data`) does **not** OCR PDFs. OCR is only attempted during `npm run backfill-history` when OCRmyPDF is available.
+
+Before a historical House backfill starts, the backend checks whether OCRmyPDF is installed. If it is missing, it prints setup instructions and continues without OCR.
+
+### Windows installation
+
+1. **Python**
+
+   ```powershell
+   winget install -e --id Python.Python.3.12
+   ```
+
+2. **Tesseract OCR**
+
+   ```powershell
+   winget install -e --id UB-Mannheim.TesseractOCR
+   ```
+
+3. **Ghostscript**
+
+   Install the current 64-bit Ghostscript for Windows from [https://ghostscript.com/releases/gsdnld.html](https://ghostscript.com/releases/gsdnld.html).
+
+   If a suitable package is available in winget on your machine, that is fine too.
+
+4. **OCRmyPDF**
+
+   ```powershell
+   py -m pip install ocrmypdf
+   ```
+
+5. **Verify**
+
+   ```powershell
+   py -m ocrmypdf --version
+   tesseract --version
+   ```
+
+The OCR command used for scanned filings is:
+
+```text
+py -m ocrmypdf --mode skip input.pdf output.pdf
+```
+
+After a historical backfill completes, the summary includes House PDF parsing stats such as normal parses, OCR attempts, OCR successes, and filings that remained unparseable.
+
 ## Deploy (Vercel)
 
 1. Framework Preset: **Next.js**
@@ -104,4 +160,4 @@ See `docs/` for the schema and historical planning notes. Third-party attributio
 
 ## Scope
 
-No auth, notifications, AI, live browser market-price calls, portfolios, OCR, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. Scheduling can later wrap `npm run update-data` on a VPS.
+No auth, notifications, AI, live browser market-price calls, portfolios, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. OCRmyPDF is used only as an optional fallback during historical House backfill for scanned PDFs. Scheduling can later wrap `npm run update-data` on a VPS.

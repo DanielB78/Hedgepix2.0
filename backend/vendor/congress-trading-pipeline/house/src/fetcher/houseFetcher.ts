@@ -3,11 +3,12 @@ import AdmZip from 'adm-zip';
 import { XMLParser } from 'fast-xml-parser';
 import pdfParse from 'pdf-parse';
 import { format, subDays, parse as parseDate, isValid } from 'date-fns';
-import type { FetchResult, RawTransaction } from '../types/index.js';
+import type { FetchResult, HousePdfParseStats, RawTransaction } from '../types/index.js';
 import { makeLogger } from '../utils/logger.js';
 import { config } from '../utils/config.js';
 import { withRetry } from '../utils/retry.js';
 import { parseHousePtrText } from '../parser/housePdfParser.js';
+import { ocrPdfBuffer } from '../../../../../src/house-ocr.js';
 
 const log = makeLogger('houseFetcher');
 
@@ -114,14 +115,102 @@ function parseIndex(xml: string, year: number, fromDate: string, toDate: string)
 
 // ─── Per-PTR PDF fetch + parse ────────────────────────────────────────────────
 
-async function fetchPdfText(year: number, docId: string): Promise<string> {
+async function fetchPdfBuffer(year: number, docId: string): Promise<Buffer> {
   const res = await axios.get<ArrayBuffer>(ptrPdfUrl(year, docId), {
     headers: HEADERS,
     timeout: TIMEOUT_MS,
     responseType: 'arraybuffer',
   });
-  const data = await pdfParse(Buffer.from(res.data));
+  return Buffer.from(res.data);
+}
+
+async function extractPdfText(pdf: Buffer): Promise<string> {
+  const data = await pdfParse(pdf);
   return data.text;
+}
+
+function emptyHousePdfStats(): HousePdfParseStats {
+  return {
+    normalParsed: 0,
+    ocrAttempted: 0,
+    ocrSuccess: 0,
+    stillUnparseable: 0,
+  };
+}
+
+function mergeHousePdfStats(
+  a: HousePdfParseStats,
+  b: HousePdfParseStats,
+): HousePdfParseStats {
+  return {
+    normalParsed: a.normalParsed + b.normalParsed,
+    ocrAttempted: a.ocrAttempted + b.ocrAttempted,
+    ocrSuccess: a.ocrSuccess + b.ocrSuccess,
+    stillUnparseable: a.stillUnparseable + b.stillUnparseable,
+  };
+}
+
+type ParseHousePdfOptions = {
+  enableOcrFallback: boolean;
+  ocrFailedKeys: Set<string>;
+  stats: HousePdfParseStats;
+};
+
+async function parseHousePdf(
+  pdf: Buffer,
+  filing: FilingIndex,
+  options: ParseHousePdfOptions,
+): Promise<RawTransaction[]> {
+  const parseInput = {
+    member: filing.member,
+    filingDate: filing.filingDate,
+    docId: filing.docId,
+  };
+
+  let text = await extractPdfText(pdf);
+  let parsed = parseHousePtrText({ ...parseInput, text });
+  if (parsed.length > 0) {
+    options.stats.normalParsed += 1;
+    return parsed;
+  }
+
+  if (!options.enableOcrFallback) {
+    options.stats.stillUnparseable += 1;
+    return parsed;
+  }
+
+  const cacheKey = `${filing.year}:${filing.docId}`;
+  if (options.ocrFailedKeys.has(cacheKey)) {
+    options.stats.stillUnparseable += 1;
+    return parsed;
+  }
+
+  options.stats.ocrAttempted += 1;
+  try {
+    const ocrPdf = await ocrPdfBuffer(pdf);
+    text = await extractPdfText(ocrPdf);
+    parsed = parseHousePtrText({ ...parseInput, text });
+    if (parsed.length > 0) {
+      options.stats.ocrSuccess += 1;
+      return parsed;
+    }
+
+    options.stats.stillUnparseable += 1;
+    options.ocrFailedKeys.add(cacheKey);
+    log.warn(
+      `House PTR ${filing.year}/${filing.docId} (${filing.member}): OCR completed but no transactions parsed`,
+    );
+    return parsed;
+  } catch (err) {
+    options.stats.stillUnparseable += 1;
+    options.ocrFailedKeys.add(cacheKey);
+    log.warn(
+      `House PTR ${filing.year}/${filing.docId} (${filing.member}) OCR failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return [];
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -148,12 +237,15 @@ export function yearsForDateRange(fromDate: string, toDate: string): number[] {
 export type FetchAllHouseOptions = {
   /** Annual House archives to download (defaults to the current calendar year). */
   years?: number[];
+  /** Retry scanned PDFs with OCRmyPDF when normal text extraction finds no transactions. */
+  enableOcrFallback?: boolean;
 };
 
 async function fetchHouseForYear(
   year: number,
   fromDate: string,
   toDate: string,
+  options: FetchAllHouseOptions = {},
 ): Promise<FetchResult> {
   log.info(`fetchHouseForYear year=${year} from=${fromDate} to=${toDate}`);
 
@@ -179,7 +271,13 @@ async function fetchHouseForYear(
 
   const records: RawTransaction[] = [];
   let errors = 0;
-  let scanned = 0;
+  const pdfStats = emptyHousePdfStats();
+  const ocrFailedKeys = new Set<string>();
+  const parseOptions: ParseHousePdfOptions = {
+    enableOcrFallback: options.enableOcrFallback === true,
+    ocrFailedKeys,
+    stats: pdfStats,
+  };
 
   const debugLimit = process.env['DEBUG_PTR_LIMIT'] ? parseInt(process.env['DEBUG_PTR_LIMIT'], 10) : 0;
   const filingsToFetch = debugLimit > 0 ? filings.slice(0, debugLimit) : filings;
@@ -190,14 +288,8 @@ async function fetchHouseForYear(
   for (let i = 0; i < filingsToFetch.length; i++) {
     const f = filingsToFetch[i]!;
     try {
-      const text = await withRetry(() => fetchPdfText(f.year, f.docId), 2, 500);
-      const parsed = parseHousePtrText({
-        text,
-        member: f.member,
-        filingDate: f.filingDate,
-        docId: f.docId,
-      });
-      if (parsed.length === 0) scanned++;
+      const pdf = await withRetry(() => fetchPdfBuffer(f.year, f.docId), 2, 500);
+      const parsed = await parseHousePdf(pdf, f, parseOptions);
       records.push(...parsed);
     } catch (err) {
       errors++;
@@ -206,20 +298,21 @@ async function fetchHouseForYear(
 
     if ((i + 1) % 25 === 0 || i === filingsToFetch.length - 1) {
       log.info(
-        `House ${year} progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${scanned} unparseable)`,
+        `House ${year} progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${pdfStats.stillUnparseable} unparseable, ${pdfStats.ocrSuccess} OCR)`,
       );
     }
     if (i < filingsToFetch.length - 1) await delay(PDF_DELAY_MS);
   }
 
   log.info(
-    `fetchHouseForYear ${year} complete: ${filingsToFetch.length} filings → ${records.length} txs, ${scanned} unparseable, ${errors} errors`,
+    `fetchHouseForYear ${year} complete: ${filingsToFetch.length} filings → ${records.length} txs, ${pdfStats.stillUnparseable} unparseable, ${pdfStats.ocrAttempted} OCR attempted, ${errors} fetch errors`,
   );
 
   const partial = errors > filingsToFetch.length / 4;
   return {
     success: !partial,
     records,
+    housePdfStats: pdfStats,
     error: partial ? `${errors}/${filings.length} House ${year} PDF fetches failed` : undefined,
   };
 }
@@ -233,16 +326,20 @@ export async function fetchAllHouse(
   log.info(`fetchAllHouse from=${fromDate} to=${toDate} years=${years.join(',')}`);
 
   if (years.length === 1) {
-    return fetchHouseForYear(years[0]!, fromDate, toDate);
+    return fetchHouseForYear(years[0]!, fromDate, toDate, options);
   }
 
   const records: RawTransaction[] = [];
   const errors: string[] = [];
+  let housePdfStats = emptyHousePdfStats();
   let hadHardFailure = false;
 
   for (const year of years) {
-    const result = await fetchHouseForYear(year, fromDate, toDate);
+    const result = await fetchHouseForYear(year, fromDate, toDate, options);
     records.push(...result.records);
+    if (result.housePdfStats) {
+      housePdfStats = mergeHousePdfStats(housePdfStats, result.housePdfStats);
+    }
     if (result.error) errors.push(result.error);
     if (!result.success && result.records.length === 0) {
       hadHardFailure = true;
@@ -253,6 +350,7 @@ export async function fetchAllHouse(
   return {
     success: !hadHardFailure,
     records,
+    housePdfStats,
     error: partial ? errors.join(' | ') : undefined,
   };
 }

@@ -1,4 +1,5 @@
 import { fetchAllHouse } from "../vendor/congress-trading-pipeline/house/src/fetcher/houseFetcher.js";
+import type { HousePdfParseStats } from "../vendor/congress-trading-pipeline/house/src/types/index.js";
 import { normalizeAll as upstreamNormalize } from "../vendor/congress-trading-pipeline/house/src/transformer/normalize.js";
 import { generateId } from "../vendor/congress-trading-pipeline/house/src/utils/dedup.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -9,6 +10,8 @@ import type { ChamberRunStats, UpstreamTransaction } from "./types.js";
 export type HouseUpdateOptions = {
   /** Annual House archives to download (defaults to current year only). */
   archiveYears?: number[];
+  /** Retry scanned PDFs with OCRmyPDF when normal text extraction finds no transactions. */
+  enableOcrFallback?: boolean;
 };
 
 export async function runHouseUpdate(
@@ -28,7 +31,10 @@ export async function runHouseUpdate(
     const fetchResult = await fetchAllHouse(
       fromDate,
       toDate,
-      archiveYears ? { years: archiveYears } : undefined,
+      {
+        ...(archiveYears ? { years: archiveYears } : {}),
+        ...(options.enableOcrFallback ? { enableOcrFallback: true } : {}),
+      },
     );
 
     if (!fetchResult.success && fetchResult.records.length === 0) {
@@ -75,6 +81,7 @@ export async function runHouseUpdate(
       updatedCount: upsert.updatedCount,
       errors: upsert.errors + (fetchResult.error ? 1 : 0),
       errorMessage: fetchResult.error,
+      housePdfStats: fetchResult.housePdfStats,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
