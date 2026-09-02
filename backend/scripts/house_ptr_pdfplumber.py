@@ -223,6 +223,9 @@ def window_text(lines: list[str], center: int, before: int = 1, after: int = 1) 
 
     ``before`` / ``after`` count non-skippable lines so a marker split across a
     page break still joins with its asset / amount / date line.
+
+    Do not cross into neighboring rows that already have their own ``[XX]``
+    asset markers — that steals the wrong ticker/asset code.
     """
     parts: list[str] = []
 
@@ -231,24 +234,31 @@ def window_text(lines: list[str], center: int, before: int = 1, after: int = 1) 
     before_parts: list[str] = []
     while i >= 0 and collected < before:
         ln = lines[i]
-        if not is_skippable_line(ln):
-            before_parts.append(ln)
-            collected += 1
+        if is_skippable_line(ln):
+            i -= 1
+            continue
+        # Neighboring completed asset row — stop.
+        if MARKER_RE.search(ln):
+            break
+        before_parts.append(ln)
+        collected += 1
         i -= 1
     parts.extend(reversed(before_parts))
 
-    if 0 <= center < len(lines) and not is_page_header_noise(lines[center]):
-        parts.append(lines[center])
-    elif 0 <= center < len(lines):
+    if 0 <= center < len(lines):
         parts.append(lines[center])
 
     collected = 0
     i = center + 1
     while i < len(lines) and collected < after:
         ln = lines[i]
-        if not is_skippable_line(ln):
-            parts.append(ln)
-            collected += 1
+        if is_skippable_line(ln):
+            i += 1
+            continue
+        if MARKER_RE.search(ln):
+            break
+        parts.append(ln)
+        collected += 1
         i += 1
 
     return clean_nulls(re.sub(r"\s+", " ", " ".join(parts))).strip()
