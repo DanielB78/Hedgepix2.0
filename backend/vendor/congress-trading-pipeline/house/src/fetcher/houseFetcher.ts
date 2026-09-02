@@ -1,14 +1,19 @@
 import axios, { AxiosError } from 'axios';
 import AdmZip from 'adm-zip';
 import { XMLParser } from 'fast-xml-parser';
-import pdfParse from 'pdf-parse';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { format, subDays, parse as parseDate, isValid } from 'date-fns';
 import type { FetchResult, HousePdfParseStats, RawTransaction } from '../types/index.js';
 import { makeLogger } from '../utils/logger.js';
 import { config } from '../utils/config.js';
 import { withRetry } from '../utils/retry.js';
-import { parseHousePtrText } from '../parser/housePdfParser.js';
 import { ocrPdfBuffer } from '../../../../../src/house-ocr.js';
+import {
+  parseHousePdfWithPdfplumber,
+  type PdfPlumberTransaction,
+} from '../../../../../src/house-pdfplumber.js';
 
 const log = makeLogger('houseFetcher');
 
@@ -124,11 +129,6 @@ async function fetchPdfBuffer(year: number, docId: string): Promise<Buffer> {
   return Buffer.from(res.data);
 }
 
-async function extractPdfText(pdf: Buffer): Promise<string> {
-  const data = await pdfParse(pdf);
-  return data.text;
-}
-
 function emptyHousePdfStats(): HousePdfParseStats {
   return {
     normalParsed: 0,
@@ -150,58 +150,143 @@ function mergeHousePdfStats(
   };
 }
 
+function toRawTransactions(
+  rows: PdfPlumberTransaction[],
+  filing: FilingIndex,
+): RawTransaction[] {
+  return rows.map((row, index) => ({
+    politician: row.politician || filing.member,
+    transaction_date: row.transaction_date,
+    filing_date: row.filing_date || filing.filingDate,
+    ticker: row.ticker ?? '',
+    asset_name: row.asset_name,
+    asset_type: row.asset_type,
+    type: row.type,
+    amount: row.amount,
+    owner: row.owner,
+    source_id: row.source_id || `house_${filing.docId}_${index}`,
+    raw_json: {
+      ...(row.raw_json ?? {}),
+      source: 'house',
+      doc_id: filing.docId,
+      member: filing.member,
+    },
+  }));
+}
+
 type ParseHousePdfOptions = {
   enableOcrFallback: boolean;
   ocrFailedKeys: Set<string>;
   stats: HousePdfParseStats;
 };
 
+async function runPdfplumberOnBuffer(
+  pdf: Buffer,
+  filing: FilingIndex,
+): Promise<{
+  rows: RawTransaction[];
+  expectedStock: number;
+  parsedStock: number;
+  hasText: boolean;
+}> {
+  const dir = await mkdtemp(join(tmpdir(), 'house-pdfplumber-'));
+  const pdfPath = join(dir, `${filing.docId}.pdf`);
+  try {
+    await writeFile(pdfPath, pdf);
+    const result = await parseHousePdfWithPdfplumber(pdfPath, {
+      filingDate: filing.filingDate,
+      docId: filing.docId,
+    });
+    return {
+      rows: toRawTransactions(result.transactions ?? [], filing),
+      expectedStock: result.expected_stock_count ?? 0,
+      parsedStock: result.parsed_stock_count ?? 0,
+      hasText: result.has_extractable_text !== false,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * pdfplumber first; OCRmyPDF only when there is no usable extractable text /
+ * no stock transactions found; then pdfplumber again on the OCR'd PDF.
+ */
 async function parseHousePdf(
   pdf: Buffer,
   filing: FilingIndex,
   options: ParseHousePdfOptions,
 ): Promise<RawTransaction[]> {
-  const parseInput = {
-    member: filing.member,
-    filingDate: filing.filingDate,
-    docId: filing.docId,
-  };
+  const first = await runPdfplumberOnBuffer(pdf, filing);
+  const firstOk =
+    first.parsedStock > 0 ||
+    (first.expectedStock === 0 && first.rows.length > 0) ||
+    (first.hasText && first.expectedStock === 0 && first.rows.length === 0);
 
-  let text = await extractPdfText(pdf);
-  let parsed = parseHousePtrText({ ...parseInput, text });
-  if (parsed.length > 0) {
+  // Usable structured data: either we parsed all expected stock rows, or there
+  // were no stock rows to parse and pdfplumber could read the PDF.
+  if (first.hasText && first.parsedStock >= first.expectedStock) {
     options.stats.normalParsed += 1;
-    return parsed;
+    return first.rows;
+  }
+
+  if (first.hasText && first.expectedStock > 0 && first.parsedStock < first.expectedStock) {
+    // Text exists but coverage is incomplete — still try OCR in case of
+    // mixed image/text pages, but keep best row set.
+    log.warn(
+      `House PTR ${filing.year}/${filing.docId}: pdfplumber stock coverage ${first.parsedStock}/${first.expectedStock}`,
+    );
   }
 
   if (!options.enableOcrFallback) {
+    if (first.rows.length > 0) {
+      options.stats.normalParsed += 1;
+      return first.rows;
+    }
     options.stats.stillUnparseable += 1;
-    return parsed;
+    return first.rows;
   }
 
   const cacheKey = `${filing.year}:${filing.docId}`;
   if (options.ocrFailedKeys.has(cacheKey)) {
-    options.stats.stillUnparseable += 1;
-    return parsed;
+    if (first.rows.length > 0) options.stats.normalParsed += 1;
+    else options.stats.stillUnparseable += 1;
+    return first.rows;
+  }
+
+  // Only OCR when text path failed to produce complete stock coverage.
+  if (first.hasText && first.parsedStock >= first.expectedStock) {
+    options.stats.normalParsed += 1;
+    return first.rows;
   }
 
   options.stats.ocrAttempted += 1;
   try {
     const ocrPdf = await ocrPdfBuffer(pdf);
-    text = await extractPdfText(ocrPdf);
-    parsed = parseHousePtrText({ ...parseInput, text });
-    if (parsed.length > 0) {
+    const second = await runPdfplumberOnBuffer(ocrPdf, filing);
+    if (second.parsedStock >= second.expectedStock && second.parsedStock > 0) {
       options.stats.ocrSuccess += 1;
-      return parsed;
+      return second.rows;
     }
-
+    if (second.rows.length > first.rows.length) {
+      options.stats.ocrSuccess += 1;
+      return second.rows;
+    }
+    if (first.rows.length > 0) {
+      options.stats.normalParsed += 1;
+      return first.rows;
+    }
     options.stats.stillUnparseable += 1;
     options.ocrFailedKeys.add(cacheKey);
     log.warn(
-      `House PTR ${filing.year}/${filing.docId} (${filing.member}): OCR completed but no transactions parsed`,
+      `House PTR ${filing.year}/${filing.docId} (${filing.member}): OCR+pdfplumber found no complete stock rows`,
     );
-    return parsed;
+    return second.rows;
   } catch (err) {
+    if (first.rows.length > 0) {
+      options.stats.normalParsed += 1;
+      return first.rows;
+    }
     options.stats.stillUnparseable += 1;
     options.ocrFailedKeys.add(cacheKey);
     log.warn(
