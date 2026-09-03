@@ -62,7 +62,7 @@ export function historyDateWindows(
   return windows;
 }
 
-/** Inclusive list of House archive years to download. */
+/** Inclusive list of House archive years to download (oldest → newest). */
 export function houseArchiveYears(
   startYear: number,
   endYear: number,
@@ -72,6 +72,14 @@ export function houseArchiveYears(
     years.push(year);
   }
   return years;
+}
+
+/** Newest-first House archive years — preferred for historical backfill. */
+export function houseArchiveYearsNewestFirst(
+  startYear: number,
+  endYear: number,
+): number[] {
+  return houseArchiveYears(startYear, endYear).reverse();
 }
 
 /** Clip an overall backfill range to one calendar year. */
@@ -131,6 +139,15 @@ function printHouseYearSummary(
 
 async function main(): Promise<void> {
   const houseOnly = process.argv.includes("--house-only");
+  const yearsArg = process.argv.find((arg) => arg.startsWith("--years="));
+  const requestedYears = yearsArg
+    ? yearsArg
+        .slice("--years=".length)
+        .split(",")
+        .map((part) => Number.parseInt(part.trim(), 10))
+        .filter((year) => Number.isInteger(year) && year >= HISTORY_START_YEAR)
+        .sort((a, b) => b - a)
+    : null;
 
   console.log(
     houseOnly
@@ -139,6 +156,9 @@ async function main(): Promise<void> {
   );
   console.log(`Collecting stock transactions from ${HISTORY_START_DATE} onward`);
   if (houseOnly) console.log("Mode: House archives only");
+  if (requestedYears?.length) {
+    console.log(`Year filter: ${requestedYears.join(", ")}`);
+  }
   console.log("");
 
   let runId: string | null = null;
@@ -151,7 +171,10 @@ async function main(): Promise<void> {
 
     const endDate = isoDate(new Date());
     const endYear = new Date().getFullYear();
-    const houseYears = houseArchiveYears(HISTORY_START_YEAR, endYear);
+    const houseYears =
+      requestedYears && requestedYears.length > 0
+        ? requestedYears
+        : houseArchiveYearsNewestFirst(HISTORY_START_YEAR, endYear);
     const senateWindows = historyDateWindows(HISTORY_START_DATE, endDate);
 
     let totalNew = 0;
@@ -160,7 +183,7 @@ async function main(): Promise<void> {
     let housePdfStats = emptyHousePdfStats();
 
     console.log(
-      `House archives: ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
+      `House archives (newest first): ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
     );
     console.log("");
 

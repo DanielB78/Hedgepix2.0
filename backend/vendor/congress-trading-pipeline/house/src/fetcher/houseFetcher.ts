@@ -135,6 +135,8 @@ function emptyHousePdfStats(): HousePdfParseStats {
     ocrAttempted: 0,
     ocrSuccess: 0,
     stillUnparseable: 0,
+    lowQualitySkipped: 0,
+    incompleteCoverage: 0,
   };
 }
 
@@ -147,6 +149,8 @@ function mergeHousePdfStats(
     ocrAttempted: a.ocrAttempted + b.ocrAttempted,
     ocrSuccess: a.ocrSuccess + b.ocrSuccess,
     stillUnparseable: a.stillUnparseable + b.stillUnparseable,
+    lowQualitySkipped: a.lowQualitySkipped + b.lowQualitySkipped,
+    incompleteCoverage: a.incompleteCoverage + b.incompleteCoverage,
   };
 }
 
@@ -210,7 +214,11 @@ async function runPdfplumberOnBuffer(
 
 /**
  * pdfplumber first; OCRmyPDF only when there is no usable extractable text /
- * no stock transactions found; then pdfplumber again on the OCR'd PDF.
+ * incomplete stock coverage; then pdfplumber again on the OCR'd PDF.
+ *
+ * Low-quality scanned PDFs (no extractable text, typically pre-2018 image
+ * forms) are skipped after a failed OCR attempt — or without OCR when the
+ * filing year is below HOUSE_OCR_MIN_YEAR (default 2018).
  */
 async function parseHousePdf(
   pdf: Buffer,
@@ -218,10 +226,7 @@ async function parseHousePdf(
   options: ParseHousePdfOptions,
 ): Promise<RawTransaction[]> {
   const first = await runPdfplumberOnBuffer(pdf, filing);
-  const firstOk =
-    first.parsedStock > 0 ||
-    (first.expectedStock === 0 && first.rows.length > 0) ||
-    (first.hasText && first.expectedStock === 0 && first.rows.length === 0);
+  const ocrMinYear = Number.parseInt(process.env['HOUSE_OCR_MIN_YEAR'] ?? '2018', 10);
 
   // Usable structured data: either we parsed all expected stock rows, or there
   // were no stock rows to parse and pdfplumber could read the PDF.
@@ -231,11 +236,19 @@ async function parseHousePdf(
   }
 
   if (first.hasText && first.expectedStock > 0 && first.parsedStock < first.expectedStock) {
-    // Text exists but coverage is incomplete — still try OCR in case of
-    // mixed image/text pages, but keep best row set.
+    options.stats.incompleteCoverage += 1;
     log.warn(
       `House PTR ${filing.year}/${filing.docId}: pdfplumber stock coverage ${first.parsedStock}/${first.expectedStock}`,
     );
+  }
+
+  // Image-only / too-low-quality scans: ignore without OCR. House scan OCR
+  // almost never yields usable [ST] markers, and burns minutes per filing.
+  // Set HOUSE_OCR_IMAGE_ONLY=1 to force OCR attempts on no-text PDFs.
+  const ocrImageOnly = process.env['HOUSE_OCR_IMAGE_ONLY'] === '1';
+  if (!first.hasText && !ocrImageOnly) {
+    options.stats.lowQualitySkipped += 1;
+    return first.rows;
   }
 
   if (!options.enableOcrFallback) {
@@ -243,20 +256,39 @@ async function parseHousePdf(
       options.stats.normalParsed += 1;
       return first.rows;
     }
-    options.stats.stillUnparseable += 1;
+    if (!first.hasText) {
+      options.stats.lowQualitySkipped += 1;
+    } else {
+      options.stats.stillUnparseable += 1;
+    }
     return first.rows;
   }
 
   const cacheKey = `${filing.year}:${filing.docId}`;
   if (options.ocrFailedKeys.has(cacheKey)) {
     if (first.rows.length > 0) options.stats.normalParsed += 1;
+    else if (!first.hasText) options.stats.lowQualitySkipped += 1;
     else options.stats.stillUnparseable += 1;
     return first.rows;
   }
 
-  // Only OCR when text path failed to produce complete stock coverage.
+  // Optional: still allow OCR on older image-only years when explicitly enabled.
+  if (!first.hasText && filing.year < ocrMinYear) {
+    options.stats.lowQualitySkipped += 1;
+    return first.rows;
+  }
+
+  // Only OCR when coverage is incomplete (mixed image/text) or image-only OCR
+  // was explicitly enabled.
   if (first.hasText && first.parsedStock >= first.expectedStock) {
     options.stats.normalParsed += 1;
+    return first.rows;
+  }
+
+  // Has text but incomplete coverage — try OCR for mixed pages.
+  // No-text path only reaches here when HOUSE_OCR_IMAGE_ONLY=1.
+  if (!first.hasText && !ocrImageOnly) {
+    options.stats.lowQualitySkipped += 1;
     return first.rows;
   }
 
@@ -276,7 +308,18 @@ async function parseHousePdf(
       options.stats.normalParsed += 1;
       return first.rows;
     }
-    options.stats.stillUnparseable += 1;
+    // OCR ran but still no usable transactions — treat no-text inputs as
+    // low-quality scans to ignore; keep text+incomplete as investigate targets.
+    if (!first.hasText && !second.hasText) {
+      options.stats.lowQualitySkipped += 1;
+    } else if (!first.hasText && second.hasText && second.expectedStock === 0) {
+      options.stats.lowQualitySkipped += 1;
+    } else {
+      options.stats.stillUnparseable += 1;
+      if (second.expectedStock > second.parsedStock) {
+        options.stats.incompleteCoverage += 1;
+      }
+    }
     options.ocrFailedKeys.add(cacheKey);
     log.warn(
       `House PTR ${filing.year}/${filing.docId} (${filing.member}): OCR+pdfplumber found no complete stock rows`,
@@ -287,7 +330,8 @@ async function parseHousePdf(
       options.stats.normalParsed += 1;
       return first.rows;
     }
-    options.stats.stillUnparseable += 1;
+    if (!first.hasText) options.stats.lowQualitySkipped += 1;
+    else options.stats.stillUnparseable += 1;
     options.ocrFailedKeys.add(cacheKey);
     log.warn(
       `House PTR ${filing.year}/${filing.docId} (${filing.member}) OCR failed: ${
@@ -383,7 +427,7 @@ async function fetchHouseForYear(
 
     if ((i + 1) % 25 === 0 || i === filingsToFetch.length - 1) {
       log.info(
-        `House ${year} progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${pdfStats.stillUnparseable} unparseable, ${pdfStats.ocrSuccess} OCR)`,
+        `House ${year} progress: ${i + 1}/${filingsToFetch.length} PTRs → ${records.length} txs (${pdfStats.stillUnparseable} unparseable, ${pdfStats.lowQualitySkipped} low-quality, ${pdfStats.ocrSuccess} OCR ok)`,
       );
     }
     if (i < filingsToFetch.length - 1) await delay(PDF_DELAY_MS);

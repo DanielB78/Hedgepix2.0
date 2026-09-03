@@ -33,6 +33,8 @@ export type HousePdfParseStats = {
   ocrAttempted: number;
   ocrSuccess: number;
   stillUnparseable: number;
+  lowQualitySkipped: number;
+  incompleteCoverage: number;
 };
 
 export type UpsertStats = {

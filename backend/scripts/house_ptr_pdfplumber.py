@@ -49,10 +49,15 @@ DATE_RE = re.compile(r"\b(\d{1,2}/\d{1,2}/\d{4})\b")
 AMOUNT_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*\$\s*([\d,]+)")
 # Handles "$15,001 - Stock (FERG) [ST] $50,000"
 AMOUNT_FLEX_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*(?:[^\$]{0,80})?\$\s*([\d,]+)")
-MARKER_RE = re.compile(r"(?:\(([A-Z][A-Z0-9./\-]{0,8})\)\s*)?\[([A-Z]{2})\]")
-TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9./\-]{0,8})\)")
-# Prefer partial-sale before bare S. No trailing \b after ')' (breaks on "S (partial) 03/...")
-TYPE_RE = re.compile(r"(S\s*\(\s*partial\s*\)|(?<![A-Z])P(?![A-Z])|(?<![A-Z])S(?![A-Z])|(?<![A-Z])E(?![A-Z]))", re.I)
+MARKER_RE = re.compile(r"(?:\(([A-Z][A-Z0-9./\-$]{0,8})\)\s*)?\[([A-Z]{2})\]")
+TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9./\-$]{0,8})\)")
+# Prefer partial-sale before bare S. Require a following date so "Energy" / "SP"
+# owner prefixes are not treated as transaction type tokens.
+TYPE_RE = re.compile(
+    r"(S\s*\(\s*partial\s*\)|(?<![A-Za-z])P(?![A-Za-z])|(?<![A-Za-z])S(?![A-Za-z])|(?<![A-Za-z])E(?![A-Za-z]))"
+    r"(?=\s+\d{1,2}/\d{1,2}/\d{4})",
+    re.I,
+)
 OWNER_PREFIX_RE = re.compile(r"^(SP|DC|JT)\b")
 FILING_ID_RE = re.compile(r"Filing ID\s*#?\s*(\d+)", re.I)
 NAME_RE = re.compile(r"Name:\s*(?:Hon\.\s*)?(.+)$", re.I)
@@ -60,6 +65,22 @@ NOISE_RE = re.compile(
     r"^(F(?:iling)?\s*S(?:tatus)?|S(?:ubholding)?\s*O|D(?:escription)?)\s*:",
     re.I,
 )
+# Repeated PTR table headers that appear after page breaks
+PAGE_HEADER_RE = re.compile(
+    r"^(?:"
+    r"ID\s+Owner\s+Asset|"
+    r"Type\s+Date\s+Gains|"
+    r"\$200\?|"
+    r"Asset|"
+    r"Transaction\s+Type|"
+    r"Notification\s+Date|"
+    r"Amount|"
+    r"Cap\.?"
+    r")\b",
+    re.I,
+)
+# "$2,722.50", "$15.00", "$0.01", "$.01"
+EXACT_AMOUNT_RE = re.compile(r"\$\s*((?:\d[\d,]*)?(?:\.\d{1,2})|\d[\d,]*)\b")
 
 
 def clean_nulls(s: str) -> str:
@@ -139,13 +160,33 @@ def parse_amount(block: str) -> tuple[int, int] | None:
     m = AMOUNT_RE.search(block)
     if not m:
         m = AMOUNT_FLEX_RE.search(block)
-    if not m:
-        return None
-    low = int(m.group(1).replace(",", ""))
-    high = int(m.group(2).replace(",", ""))
-    if high < low:
-        return None
-    return low, high
+    if m:
+        low = int(m.group(1).replace(",", ""))
+        high = int(m.group(2).replace(",", ""))
+        if high < low:
+            return None
+        return low, high
+
+    # Exact disclosed amounts (e.g. "$2,722.50" or "$15.00") — not a range start.
+    for m in EXACT_AMOUNT_RE.finditer(block):
+        after = block[m.end() : m.end() + 12]
+        if after.startswith("?") or re.match(r"\s*-\s*\$?", after):
+            continue
+        raw = m.group(1).replace(",", "")
+        if raw.startswith("."):
+            raw = "0" + raw
+        try:
+            value_f = float(raw)
+        except ValueError:
+            continue
+        if value_f < 0:
+            continue
+        # Sub-dollar disclosures (rights at $.01) round up so they still parse.
+        value = int(round(value_f))
+        if 0 < value_f < 0.5:
+            value = 1
+        return value, value
+    return None
 
 
 def extract_member_and_doc(lines: list[str], fallback_doc: str | None) -> tuple[str, str]:
@@ -172,14 +213,66 @@ def is_description_noise(line: str) -> bool:
     return False
 
 
+def is_page_header_noise(line: str) -> bool:
+    text = line.strip()
+    if not text:
+        return True
+    if text in {"$200?", ">", "Cap.", "Cap"}:
+        return True
+    if PAGE_HEADER_RE.match(text):
+        return True
+    if re.fullmatch(r"Type Date Gains\s*>?", text, flags=re.I):
+        return True
+    return False
+
+
+def is_skippable_line(line: str) -> bool:
+    return is_description_noise(line) or is_page_header_noise(line)
+
+
 def window_text(lines: list[str], center: int, before: int = 1, after: int = 1) -> str:
-    start = max(0, center - before)
-    end = min(len(lines), center + after + 1)
-    parts = []
-    for ln in lines[start:end]:
-        if is_description_noise(ln):
+    """Collect nearby content lines, skipping page-break table headers.
+
+    ``before`` / ``after`` count non-skippable lines so a marker split across a
+    page break still joins with its asset / amount / date line.
+
+    Do not cross into neighboring rows that already have their own ``[XX]``
+    asset markers — that steals the wrong ticker/asset code.
+    """
+    parts: list[str] = []
+
+    collected = 0
+    i = center - 1
+    before_parts: list[str] = []
+    while i >= 0 and collected < before:
+        ln = lines[i]
+        if is_skippable_line(ln):
+            i -= 1
             continue
+        # Neighboring completed asset row — stop.
+        if MARKER_RE.search(ln):
+            break
+        before_parts.append(ln)
+        collected += 1
+        i -= 1
+    parts.extend(reversed(before_parts))
+
+    if 0 <= center < len(lines):
+        parts.append(lines[center])
+
+    collected = 0
+    i = center + 1
+    while i < len(lines) and collected < after:
+        ln = lines[i]
+        if is_skippable_line(ln):
+            i += 1
+            continue
+        if MARKER_RE.search(ln):
+            break
         parts.append(ln)
+        collected += 1
+        i += 1
+
     return clean_nulls(re.sub(r"\s+", " ", " ".join(parts))).strip()
 
 
@@ -240,9 +333,13 @@ def parse_from_window(
     asset_name = MARKER_RE.sub(" ", asset_name)
     asset_name = re.sub(r"\bType Date Gains\b.*$", "", asset_name, flags=re.I)
     asset_name = re.sub(r"\$200\?", "", asset_name)
+    asset_name = re.sub(r"^(?:F|Filer|Asset|SP)\s+", "", asset_name, flags=re.I)
+    asset_name = re.sub(r"^SP(?=[A-Z])", "", asset_name)
     asset_name = re.sub(r"\s+", " ", asset_name).strip(" -:\t")
-    if not asset_name:
+    if not asset_name or asset_name.upper() in {"FILING ID", "FILING", "ID"}:
         asset_name = ticker or "Unknown asset"
+    if owner.upper() in {"FILING ID", "FILING", "ID", "STATUS"}:
+        owner = "self"
 
     return {
         "politician": member,
@@ -273,6 +370,7 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
     marker_idxs = find_marker_line_indexes(lines)
     rows: list[dict] = []
     seen_marker_lines: set[int] = set()
+    has_modern_markers = bool(marker_idxs)
 
     for idx in marker_idxs:
         if idx in seen_marker_lines:
@@ -283,34 +381,189 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
             block = window_text(lines, idx, before=1, after=1)
         if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
             block = window_text(lines, idx, before=2, after=1)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=2, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=3, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=4, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=5, after=2)
 
         row = parse_from_window(block, member, filing_date, doc_id, len(rows), idx)
         if not row:
             continue
         seen_marker_lines.add(idx)
         rows.append(row)
+
+    # Pre-~2018 PTR forms omit [XX] asset-class markers entirely. Only use the
+    # legacy ticker path when this filing has no modern markers — otherwise
+    # fund names like "(ICAPITAL)" get mistaken for stock tickers.
+    if not has_modern_markers:
+        for idx in find_legacy_candidate_indexes(lines):
+            if idx in seen_marker_lines:
+                continue
+            block = window_text(lines, idx, before=0, after=1)
+            if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+                block = window_text(lines, idx, before=1, after=1)
+            if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+                block = window_text(lines, idx, before=1, after=2)
+            row = parse_legacy_from_window(block, member, filing_date, doc_id, len(rows), idx)
+            if not row:
+                continue
+            seen_marker_lines.add(idx)
+            rows.append(row)
     return rows
 
 
+def find_legacy_candidate_indexes(lines: list[str]) -> list[int]:
+    """Candidate rows for older PTR forms that lack [ST]/[ET] markers."""
+    idxs: list[int] = []
+    for i, ln in enumerate(lines):
+        if MARKER_RE.search(ln):
+            continue
+        if is_skippable_line(ln):
+            continue
+        low = ln.lower()
+        if low.startswith("description") or " as part of the " in low:
+            continue
+        has_ticker = bool(TICKER_RE.search(ln))
+        has_dates = len(DATE_RE.findall(ln)) >= 1
+        has_type = bool(TYPE_RE.search(ln))
+        has_amount = bool(parse_amount(ln))
+        # Real transaction rows have a type token next to a date on this line.
+        if has_type and has_dates and (has_ticker or has_amount):
+            idxs.append(i)
+    return idxs
+
+
+def parse_legacy_from_window(
+    block: str,
+    member: str,
+    filing_date: str,
+    doc_id: str,
+    index: int,
+    line_index: int,
+) -> dict | None:
+    """Parse a pre-marker House PTR transaction row."""
+    if MARKER_RE.search(block):
+        # Prefer the modern marker path when present.
+        return None
+    tickers = TICKER_RE.findall(block)
+    if not tickers:
+        return None
+    ticker = tickers[-1]
+
+    dates = DATE_RE.findall(block)
+    if len(dates) < 2:
+        return None
+    tx_date = to_iso(dates[0])
+    notif_date = to_iso(dates[1])
+    if not tx_date:
+        return None
+
+    amount = parse_amount(block)
+    if not amount:
+        return None
+    amount_low, amount_high = amount
+
+    before_first_date = block.split(dates[0], 1)[0]
+    type_matches = list(TYPE_RE.finditer(before_first_date))
+    if not type_matches:
+        type_matches = list(TYPE_RE.finditer(block))
+    if not type_matches:
+        return None
+    type_label = normalize_type(type_matches[-1].group(1))
+
+    owner = "self"
+    owner_m = OWNER_PREFIX_RE.search(block)
+    if owner_m:
+        owner = OWNER_MAP.get(owner_m.group(1).upper(), "self")
+
+    asset_name = before_first_date
+    asset_name = OWNER_PREFIX_RE.sub("", asset_name)
+    asset_name = TYPE_RE.sub(" ", asset_name)
+    asset_name = TICKER_RE.sub(" ", asset_name)
+    asset_name = re.sub(r"\s+", " ", asset_name).strip(" -:\t")
+    if not asset_name:
+        asset_name = ticker
+
+    # Older forms rarely include asset-class codes; treat ticker rows as stock
+    # and let downstream listed-equity filters decide.
+    asset_code = "ST"
+    return {
+        "politician": member,
+        "transaction_date": tx_date,
+        "filing_date": notif_date or filing_date or tx_date,
+        "ticker": ticker,
+        "asset_name": asset_name,
+        "asset_type": ASSET_TYPE_MAP.get(asset_code, "Stock"),
+        "asset_type_code": asset_code,
+        "type": type_label,
+        "amount": f"${amount_low:,} - ${amount_high:,}",
+        "amount_min": amount_low,
+        "amount_max": amount_high,
+        "owner": owner,
+        "source_id": f"house_{doc_id}_{line_index}",
+        "raw_json": {
+            "source": "house",
+            "doc_id": doc_id,
+            "parser": "pdfplumber-legacy",
+            "asset_type_code": asset_code,
+            "marker_line_index": line_index,
+            "block": block[:500],
+        },
+    }
+
+
 def expected_stock_count(lines: list[str]) -> int:
-    """Count identifiable stock/ETF transaction rows via marker-centered windows."""
+    """Count identifiable stock/ETF transaction rows.
+
+    A stock row is identifiable when an [ST]/[ET] marker appears with nearby
+    transaction context (type and/or dates). We intentionally do NOT require a
+    parseable amount here — missing amounts should fail coverage validation.
+
+    Older forms without markers are counted when ticker + type + dates are present.
+    """
     count = 0
     for idx in find_marker_line_indexes(lines):
         marker_line = lines[idx]
         m = MARKER_RE.search(marker_line)
         if not m or m.group(2).upper() not in STOCK_CODES:
             continue
-        complete = False
-        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2)):
+        identifiable = False
+        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2), (3, 2), (4, 2), (5, 2)):
+            block = window_text(lines, idx, before=before, after=after)
+            dates = DATE_RE.findall(block)
+            has_type = bool(TYPE_RE.search(block))
+            # Real PTR rows almost always have type + at least one date nearby.
+            if has_type and len(dates) >= 1:
+                identifiable = True
+                break
+            if len(dates) >= 2 and parse_amount(block):
+                identifiable = True
+                break
+        if identifiable:
+            count += 1
+
+    if count > 0 or find_marker_line_indexes(lines):
+        # Modern PTR form (has [XX] markers): stock count is only [ST]/[ET].
+        # Do not fall through to legacy ticker heuristics.
+        return count
+
+    # Legacy (no [XX] asset-class markers in filing at all)
+    for idx in find_legacy_candidate_indexes(lines):
+        identifiable = False
+        for before, after in ((0, 1), (1, 1), (1, 2)):
             block = window_text(lines, idx, before=before, after=after)
             if (
-                len(DATE_RE.findall(block)) >= 2
+                TICKER_RE.search(block)
                 and TYPE_RE.search(block)
-                and parse_amount(block)
+                and len(DATE_RE.findall(block)) >= 2
             ):
-                complete = True
+                identifiable = True
                 break
-        if complete:
+        if identifiable:
             count += 1
     return count
 

@@ -44,6 +44,8 @@ export interface HousePdfParseStats {
   ocrAttempted: number;
   ocrSuccess: number;
   stillUnparseable: number;
+  lowQualitySkipped: number;
+  incompleteCoverage: number;
 }
 
 export interface FetchResult {

@@ -83,22 +83,30 @@ cd backend && npm test
 
 Only **listed stocks** (valid tickers passing equity filters) appear in Latest, Trending, member pages, stock pages, and holdings. Bonds, funds, and other non-stock assets are stored with `is_listed_equity = false` and excluded from the UI.
 
-## Historical House PDF OCR setup
+## House PDF parsing (pdfplumber + OCR fallback)
 
-Most recent House PTR filings include extractable text and are parsed directly with the normal PDF text extractor.
+House PTR flow:
 
-Some older House filings (especially mid-2010s) are scanned image PDFs. For those, the historical backfill uses **OCRmyPDF as a fallback only**:
+1. **pdfplumber** (Python) extracts transactions using word coordinates / column clustering
+2. If the PDF has little text or stock-row coverage is incomplete → **OCRmyPDF** (Tesseract)
+3. **pdfplumber** again on the OCR’d PDF (same extraction path)
 
-1. Download the House PDF
-2. Run normal PDF text extraction
-3. If usable transaction markers are found → parse with the existing House parser
-4. If not → run OCRmyPDF, extract text again, then parse with the same House parser
+Normalized fields: ticker, stock marker (`[ST]` / `[ET]`), purchase/sale, transaction date, notification date, amount range.
 
-The normal incremental updater (`npm run update-data`) does **not** OCR PDFs. OCR is only attempted during `npm run backfill-history` when OCRmyPDF is available.
+Stock-only filtering, deduplication (`source_hash`), and Supabase upsert behavior are unchanged.
 
-Before a historical House backfill starts, the backend checks whether OCRmyPDF is installed. If it is missing, it prints setup instructions and continues without OCR.
+**Validate 2026 only (required before historical backfill):**
 
-### Windows installation
+```bash
+cd backend
+npm run validate:house-2026
+```
+
+Target: **100%** of identifiable stock rows in every 2026 PTR. The script lists failing document IDs and exits non-zero if any filing is incomplete. Do not backfill earlier years until this passes.
+
+Disable OCR with `HOUSE_OCR_DISABLED=1`.
+
+### Windows installation (OCR deps for scanned PDFs)
 
 1. **Python**
 
@@ -116,12 +124,10 @@ Before a historical House backfill starts, the backend checks whether OCRmyPDF i
 
    Install the current 64-bit Ghostscript for Windows from [https://ghostscript.com/releases/gsdnld.html](https://ghostscript.com/releases/gsdnld.html).
 
-   If a suitable package is available in winget on your machine, that is fine too.
-
-4. **OCRmyPDF**
+4. **pdfplumber + OCRmyPDF**
 
    ```powershell
-   py -m pip install ocrmypdf
+   py -m pip install pdfplumber ocrmypdf
    ```
 
 5. **Verify**
@@ -134,7 +140,7 @@ Before a historical House backfill starts, the backend checks whether OCRmyPDF i
 The OCR command used for scanned filings is:
 
 ```text
-py -m ocrmypdf --mode skip input.pdf output.pdf
+py -m ocrmypdf --skip-text input.pdf output.pdf
 ```
 
 After a historical backfill completes, the summary includes House PDF parsing stats such as normal parses, OCR attempts, OCR successes, and filings that remained unparseable.
@@ -160,4 +166,4 @@ See `docs/` for the schema and historical planning notes. Third-party attributio
 
 ## Scope
 
-No auth, notifications, AI, live browser market-price calls, portfolios, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. OCRmyPDF is used only as an optional fallback during historical House backfill for scanned PDFs. Scheduling can later wrap `npm run update-data` on a VPS.
+No auth, notifications, AI, live browser market-price calls, portfolios, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. House PTRs use pdfplumber with OCRmyPDF only as a fallback for scanned/incomplete PDFs. Scheduling can later wrap `npm run update-data` on a VPS.
