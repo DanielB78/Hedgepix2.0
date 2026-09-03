@@ -139,6 +139,15 @@ function printHouseYearSummary(
 
 async function main(): Promise<void> {
   const houseOnly = process.argv.includes("--house-only");
+  const yearsArg = process.argv.find((arg) => arg.startsWith("--years="));
+  const requestedYears = yearsArg
+    ? yearsArg
+        .slice("--years=".length)
+        .split(",")
+        .map((part) => Number.parseInt(part.trim(), 10))
+        .filter((year) => Number.isInteger(year) && year >= HISTORY_START_YEAR)
+        .sort((a, b) => b - a)
+    : null;
 
   console.log(
     houseOnly
@@ -147,6 +156,9 @@ async function main(): Promise<void> {
   );
   console.log(`Collecting stock transactions from ${HISTORY_START_DATE} onward`);
   if (houseOnly) console.log("Mode: House archives only");
+  if (requestedYears?.length) {
+    console.log(`Year filter: ${requestedYears.join(", ")}`);
+  }
   console.log("");
 
   let runId: string | null = null;
@@ -159,7 +171,10 @@ async function main(): Promise<void> {
 
     const endDate = isoDate(new Date());
     const endYear = new Date().getFullYear();
-    const houseYears = houseArchiveYearsNewestFirst(HISTORY_START_YEAR, endYear);
+    const houseYears =
+      requestedYears && requestedYears.length > 0
+        ? requestedYears
+        : houseArchiveYearsNewestFirst(HISTORY_START_YEAR, endYear);
     const senateWindows = historyDateWindows(HISTORY_START_DATE, endDate);
 
     let totalNew = 0;

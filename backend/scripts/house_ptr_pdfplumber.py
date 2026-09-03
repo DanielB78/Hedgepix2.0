@@ -51,8 +51,13 @@ AMOUNT_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*\$\s*([\d,]+)")
 AMOUNT_FLEX_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*(?:[^\$]{0,80})?\$\s*([\d,]+)")
 MARKER_RE = re.compile(r"(?:\(([A-Z][A-Z0-9./\-$]{0,8})\)\s*)?\[([A-Z]{2})\]")
 TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9./\-$]{0,8})\)")
-# Prefer partial-sale before bare S. No trailing \b after ')' (breaks on "S (partial) 03/...")
-TYPE_RE = re.compile(r"(S\s*\(\s*partial\s*\)|(?<![A-Z])P(?![A-Z])|(?<![A-Z])S(?![A-Z])|(?<![A-Z])E(?![A-Z]))", re.I)
+# Prefer partial-sale before bare S. Require a following date so "Energy" / "SP"
+# owner prefixes are not treated as transaction type tokens.
+TYPE_RE = re.compile(
+    r"(S\s*\(\s*partial\s*\)|(?<![A-Za-z])P(?![A-Za-z])|(?<![A-Za-z])S(?![A-Za-z])|(?<![A-Za-z])E(?![A-Za-z]))"
+    r"(?=\s+\d{1,2}/\d{1,2}/\d{4})",
+    re.I,
+)
 OWNER_PREFIX_RE = re.compile(r"^(SP|DC|JT)\b")
 FILING_ID_RE = re.compile(r"Filing ID\s*#?\s*(\d+)", re.I)
 NAME_RE = re.compile(r"Name:\s*(?:Hon\.\s*)?(.+)$", re.I)
@@ -74,7 +79,8 @@ PAGE_HEADER_RE = re.compile(
     r")\b",
     re.I,
 )
-EXACT_AMOUNT_RE = re.compile(r"\$\s*([\d,]+(?:\.\d{1,2})?)\b")
+# "$2,722.50", "$15.00", "$0.01", "$.01"
+EXACT_AMOUNT_RE = re.compile(r"\$\s*((?:\d[\d,]*)?(?:\.\d{1,2})|\d[\d,]*)\b")
 
 
 def clean_nulls(s: str) -> str:
@@ -167,12 +173,18 @@ def parse_amount(block: str) -> tuple[int, int] | None:
         if after.startswith("?") or re.match(r"\s*-\s*\$?", after):
             continue
         raw = m.group(1).replace(",", "")
+        if raw.startswith("."):
+            raw = "0" + raw
         try:
-            value = int(round(float(raw)))
+            value_f = float(raw)
         except ValueError:
             continue
-        if value <= 0:
+        if value_f < 0:
             continue
+        # Sub-dollar disclosures (rights at $.01) round up so they still parse.
+        value = int(round(value_f))
+        if 0 < value_f < 0.5:
+            value = 1
         return value, value
     return None
 
@@ -412,13 +424,15 @@ def find_legacy_candidate_indexes(lines: list[str]) -> list[int]:
             continue
         if is_skippable_line(ln):
             continue
+        low = ln.lower()
+        if low.startswith("description") or " as part of the " in low:
+            continue
         has_ticker = bool(TICKER_RE.search(ln))
         has_dates = len(DATE_RE.findall(ln)) >= 1
         has_type = bool(TYPE_RE.search(ln))
         has_amount = bool(parse_amount(ln))
-        if has_ticker and (has_dates or has_type):
-            idxs.append(i)
-        elif has_dates and has_type and has_amount:
+        # Real transaction rows have a type token next to a date on this line.
+        if has_type and has_dates and (has_ticker or has_amount):
             idxs.append(i)
     return idxs
 
@@ -518,7 +532,7 @@ def expected_stock_count(lines: list[str]) -> int:
         if not m or m.group(2).upper() not in STOCK_CODES:
             continue
         identifiable = False
-        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2), (3, 2)):
+        for before, after in ((1, 0), (1, 1), (2, 1), (2, 2), (3, 2), (4, 2), (5, 2)):
             block = window_text(lines, idx, before=before, after=after)
             dates = DATE_RE.findall(block)
             has_type = bool(TYPE_RE.search(block))
