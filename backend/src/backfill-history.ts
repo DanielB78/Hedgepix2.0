@@ -168,7 +168,7 @@ async function main(): Promise<void> {
     let housePdfStats = emptyHousePdfStats();
 
     console.log(
-      `House archives: ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
+      `House archives (newest first): ${houseYears[0]}FD.zip → ${houseYears[houseYears.length - 1]}FD.zip (${houseYears.length} years)`,
     );
     console.log("");
 

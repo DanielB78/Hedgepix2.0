@@ -242,6 +242,15 @@ async function parseHousePdf(
     );
   }
 
+  // Image-only / too-low-quality scans: ignore without OCR. House scan OCR
+  // almost never yields usable [ST] markers, and burns minutes per filing.
+  // Set HOUSE_OCR_IMAGE_ONLY=1 to force OCR attempts on no-text PDFs.
+  const ocrImageOnly = process.env['HOUSE_OCR_IMAGE_ONLY'] === '1';
+  if (!first.hasText && !ocrImageOnly) {
+    options.stats.lowQualitySkipped += 1;
+    return first.rows;
+  }
+
   if (!options.enableOcrFallback) {
     if (first.rows.length > 0) {
       options.stats.normalParsed += 1;
@@ -263,20 +272,23 @@ async function parseHousePdf(
     return first.rows;
   }
 
-  // Image-only PDFs before HOUSE_OCR_MIN_YEAR are almost always low-quality
-  // scans of old forms; OCR yields garbage and wastes minutes per filing.
+  // Optional: still allow OCR on older image-only years when explicitly enabled.
   if (!first.hasText && filing.year < ocrMinYear) {
     options.stats.lowQualitySkipped += 1;
-    log.info(
-      `House PTR ${filing.year}/${filing.docId} (${filing.member}): skipping OCR (image-only, year < ${ocrMinYear})`,
-    );
     return first.rows;
   }
 
-  // Text exists with zero expected stock rows — already handled above as OK.
-  // Only OCR when coverage is incomplete or there is no extractable text.
+  // Only OCR when coverage is incomplete (mixed image/text) or image-only OCR
+  // was explicitly enabled.
   if (first.hasText && first.parsedStock >= first.expectedStock) {
     options.stats.normalParsed += 1;
+    return first.rows;
+  }
+
+  // Has text but incomplete coverage — try OCR for mixed pages.
+  // No-text path only reaches here when HOUSE_OCR_IMAGE_ONLY=1.
+  if (!first.hasText && !ocrImageOnly) {
+    options.stats.lowQualitySkipped += 1;
     return first.rows;
   }
 
