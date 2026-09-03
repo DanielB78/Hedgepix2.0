@@ -62,7 +62,7 @@ export function historyDateWindows(
   return windows;
 }
 
-/** Inclusive list of House archive years to download. */
+/** Inclusive list of House archive years to download (oldest → newest). */
 export function houseArchiveYears(
   startYear: number,
   endYear: number,
@@ -72,6 +72,14 @@ export function houseArchiveYears(
     years.push(year);
   }
   return years;
+}
+
+/** Newest-first House archive years — preferred for historical backfill. */
+export function houseArchiveYearsNewestFirst(
+  startYear: number,
+  endYear: number,
+): number[] {
+  return houseArchiveYears(startYear, endYear).reverse();
 }
 
 /** Clip an overall backfill range to one calendar year. */
@@ -151,7 +159,7 @@ async function main(): Promise<void> {
 
     const endDate = isoDate(new Date());
     const endYear = new Date().getFullYear();
-    const houseYears = houseArchiveYears(HISTORY_START_YEAR, endYear);
+    const houseYears = houseArchiveYearsNewestFirst(HISTORY_START_YEAR, endYear);
     const senateWindows = historyDateWindows(HISTORY_START_DATE, endDate);
 
     let totalNew = 0;

@@ -378,7 +378,121 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
             continue
         seen_marker_lines.add(idx)
         rows.append(row)
+
+    # Pre-~2018 PTR forms often omit [ST]/[ET] markers but still print
+    # ticker + type + dates + amount. Parse those without double-counting.
+    for idx in find_legacy_candidate_indexes(lines):
+        if idx in seen_marker_lines:
+            continue
+        block = window_text(lines, idx, before=0, after=1)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+            block = window_text(lines, idx, before=1, after=1)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+            block = window_text(lines, idx, before=1, after=2)
+        row = parse_legacy_from_window(block, member, filing_date, doc_id, len(rows), idx)
+        if not row:
+            continue
+        seen_marker_lines.add(idx)
+        rows.append(row)
     return rows
+
+
+def find_legacy_candidate_indexes(lines: list[str]) -> list[int]:
+    """Candidate rows for older PTR forms that lack [ST]/[ET] markers."""
+    idxs: list[int] = []
+    for i, ln in enumerate(lines):
+        if MARKER_RE.search(ln):
+            continue
+        if is_skippable_line(ln):
+            continue
+        has_ticker = bool(TICKER_RE.search(ln))
+        has_dates = len(DATE_RE.findall(ln)) >= 1
+        has_type = bool(TYPE_RE.search(ln))
+        has_amount = bool(parse_amount(ln))
+        if has_ticker and (has_dates or has_type):
+            idxs.append(i)
+        elif has_dates and has_type and has_amount:
+            idxs.append(i)
+    return idxs
+
+
+def parse_legacy_from_window(
+    block: str,
+    member: str,
+    filing_date: str,
+    doc_id: str,
+    index: int,
+    line_index: int,
+) -> dict | None:
+    """Parse a pre-marker House PTR transaction row."""
+    if MARKER_RE.search(block):
+        # Prefer the modern marker path when present.
+        return None
+    tickers = TICKER_RE.findall(block)
+    if not tickers:
+        return None
+    ticker = tickers[-1]
+
+    dates = DATE_RE.findall(block)
+    if len(dates) < 2:
+        return None
+    tx_date = to_iso(dates[0])
+    notif_date = to_iso(dates[1])
+    if not tx_date:
+        return None
+
+    amount = parse_amount(block)
+    if not amount:
+        return None
+    amount_low, amount_high = amount
+
+    before_first_date = block.split(dates[0], 1)[0]
+    type_matches = list(TYPE_RE.finditer(before_first_date))
+    if not type_matches:
+        type_matches = list(TYPE_RE.finditer(block))
+    if not type_matches:
+        return None
+    type_label = normalize_type(type_matches[-1].group(1))
+
+    owner = "self"
+    owner_m = OWNER_PREFIX_RE.search(block)
+    if owner_m:
+        owner = OWNER_MAP.get(owner_m.group(1).upper(), "self")
+
+    asset_name = before_first_date
+    asset_name = OWNER_PREFIX_RE.sub("", asset_name)
+    asset_name = TYPE_RE.sub(" ", asset_name)
+    asset_name = TICKER_RE.sub(" ", asset_name)
+    asset_name = re.sub(r"\s+", " ", asset_name).strip(" -:\t")
+    if not asset_name:
+        asset_name = ticker
+
+    # Older forms rarely include asset-class codes; treat ticker rows as stock
+    # and let downstream listed-equity filters decide.
+    asset_code = "ST"
+    return {
+        "politician": member,
+        "transaction_date": tx_date,
+        "filing_date": notif_date or filing_date or tx_date,
+        "ticker": ticker,
+        "asset_name": asset_name,
+        "asset_type": ASSET_TYPE_MAP.get(asset_code, "Stock"),
+        "asset_type_code": asset_code,
+        "type": type_label,
+        "amount": f"${amount_low:,} - ${amount_high:,}",
+        "amount_min": amount_low,
+        "amount_max": amount_high,
+        "owner": owner,
+        "source_id": f"house_{doc_id}_{line_index}",
+        "raw_json": {
+            "source": "house",
+            "doc_id": doc_id,
+            "parser": "pdfplumber-legacy",
+            "asset_type_code": asset_code,
+            "marker_line_index": line_index,
+            "block": block[:500],
+        },
+    }
 
 
 def expected_stock_count(lines: list[str]) -> int:
@@ -387,6 +501,8 @@ def expected_stock_count(lines: list[str]) -> int:
     A stock row is identifiable when an [ST]/[ET] marker appears with nearby
     transaction context (type and/or dates). We intentionally do NOT require a
     parseable amount here — missing amounts should fail coverage validation.
+
+    Older forms without markers are counted when ticker + type + dates are present.
     """
     count = 0
     for idx in find_marker_line_indexes(lines):
@@ -404,6 +520,24 @@ def expected_stock_count(lines: list[str]) -> int:
                 identifiable = True
                 break
             if len(dates) >= 2 and parse_amount(block):
+                identifiable = True
+                break
+        if identifiable:
+            count += 1
+
+    if count > 0:
+        return count
+
+    # Legacy (no [ST]/[ET] markers in filing)
+    for idx in find_legacy_candidate_indexes(lines):
+        identifiable = False
+        for before, after in ((0, 1), (1, 1), (1, 2)):
+            block = window_text(lines, idx, before=before, after=after)
+            if (
+                TICKER_RE.search(block)
+                and TYPE_RE.search(block)
+                and len(DATE_RE.findall(block)) >= 2
+            ):
                 identifiable = True
                 break
         if identifiable:
