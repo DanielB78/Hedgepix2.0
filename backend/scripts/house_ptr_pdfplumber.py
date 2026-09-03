@@ -49,8 +49,8 @@ DATE_RE = re.compile(r"\b(\d{1,2}/\d{1,2}/\d{4})\b")
 AMOUNT_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*\$\s*([\d,]+)")
 # Handles "$15,001 - Stock (FERG) [ST] $50,000"
 AMOUNT_FLEX_RE = re.compile(r"\$\s*([\d,]+)\s*-\s*(?:[^\$]{0,80})?\$\s*([\d,]+)")
-MARKER_RE = re.compile(r"(?:\(([A-Z][A-Z0-9./\-]{0,8})\)\s*)?\[([A-Z]{2})\]")
-TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9./\-]{0,8})\)")
+MARKER_RE = re.compile(r"(?:\(([A-Z][A-Z0-9./\-$]{0,8})\)\s*)?\[([A-Z]{2})\]")
+TICKER_RE = re.compile(r"\(([A-Z][A-Z0-9./\-$]{0,8})\)")
 # Prefer partial-sale before bare S. No trailing \b after ')' (breaks on "S (partial) 03/...")
 TYPE_RE = re.compile(r"(S\s*\(\s*partial\s*\)|(?<![A-Z])P(?![A-Z])|(?<![A-Z])S(?![A-Z])|(?<![A-Z])E(?![A-Z]))", re.I)
 OWNER_PREFIX_RE = re.compile(r"^(SP|DC|JT)\b")
@@ -373,6 +373,10 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
             block = window_text(lines, idx, before=2, after=2)
         if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
             block = window_text(lines, idx, before=3, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=4, after=2)
+        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2:
+            block = window_text(lines, idx, before=5, after=2)
 
         row = parse_from_window(block, member, filing_date, doc_id, len(rows), idx)
         if not row:
