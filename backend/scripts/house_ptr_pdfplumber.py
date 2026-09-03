@@ -358,6 +358,7 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
     marker_idxs = find_marker_line_indexes(lines)
     rows: list[dict] = []
     seen_marker_lines: set[int] = set()
+    has_modern_markers = bool(marker_idxs)
 
     for idx in marker_idxs:
         if idx in seen_marker_lines:
@@ -379,21 +380,23 @@ def parse_transactions(lines: list[str], member: str, filing_date: str, doc_id: 
         seen_marker_lines.add(idx)
         rows.append(row)
 
-    # Pre-~2018 PTR forms often omit [ST]/[ET] markers but still print
-    # ticker + type + dates + amount. Parse those without double-counting.
-    for idx in find_legacy_candidate_indexes(lines):
-        if idx in seen_marker_lines:
-            continue
-        block = window_text(lines, idx, before=0, after=1)
-        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
-            block = window_text(lines, idx, before=1, after=1)
-        if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
-            block = window_text(lines, idx, before=1, after=2)
-        row = parse_legacy_from_window(block, member, filing_date, doc_id, len(rows), idx)
-        if not row:
-            continue
-        seen_marker_lines.add(idx)
-        rows.append(row)
+    # Pre-~2018 PTR forms omit [XX] asset-class markers entirely. Only use the
+    # legacy ticker path when this filing has no modern markers — otherwise
+    # fund names like "(ICAPITAL)" get mistaken for stock tickers.
+    if not has_modern_markers:
+        for idx in find_legacy_candidate_indexes(lines):
+            if idx in seen_marker_lines:
+                continue
+            block = window_text(lines, idx, before=0, after=1)
+            if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+                block = window_text(lines, idx, before=1, after=1)
+            if not parse_amount(block) or len(DATE_RE.findall(block)) < 2 or not TICKER_RE.search(block):
+                block = window_text(lines, idx, before=1, after=2)
+            row = parse_legacy_from_window(block, member, filing_date, doc_id, len(rows), idx)
+            if not row:
+                continue
+            seen_marker_lines.add(idx)
+            rows.append(row)
     return rows
 
 
@@ -525,10 +528,12 @@ def expected_stock_count(lines: list[str]) -> int:
         if identifiable:
             count += 1
 
-    if count > 0:
+    if count > 0 or find_marker_line_indexes(lines):
+        # Modern PTR form (has [XX] markers): stock count is only [ST]/[ET].
+        # Do not fall through to legacy ticker heuristics.
         return count
 
-    # Legacy (no [ST]/[ET] markers in filing)
+    # Legacy (no [XX] asset-class markers in filing at all)
     for idx in find_legacy_candidate_indexes(lines):
         identifiable = False
         for before, after in ((0, 1), (1, 1), (1, 2)):
