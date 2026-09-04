@@ -53,8 +53,9 @@ NOISE_ASSET_RE = re.compile(
     r"type\s*of|date\s*of|amount\s*of|periodic\s*transaction)"
 )
 BOND_RE = re.compile(
-    r"(?i)\b(?:municipal\s+bond|muni(?:cipal)?\b|bond\b|note\b|treasury\s+bill|"
-    r"\bBE/?R\b|RV\s*BE|auth(?:ority)?\b.*(?:rev|revenue)|cd\b|certificate\s+of\s+deposit)\b"
+    r"(?i)\b(?:municipal\s+bond|muni(?:cipal)?\b|\bbonds?\b|\bnotes?\b|treasury\s+bill|"
+    r"\bBE/?R\b|RV\s*BE|auth(?:ority)?\b.*(?:rev|revenue|elec|cultural)|"
+    r"airports?\s+auth|energy\s+(?:northwest|auth)|certificate\s+of\s+deposit|\bcd\b)\b"
 )
 ETF_HINT_RE = re.compile(r"(?i)\b(?:etf|exchange[\s-]?traded|spdr|ishares|vanguard|invesco|proshares)\b")
 STOCK_HINT_RE = re.compile(
@@ -203,10 +204,13 @@ def looks_like_stock_row(asset: str, ticker: str | None, marker: str | None) -> 
         return False
     if BOND_RE.search(asset) and not ETF_HINT_RE.search(asset):
         return False
+    # Reject obvious municipal / authority debt even when OCR mangled "Bond"
+    low = asset.lower()
+    if any(k in low for k in ("be/r", "rv be", "airports auth", "cultural", "muni")) and not ETF_HINT_RE.search(asset):
+        return False
     if ETF_HINT_RE.search(asset) or STOCK_HINT_RE.search(asset) or MARKER_RE.search(asset):
         return True
     # Typed paper forms often list "Company Name TICKER" without Inc/Corp.
-    # Accept plausible tickers that are not bond-like names.
     if len(ticker) >= 1 and ticker.isalpha() and not BOND_RE.search(asset):
         return True
     return False

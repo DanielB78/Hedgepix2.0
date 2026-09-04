@@ -4,28 +4,74 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-
-import house_ptr_paddleocr as paddle  # noqa: E402
-
 SCANS_DIR = Path("/tmp/scans2026")
 LIST_PATH = Path("/opt/cursor/artifacts/scanned_2026_filings.json")
 OUT_PATH = Path("/opt/cursor/artifacts/paddleocr_2026_scan_report.json")
+PYTHON = Path("/workspace/.venv-paddle/bin/python")
+SCRIPT = Path(__file__).resolve().parent / "house_ptr_paddleocr.py"
+
+
+def adaptive_max_pages(pdf: Path) -> int:
+    size = pdf.stat().st_size
+    if size > 800_000:
+        return 2
+    if size > 200_000:
+        return 4
+    return int(os.environ.get("HOUSE_PADDLE_MAX_PAGES") or "8")
+
+
+def parse_one(pdf: Path, filing: dict, timeout_sec: int) -> dict:
+    env = os.environ.copy()
+    env["HOUSE_PADDLE_MAX_PAGES"] = str(adaptive_max_pages(pdf))
+    args = [
+        str(PYTHON),
+        str(SCRIPT),
+        str(pdf),
+        str(filing.get("filing_date") or ""),
+        str(filing["doc_id"]),
+        str(filing.get("member") or ""),
+    ]
+    proc = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        timeout=timeout_sec,
+        env=env,
+    )
+    stdout = (proc.stdout or "").strip()
+    # Last JSON object in stdout
+    payload = ""
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            payload = line
+            break
+    if not payload:
+        start = stdout.find("{")
+        end = stdout.rfind("}")
+        if start >= 0 and end > start:
+            payload = stdout[start : end + 1]
+    if not payload:
+        raise RuntimeError((proc.stderr or "empty paddle stdout")[:400])
+    return json.loads(payload)
 
 
 def main() -> int:
     filings = json.loads(LIST_PATH.read_text())
+    timeout_sec = int(os.environ.get("HOUSE_PADDLE_TEST_TIMEOUT") or "180")
     report = {
         "scanned_filings_tested": 0,
         "filings_successfully_parsed": 0,
         "stock_rows_recovered": 0,
         "filings_still_unparseable": 0,
         "errors": 0,
+        "timeouts": 0,
         "elapsed_sec": 0.0,
         "results": [],
         "sample_rows": [],
@@ -52,12 +98,21 @@ def main() -> int:
             )
             continue
         try:
-            result = paddle.parse_pdf(
-                pdf,
-                filing_date=f.get("filing_date"),
-                doc_id=doc_id,
-                member_hint=f.get("member"),
+            result = parse_one(pdf, f, timeout_sec)
+        except subprocess.TimeoutExpired:
+            report["timeouts"] += 1
+            report["filings_still_unparseable"] += 1
+            report["results"].append(
+                {
+                    "doc_id": doc_id,
+                    "member": f.get("member"),
+                    "ok": False,
+                    "error": f"timeout_after_{timeout_sec}s",
+                    "parsed_stock_count": 0,
+                }
             )
+            print(f"  TIMEOUT after {timeout_sec}s", flush=True)
+            continue
         except Exception as exc:
             report["errors"] += 1
             report["filings_still_unparseable"] += 1
@@ -88,23 +143,40 @@ def main() -> int:
             report["filings_successfully_parsed"] += 1
             report["stock_rows_recovered"] += n
             for tx in entry["transactions"][:5]:
-                report["sample_rows"].append({"doc_id": doc_id, **{k: tx.get(k) for k in (
-                    "ticker", "asset_name", "type", "transaction_date", "filing_date", "amount"
-                )}})
-                # Heuristic garbled flags for manual review
+                report["sample_rows"].append(
+                    {
+                        "doc_id": doc_id,
+                        **{
+                            k: tx.get(k)
+                            for k in (
+                                "ticker",
+                                "asset_name",
+                                "type",
+                                "transaction_date",
+                                "filing_date",
+                                "amount",
+                            )
+                        },
+                    }
+                )
                 name = str(tx.get("asset_name") or "")
                 if sum(ch.isalpha() for ch in name) < max(3, len(name) // 3) or "□" in name:
                     report["garbled_or_suspicious"].append({"doc_id": doc_id, "tx": tx})
+                low = name.lower()
+                if any(k in low for k in ("bond", "muni", "be/r", "authority", "note ")):
+                    report["garbled_or_suspicious"].append(
+                        {"doc_id": doc_id, "reason": "possible_bond", "tx": tx}
+                    )
             print(f"  OK {n} stock rows", flush=True)
         else:
             report["filings_still_unparseable"] += 1
             print(f"  unparseable ({result.get('error')})", flush=True)
 
     report["elapsed_sec"] = round(time.time() - t0, 1)
-    # Compact results for summary file (drop full txs in results list copy)
     slim = dict(report)
     slim["results"] = [
-        {k: v for k, v in r.items() if k != "transactions"} | {
+        {k: v for k, v in r.items() if k != "transactions"}
+        | {
             "transaction_preview": [
                 {
                     "ticker": t.get("ticker"),
@@ -120,14 +192,23 @@ def main() -> int:
     ]
     OUT_PATH.write_text(json.dumps(slim, indent=2, ensure_ascii=False))
     print("\n=== SUMMARY ===")
-    print(json.dumps({k: slim[k] for k in [
-        "scanned_filings_tested",
-        "filings_successfully_parsed",
-        "stock_rows_recovered",
-        "filings_still_unparseable",
-        "errors",
-        "elapsed_sec",
-    ]}, indent=2))
+    print(
+        json.dumps(
+            {
+                k: slim[k]
+                for k in [
+                    "scanned_filings_tested",
+                    "filings_successfully_parsed",
+                    "stock_rows_recovered",
+                    "filings_still_unparseable",
+                    "errors",
+                    "timeouts",
+                    "elapsed_sec",
+                ]
+            },
+            indent=2,
+        )
+    )
     print(f"Wrote {OUT_PATH}")
     return 0
 
