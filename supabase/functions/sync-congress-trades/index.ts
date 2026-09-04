@@ -14,7 +14,7 @@ Deno.serve((_req) => {
     JSON.stringify({
       ok: false,
       error:
-        "Deprecated. Use backend `npm run update-data` (local congress-trading-pipeline updater).",
+        "Deprecated. Use backend `npm run backfill-kadoa` or `npm run update-data` (Kadoa dataset import).",
     }),
     { status: 410, headers: { "Content-Type": "application/json" } },
   );

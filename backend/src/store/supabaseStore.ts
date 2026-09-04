@@ -129,6 +129,38 @@ async function hasListedEquityColumn(
   return listedEquityColumn;
 }
 
+/**
+ * Delete all congressional trade rows. Does not touch stock price history
+ * or unrelated tables. Holdings should be recomputed after a fresh import.
+ */
+export async function clearCongressTrades(
+  supabase: SupabaseClient,
+): Promise<number> {
+  let deleted = 0;
+  // PostgREST requires a filter; delete in pages by source_hash.
+  for (;;) {
+    const { data, error: selectError } = await supabase
+      .from("congress_trades")
+      .select("source_hash")
+      .limit(500);
+    if (selectError) {
+      throw new Error(`Failed to list trades for clear: ${selectError.message}`);
+    }
+    const hashes = (data ?? []).map((row) => row.source_hash as string);
+    if (hashes.length === 0) break;
+
+    const { error } = await supabase
+      .from("congress_trades")
+      .delete()
+      .in("source_hash", hashes);
+    if (error) {
+      throw new Error(`Failed to clear congress_trades: ${error.message}`);
+    }
+    deleted += hashes.length;
+  }
+  return deleted;
+}
+
 export async function upsertTrades(
   supabase: SupabaseClient,
   trades: CongressTrade[],

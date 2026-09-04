@@ -1,12 +1,12 @@
 # Congress Trade Monitor
 
-MVP that fetches House and Senate STOCK Act securities disclosures from official
-U.S. government sources (via a local manual updater derived from
-[congress-trading-pipeline](https://github.com/seralifatih/congress-trading-pipeline)),
-stores them in Supabase, and displays them in a Next.js frontend.
+MVP that imports House and Senate STOCK Act securities disclosures from the
+MIT-licensed [Kadoa congress-trading-monitor](https://github.com/kadoa-org/congress-trading-monitor)
+dataset, stores ordinary publicly traded stocks in Supabase, and displays them
+in a Next.js frontend.
 
-Historical stock prices are cached from Alpaca Market Data (IEX daily bars) during
-the same manual update, then read from Supabase by the website.
+Historical stock prices are cached from Alpaca Market Data (IEX daily bars)
+during the same update, then read from Supabase by the website.
 
 ## Stack
 
@@ -14,6 +14,7 @@ the same manual update, then read from Supabase by the website.
 - Supabase (Postgres)
 - Local Node.js backend updater (`backend/`)
 - Alpaca Market Data (IEX daily bars, cached in Supabase)
+- Kadoa static JSON dataset (`public/data/filer/*.json`)
 
 ## Features
 
@@ -43,107 +44,63 @@ the same manual update, then read from Supabase by the website.
    npm run dev
    ```
 
-## Updating congressional trade data
+## Importing congressional trade data (Kadoa)
 
-The updater fetches the most recent House and Senate disclosures,
-deduplicates them, writes new transactions to Supabase, then incrementally
-fetches missing Alpaca daily bars for listed stock/ETF tickers.
-
-The website reads congressional trades and stock prices from Supabase only
-(no browser calls to Alpaca), so no frontend redeployment is required after
-an update.
-
-### Option 1 — Windows
-
-Double-click:
+Data flow:
 
 ```text
-update.bat
+Kadoa dataset → House + Senate only → stocks only → congress_trades → holdings / Latest / Trending
 ```
 
-### Option 2 — Terminal
+Executive-branch disclosures, bonds, ETFs, mutual funds, options, crypto, and
+other non-stock assets are discarded. Deduplication uses stable
+`source_hash` values (`kadoa:<kadoa_trade_id>`).
+
+### One-time historical backfill (clears old trades)
+
+```bash
+npm run backfill-kadoa
+```
+
+This will:
+
+1. Download/read the Kadoa dataset (or use `KADOA_DATA_DIR`)
+2. Keep House + Senate stock purchase/sale rows only
+3. Clear existing `congress_trades` rows (not price history)
+4. Upsert into Supabase
+5. Recalculate member holdings
+6. Fetch missing Alpaca daily bars only
+
+Useful flags (passed through to the backend script):
 
 ```bash
 cd backend
-npm run update-data
+npx tsx src/backfill-kadoa.ts --no-clear          # upsert without wiping
+npx tsx src/backfill-kadoa.ts --data-dir /path    # local Kadoa checkout
+npx tsx src/backfill-kadoa.ts --skip-prices
+npx tsx src/backfill-kadoa.ts --refresh           # re-clone dataset cache
 ```
 
-Or from the repo root:
+### Incremental refresh
 
 ```bash
 npm run update-data
-# one-time historical backfill (2012 → present):
-npm run backfill-history
-# prices only:
+```
+
+Re-reads Kadoa and upserts without clearing. Safe to run repeatedly.
+
+### Prices only / tests
+
+```bash
 npm run sync:prices
-# tests:
 npm run test:prices
 cd backend && npm test
 ```
 
-Only **listed stocks** (valid tickers passing equity filters) appear in Latest, Trending, member pages, stock pages, and holdings. Bonds, funds, and other non-stock assets are stored with `is_listed_equity = false` and excluded from the UI.
+Only **ordinary listed stocks** (valid tickers passing equity filters) appear in
+Latest, Trending, member pages, stock pages, holdings, and Alpaca price sync.
 
-## House PDF parsing (pdfplumber + OCR fallback)
-
-House PTR flow:
-
-1. **pdfplumber** (Python) extracts transactions using word coordinates / column clustering
-2. If the PDF has little text or stock-row coverage is incomplete → **OCRmyPDF** (Tesseract)
-3. **pdfplumber** again on the OCR’d PDF (same extraction path)
-
-Normalized fields: ticker, stock marker (`[ST]` / `[ET]`), purchase/sale, transaction date, notification date, amount range.
-
-Stock-only filtering, deduplication (`source_hash`), and Supabase upsert behavior are unchanged.
-
-**Validate 2026 only (required before historical backfill):**
-
-```bash
-cd backend
-npm run validate:house-2026
-```
-
-Target: **100%** of identifiable stock rows in every 2026 PTR. The script lists failing document IDs and exits non-zero if any filing is incomplete. Do not backfill earlier years until this passes.
-
-Disable OCR with `HOUSE_OCR_DISABLED=1`.
-
-### Windows installation (OCR deps for scanned PDFs)
-
-1. **Python**
-
-   ```powershell
-   winget install -e --id Python.Python.3.12
-   ```
-
-2. **Tesseract OCR**
-
-   ```powershell
-   winget install -e --id UB-Mannheim.TesseractOCR
-   ```
-
-3. **Ghostscript**
-
-   Install the current 64-bit Ghostscript for Windows from [https://ghostscript.com/releases/gsdnld.html](https://ghostscript.com/releases/gsdnld.html).
-
-4. **pdfplumber + OCRmyPDF**
-
-   ```powershell
-   py -m pip install pdfplumber ocrmypdf
-   ```
-
-5. **Verify**
-
-   ```powershell
-   py -m ocrmypdf --version
-   tesseract --version
-   ```
-
-The OCR command used for scanned filings is:
-
-```text
-py -m ocrmypdf --skip-text input.pdf output.pdf
-```
-
-After a historical backfill completes, the summary includes House PDF parsing stats such as normal parses, OCR attempts, OCR successes, and filings that remained unparseable.
+Attribution: see `THIRD_PARTY_NOTICES.md`.
 
 ## Deploy (Vercel)
 
@@ -166,4 +123,4 @@ See `docs/` for the schema and historical planning notes. Third-party attributio
 
 ## Scope
 
-No auth, notifications, AI, live browser market-price calls, portfolios, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. House PTRs use pdfplumber with OCRmyPDF only as a fallback for scanned/incomplete PDFs. Scheduling can later wrap `npm run update-data` on a VPS.
+No auth, notifications, AI, live browser market-price calls, portfolios, always-on backend server, or scheduled cloud cron in this MVP. Historical daily bars are ingested server-side from Alpaca and read from Supabase. Scheduling can later wrap `npm run update-data` on a VPS.

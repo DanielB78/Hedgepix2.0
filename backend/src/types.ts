@@ -16,46 +16,9 @@ export type CongressTrade = {
   rawSource?: unknown;
 };
 
-export type ChamberRunStats = {
-  chamber: Chamber;
-  status: "success" | "failed";
-  fetched: number;
-  normalized: number;
-  newCount: number;
-  updatedCount: number;
-  errors: number;
-  errorMessage?: string;
-  housePdfStats?: HousePdfParseStats;
-};
-
-export type HousePdfParseStats = {
-  normalParsed: number;
-  ocrAttempted: number;
-  ocrSuccess: number;
-  stillUnparseable: number;
-  lowQualitySkipped: number;
-  incompleteCoverage: number;
-};
-
 export type UpsertStats = {
   fetched: number;
   newCount: number;
   updatedCount: number;
   errors: number;
-};
-
-/** Upstream Transaction shape shared by house/senate vendor pipelines. */
-export type UpstreamTransaction = {
-  id?: string;
-  politician: string;
-  transaction_date: string;
-  filing_date: string;
-  ticker: string | null;
-  asset_name: string;
-  asset_type: string;
-  type: "buy" | "sell";
-  amount_min: number;
-  amount_max: number | null;
-  owner: "self" | "joint" | "spouse" | "child";
-  created_at?: string;
 };
