@@ -5,28 +5,16 @@
   "type": "module",
   "scripts": {
     "update-data": "tsx src/update.ts",
-    "backfill-history": "tsx src/backfill-history.ts",
-    "validate:house-2026": "tsx src/validate-2026-house.ts",
+    "backfill-kadoa": "tsx src/backfill-kadoa.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/backfill-history.test.ts && tsx src/__tests__/house-pdf-stats.test.ts"
+    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
-    "adm-zip": "^0.5.17",
-    "axios": "^1.7.2",
-    "cheerio": "^1.0.0",
-    "date-fns": "^4.1.0",
-    "dotenv": "^16.4.7",
-    "fast-xml-parser": "^5.7.2",
-    "https-proxy-agent": "^7.0.6",
-    "pdf-parse": "^1.1.4",
-    "tough-cookie": "^6.0.1",
-    "zod": "^3.23.8"
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20.14.2",
-    "@types/pdf-parse": "^1.1.5",
     "tsx": "^4.19.3",
     "typescript": "^5.4.5"
   }

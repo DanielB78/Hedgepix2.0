@@ -129,6 +129,58 @@ async function hasListedEquityColumn(
   return listedEquityColumn;
 }
 
+/**
+ * Delete all congressional trade rows. Does not touch stock price history
+ * or unrelated tables. Holdings should be recomputed after a fresh import.
+ */
+export async function clearCongressTrades(
+  supabase: SupabaseClient,
+): Promise<number> {
+  let deleted = 0;
+  // Prefer a single filtered delete — PostgREST rejects large `.in()` URL lists.
+  for (;;) {
+    const { count, error } = await supabase
+      .from("congress_trades")
+      .select("*", { count: "exact", head: true });
+    if (error) {
+      throw new Error(`Failed to count trades for clear: ${error.message}`);
+    }
+    const remaining = count ?? 0;
+    if (remaining === 0) break;
+
+    const { error: deleteError } = await supabase
+      .from("congress_trades")
+      .delete()
+      .gte("transaction_date", "1900-01-01");
+    if (deleteError) {
+      throw new Error(`Failed to clear congress_trades: ${deleteError.message}`);
+    }
+    deleted += remaining;
+
+    // Safety: if rows remain (e.g. null transaction_date), remove by hash pages.
+    const { data, error: selectError } = await supabase
+      .from("congress_trades")
+      .select("source_hash")
+      .limit(100);
+    if (selectError) {
+      throw new Error(`Failed to list leftover trades: ${selectError.message}`);
+    }
+    const hashes = (data ?? []).map((row) => row.source_hash as string);
+    if (hashes.length === 0) break;
+    for (const hash of hashes) {
+      const { error: oneErr } = await supabase
+        .from("congress_trades")
+        .delete()
+        .eq("source_hash", hash);
+      if (oneErr) {
+        throw new Error(`Failed to clear leftover trade: ${oneErr.message}`);
+      }
+      deleted += 1;
+    }
+  }
+  return deleted;
+}
+
 export async function upsertTrades(
   supabase: SupabaseClient,
   trades: CongressTrade[],

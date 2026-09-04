@@ -1,61 +1,99 @@
 import assert from "node:assert/strict";
-import { calculateDateWindow } from "../update.js";
-import { toCongressTrade, memberSlug, amountRange } from "../normalize.js";
-import type { UpstreamTransaction } from "../types.js";
+import { memberSlug, amountRange } from "../normalize.js";
+import {
+  isKadoaStockTrade,
+  normalizeOwner,
+  normalizeTransactionType,
+  toCongressTradeFromKadoa,
+} from "../kadoa/normalize.js";
+import type { KadoaFiler, KadoaTrade } from "../kadoa/types.js";
 
-function testDateWindow() {
-  const now = new Date("2026-08-29T12:00:00Z");
-
-  const first = calculateDateWindow({
-    lastSuccessAt: null,
-    initialBackfillDays: 90,
-    syncOverlapDays: 7,
-    now,
-  });
-  assert.equal(first.toDate, "2026-08-29");
-  assert.equal(first.fromDate, "2026-05-31");
-
-  const later = calculateDateWindow({
-    lastSuccessAt: "2026-08-29T10:00:00.000Z",
-    initialBackfillDays: 90,
-    syncOverlapDays: 7,
-    now,
-  });
-  assert.equal(later.fromDate, "2026-08-22");
-  assert.equal(later.toDate, "2026-08-29");
+function alwaysEquity(_ticker: string | null, _asset: string | null) {
+  return Boolean(_ticker);
 }
 
-function testNormalize() {
-  const upstream: UpstreamTransaction = {
-    id: "abc123deadbeef",
-    politician: "Jane Doe",
-    transaction_date: "2026-08-01",
-    filing_date: "2026-08-10",
-    ticker: "NVDA",
-    asset_name: "NVIDIA Corp",
-    asset_type: "Stock",
-    type: "buy",
-    amount_min: 1001,
-    amount_max: 15000,
-    owner: "self",
-  };
+function neverEquity() {
+  return false;
+}
 
-  const trade = toCongressTrade(upstream, "house");
-  assert.equal(trade.sourceId, "house:abc123deadbeef");
-  assert.equal(trade.chamber, "house");
-  assert.equal(trade.member, "Jane Doe");
-  assert.equal(trade.transactionType, "purchase");
-  assert.equal(trade.amountLow, 1001);
-  assert.equal(trade.amountHigh, 15000);
-  assert.equal(trade.disclosureDate, "2026-08-10");
+function testNormalizeHelpers() {
   assert.equal(memberSlug("Jane Doe"), "jane-doe");
   assert.equal(amountRange(1001, 15000), "$1,001 - $15,000");
-
-  const sell = toCongressTrade({ ...upstream, type: "sell", id: "x" }, "senate");
-  assert.equal(sell.sourceId, "senate:x");
-  assert.equal(sell.transactionType, "sale");
+  assert.equal(normalizeOwner("SP"), "spouse");
+  assert.equal(normalizeOwner("JT"), "joint");
+  assert.equal(normalizeOwner("DC"), "child");
+  assert.equal(normalizeTransactionType("Sale (Partial)"), "sale");
+  assert.equal(normalizeTransactionType("Exchange"), null);
 }
 
-testDateWindow();
-testNormalize();
+function testKadoaStockFilter() {
+  const stock: KadoaTrade = {
+    id: "t1",
+    ticker: "AAPL",
+    asset_name: "Apple Inc Common Stock",
+    asset_type: "ST",
+    transaction_type: "Purchase",
+    transaction_date: "2024-01-01",
+    filing_date: "2024-01-10",
+  };
+  assert.equal(isKadoaStockTrade(stock, alwaysEquity), true);
+
+  const etf: KadoaTrade = {
+    ...stock,
+    id: "t2",
+    ticker: "SPY",
+    asset_name: "SPDR S&P 500 ETF Trust",
+    asset_type: "ST",
+  };
+  assert.equal(isKadoaStockTrade(etf, neverEquity), false);
+
+  const bond: KadoaTrade = {
+    ...stock,
+    id: "t3",
+    ticker: "GS",
+    asset_name: "Municipal Bond",
+    asset_type: "Municipal Security",
+  };
+  assert.equal(isKadoaStockTrade(bond, alwaysEquity), false);
+
+  const exchange: KadoaTrade = {
+    ...stock,
+    id: "t4",
+    transaction_type: "Exchange",
+  };
+  assert.equal(isKadoaStockTrade(exchange, alwaysEquity), false);
+}
+
+function testKadoaNormalize() {
+  const filer: KadoaFiler = {
+    id: "house_jane_doe",
+    full_name: "Jane Doe",
+    chamber: "house",
+    branch: "congress",
+  };
+  const trade: KadoaTrade = {
+    id: "house_1_t0",
+    ticker: "NVDA",
+    asset_name: "NVIDIA Corp",
+    asset_type: "ST",
+    transaction_type: "Sale (Full)",
+    amount_range_low: 1001,
+    amount_range_high: 15000,
+    transaction_date: "2026-08-01",
+    filing_date: "2026-08-10",
+    owner: "SP",
+    source_id: "house_clerk",
+  };
+  const out = toCongressTradeFromKadoa(trade, filer, "house");
+  assert.equal(out.sourceId, "kadoa:house_1_t0");
+  assert.equal(out.chamber, "house");
+  assert.equal(out.member, "Jane Doe");
+  assert.equal(out.transactionType, "sale");
+  assert.equal(out.owner, "spouse");
+  assert.equal(out.ticker, "NVDA");
+}
+
+testNormalizeHelpers();
+testKadoaStockFilter();
+testKadoaNormalize();
 console.log("unit tests passed");
