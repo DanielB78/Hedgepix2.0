@@ -35,6 +35,15 @@ assert.equal(
   isLikelyListedEquity("VTI", "VANGUARD TOTAL STOCK MARKET INDEX ADM"),
   false,
 );
+assert.equal(
+  isLikelyListedEquity("FBALX", "Fidelity Balanced Fund"),
+  false,
+  "mutual fund share classes must be excluded",
+);
+assert.equal(
+  isLikelyListedEquity("YACKX", "AMG Yacktman Fund"),
+  false,
+);
 
 assert.equal(
   isLikelyListedEquity("GS", "Washington ST 5% Go Utx Due 08/01/30"),

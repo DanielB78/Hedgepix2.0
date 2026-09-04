@@ -76,6 +76,10 @@ export function isLikelyListedEquity(
   if (ETF_TICKERS.has(symbol)) return false;
 
   const name = asset ?? "";
+  // Five-letter tickers ending in X are almost always mutual-fund share classes.
+  if (/^[A-Z]{4}X$/.test(symbol) && !ASSET_ALLOW.test(name)) {
+    return false;
+  }
   if (ASSET_DENY.some((re) => re.test(name))) return false;
 
   const lower = name.toLowerCase();
