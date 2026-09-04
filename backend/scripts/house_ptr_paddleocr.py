@@ -38,6 +38,74 @@ AMOUNT_BANDS: list[tuple[str, int, int | None]] = [
     ("J", 50_000_001, None),
 ]
 
+BLOCKED_TICKERS = {
+    "LP",
+    "LLP",
+    "LLC",
+    "FUND",
+    "FUNDS",
+    "BOND",
+    "BONDS",
+    "NOTE",
+    "NOTES",
+    "STOCK",
+    "BDS",
+    "SYS",
+    "ADR",
+    "ETF",
+    "ETFS",
+    "AUTH",
+    "INC",
+    "CORP",
+    "CO",
+    "THE",
+    "AND",
+    "FOR",
+    "OF",
+    "TR",
+    "CL",
+    "SR",
+    "GO",
+    "ST",
+    "AU",
+    "GA",
+    "TX",
+    "MI",
+    "NC",
+    "WA",
+    "NY",
+    "CA",
+    "FL",
+    "IL",
+    "OH",
+    "PA",
+    "AZ",
+    "ELEC",
+    "RAP",
+    "DNTN",
+    "MICHI",
+    "STR",
+    "SCH",
+    "COM",
+    "CLASS",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+}
+
+MUNI_HINT_RE = re.compile(
+    r"(?i)\b(?:sch(?:ool)?s?\b|county|city|township|authority|arpt|airport|"
+    r"stadium|toll\s+hwy|electric|water|utility|go\b|rev(?:enue)?\b|"
+    r"tax\s+exempt|municipal|cop\b|passenge|civic\s+impt)\b"
+)
+
 OWNER_MAP = {"SP": "spouse", "DC": "child", "JT": "joint"}
 
 DATE_RE = re.compile(r"\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b")
@@ -174,44 +242,53 @@ def normalize_type(raw: str) -> str | None:
 def extract_ticker(asset: str) -> str | None:
     if not asset:
         return None
+    # "ASML HOLDING N.V." / "ASML HOLDING NV" — ticker is the leading symbol.
+    m = re.match(r"^([A-Z]{2,5})\s+HOLDINGS?\b", asset.strip(), re.I)
+    if m:
+        tok = m.group(1).upper()
+        return None if tok in BLOCKED_TICKERS else tok
     m = TICKER_PAREN_RE.search(asset)
     if m:
-        return m.group(1).upper()
+        tok = m.group(1).upper()
+        return None if tok in BLOCKED_TICKERS else tok
     # Trailing ticker after dash/space: "Zoetis Inc ZTS", "… ETF - SHLD"
-    m = re.search(r"(?:[\s\-–—])([A-Z]{1,5})\s*$", asset.strip())
+    m = re.search(r"(?:[\s\-–—])([A-Z]{2,5})\s*$", asset.strip())
     if m:
         tok = m.group(1)
-        if tok not in {"INC", "CORP", "CO", "LTD", "PLC", "ETF", "TR", "THE", "AND", "OF", "FOR", "II", "WA", "TX"}:
-            return tok
+        # Dutch N.V. suffix is not a ticker.
+        if tok in BLOCKED_TICKERS or tok == "NV":
+            return None
+        return tok
     m = TICKER_LOOSE_TRAIL_RE.search(asset.strip())
     if m:
         tok = m.group(1).upper()
-        # Only accept mostly-letter tickers that look intentional (OCR case noise).
-        if (
-            tok.isalpha()
-            and 2 <= len(tok) <= 5
-            and tok
-            not in {"INC", "CORP", "CO", "LTD", "PLC", "ETF", "TR", "THE", "AND", "OF", "FOR", "II", "WA", "TX", "AUTH"}
-        ):
+        if tok.isalpha() and 2 <= len(tok) <= 5 and tok not in BLOCKED_TICKERS and tok != "NV":
             return tok
     return None
 
 
 def looks_like_stock_row(asset: str, ticker: str | None, marker: str | None) -> bool:
+    if not asset:
+        return False
+    if "example" in asset.lower() or "mega corp" in asset.lower():
+        return False
+    if ticker and ticker.upper() in BLOCKED_TICKERS:
+        return False
     if marker in STOCK_CODES:
         return True
     if not ticker:
         return False
     if BOND_RE.search(asset) and not ETF_HINT_RE.search(asset):
         return False
-    # Reject obvious municipal / authority debt even when OCR mangled "Bond"
+    if MUNI_HINT_RE.search(asset) and not ETF_HINT_RE.search(asset):
+        return False
     low = asset.lower()
-    if any(k in low for k in ("be/r", "rv be", "airports auth", "cultural", "muni")) and not ETF_HINT_RE.search(asset):
+    if any(k in low for k in ("be/r", "rv be", "airports auth", "cultural", "muni", "partners fund", "capital partners")) and not ETF_HINT_RE.search(asset):
         return False
     if ETF_HINT_RE.search(asset) or STOCK_HINT_RE.search(asset) or MARKER_RE.search(asset):
         return True
-    # Typed paper forms often list "Company Name TICKER" without Inc/Corp.
-    if len(ticker) >= 1 and ticker.isalpha() and not BOND_RE.search(asset):
+    # Parenthetical ticker with a plausible company-like name
+    if TICKER_PAREN_RE.search(asset) and sum(c.isalpha() for c in asset) >= 6:
         return True
     return False
 
@@ -1022,7 +1099,11 @@ def parse_pdf(
     all_texts: list[str] = []
     for p in pages:
         all_texts.extend(p.get("texts") or [])
-    member = extract_member_from_texts(all_texts, member_hint or "Unknown")
+    # Prefer the filing-index member name; OCR headers on paper forms are often garbled.
+    if member_hint and member_hint.strip() and member_hint.strip().lower() not in {"unknown", "none"}:
+        member = member_hint.strip()
+    else:
+        member = extract_member_from_texts(all_texts, "Unknown")
 
     transactions, stats = reconstruct_transactions(pages, member, filing_date, doc)
     parsed_stock = sum(1 for t in transactions if t.get("asset_type_code") in STOCK_CODES)
