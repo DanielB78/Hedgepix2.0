@@ -191,13 +191,18 @@ export async function fetchSyncState(): Promise<SyncState | null> {
     .select(
       "provider, last_attempt_at, last_success_at, latest_seen_disclosure_date, latest_seen_transaction_date, last_rows_received, last_rows_upserted, last_error",
     )
-    .eq("provider", "local-pipeline")
-    .maybeSingle();
+    .in("provider", ["insiderwatch", "kadoa", "local-pipeline"]);
 
   if (error) {
     console.error("Failed to load congress_sync_state:", error.message);
     return null;
   }
 
-  return (data as SyncState | null) ?? null;
+  const rows = (data as SyncState[] | null) ?? [];
+  const preferred =
+    rows.find((row) => row.provider === "insiderwatch") ??
+    rows.find((row) => row.provider === "kadoa") ??
+    rows.find((row) => row.provider === "local-pipeline") ??
+    null;
+  return preferred;
 }

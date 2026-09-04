@@ -1,12 +1,13 @@
 # Congress Trade Monitor
 
-MVP that imports House and Senate STOCK Act securities disclosures from the
-MIT-licensed [Kadoa congress-trading-monitor](https://github.com/kadoa-org/congress-trading-monitor)
-dataset, stores ordinary publicly traded stocks in Supabase, and displays them
-in a Next.js frontend.
+MVP that stores House and Senate STOCK Act securities disclosures in Supabase
+and displays ordinary publicly traded stocks in a Next.js frontend.
+
+- **Historical backfill:** MIT-licensed [Kadoa congress-trading-monitor](https://github.com/kadoa-org/congress-trading-monitor) dataset
+- **Ongoing updates:** [InsiderWatch](https://insiderwatch.ai/congress-disclosure-lag) open congress-trades CSV (CC BY 4.0)
 
 Historical stock prices are cached from Alpaca Market Data (IEX daily bars)
-during the same update, then read from Supabase by the website.
+during updates, then read from Supabase by the website.
 
 ## Stack
 
@@ -14,7 +15,8 @@ during the same update, then read from Supabase by the website.
 - Supabase (Postgres)
 - Local Node.js backend updater (`backend/`)
 - Alpaca Market Data (IEX daily bars, cached in Supabase)
-- Kadoa static JSON dataset (`public/data/filer/*.json`)
+- Kadoa static JSON (`public/data/filer/*.json`) for history
+- InsiderWatch CSV for new disclosures
 
 ## Features
 
@@ -44,50 +46,54 @@ during the same update, then read from Supabase by the website.
    npm run dev
    ```
 
-## Importing congressional trade data (Kadoa)
-
-Data flow:
+## Data flow
 
 ```text
-Kadoa dataset → House + Senate only → stocks only → congress_trades → holdings / Latest / Trending
+Kadoa (historical)  ──backfill-kadoa──▶  congress_trades
+InsiderWatch (new)  ──update-data────▶  congress_trades
+                                              │
+                                              ├─▶ holdings
+                                              └─▶ Alpaca missing prices
 ```
 
-Executive-branch disclosures, bonds, ETFs, mutual funds, options, crypto, and
-other non-stock assets are discarded. Deduplication uses stable
-`source_hash` values (`kadoa:<kadoa_trade_id>`).
+Only House + Senate **ordinary listed stocks** are kept. Bonds, ETFs, funds,
+options, crypto, and other non-stock assets are discarded.
 
-### One-time historical backfill (clears old trades)
+Deduplication uses a stable content `source_hash` (`trade:<sha256>`) built from
+chamber, member, ticker, purchase/sale, amounts, transaction date, and owner so
+Kadoa history and InsiderWatch updates can match the same trade.
+
+### One-time historical backfill (Kadoa)
 
 ```bash
 npm run backfill-kadoa
 ```
 
-This will:
+Clears `congress_trades` (not price history), imports Kadoa House/Senate stocks,
+rebuilds holdings, and fetches missing Alpaca bars.
 
-1. Download/read the Kadoa dataset (or use `KADOA_DATA_DIR`)
-2. Keep House + Senate stock purchase/sale rows only
-3. Clear existing `congress_trades` rows (not price history)
-4. Upsert into Supabase
-5. Recalculate member holdings
-6. Fetch missing Alpaca daily bars only
-
-Useful flags (passed through to the backend script):
-
-```bash
-cd backend
-npx tsx src/backfill-kadoa.ts --no-clear          # upsert without wiping
-npx tsx src/backfill-kadoa.ts --data-dir /path    # local Kadoa checkout
-npx tsx src/backfill-kadoa.ts --skip-prices
-npx tsx src/backfill-kadoa.ts --refresh           # re-clone dataset cache
-```
-
-### Incremental refresh
+### Ongoing updates (InsiderWatch)
 
 ```bash
 npm run update-data
 ```
 
-Re-reads Kadoa and upserts without clearing. Safe to run repeatedly.
+1. Reads `congress_sync_state` for `provider = insiderwatch`
+2. Downloads https://insiderwatch.ai/api/data/congress-trades.csv
+3. Filters by `filed_date` ≥ last success − overlap (default 3 days; first run uses a 14-day lookback)
+4. Keeps House/Senate stocks only
+5. Upserts into Supabase
+6. Rebuilds holdings + missing Alpaca prices
+7. Advances `last_success_at` only on full success
+
+Useful env vars (backend `.env`):
+
+```bash
+INSIDERWATCH_OVERLAP_DAYS=3
+INSIDERWATCH_INITIAL_DAYS=14
+# INSIDERWATCH_CSV_URL=https://insiderwatch.ai/api/data/congress-trades.csv
+# INSIDERWATCH_CSV_PATH=/path/to/local.csv
+```
 
 ### Prices only / tests
 
@@ -96,9 +102,6 @@ npm run sync:prices
 npm run test:prices
 cd backend && npm test
 ```
-
-Only **ordinary listed stocks** (valid tickers passing equity filters) appear in
-Latest, Trending, member pages, stock pages, holdings, and Alpaca price sync.
 
 Attribution: see `THIRD_PARTY_NOTICES.md`.
 

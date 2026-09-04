@@ -1,11 +1,11 @@
 /**
- * Mock-backed integration checks for upsert counting and Kadoa source IDs.
+ * Mock-backed integration checks for upsert counting and content source IDs.
  */
 import assert from "node:assert/strict";
-import { toCongressTradeFromKadoa } from "../kadoa/normalize.js";
+import { toCongressTradeFromInsiderWatch } from "../insiderwatch/normalize.js";
 import { toDbRow } from "../store/supabaseStore.js";
 import type { CongressTrade } from "../types.js";
-import type { KadoaFiler, KadoaTrade } from "../kadoa/types.js";
+import type { InsiderWatchCsvRow } from "../insiderwatch/types.js";
 
 type Row = ReturnType<typeof toDbRow>;
 
@@ -34,48 +34,46 @@ class MemoryStore {
   }
 }
 
-function sample(id: string, chamber: "house" | "senate"): CongressTrade {
-  const filer: KadoaFiler = {
-    id: `${chamber}_test_member`,
-    full_name: "Test Member",
+function sample(
+  filingId: string,
+  chamber: "house" | "senate",
+  ticker: string,
+): CongressTrade {
+  const row: InsiderWatchCsvRow = {
     chamber,
-    branch: "congress",
-  };
-  const trade: KadoaTrade = {
-    id,
-    ticker: "AAA",
-    asset_name: "AAA Inc",
-    asset_type: "ST",
-    transaction_type: "Purchase",
-    amount_range_low: 1001,
-    amount_range_high: 15000,
-    transaction_date: "2026-08-01",
-    filing_date: "2026-08-10",
+    member: "Test Member",
+    member_slug: "test-member",
+    ticker,
+    asset: `${ticker} Inc`,
+    action: "buy",
+    amount_range: "$1,001 - $15,000",
+    amount_min_usd: "1001",
+    transaction_date: "08/01/2026",
+    filed_date: "8/10/2026",
+    disclosure_lag_days: "9",
     owner: "Self",
+    filing_id: filingId,
   };
-  return toCongressTradeFromKadoa(trade, filer, chamber);
+  return toCongressTradeFromInsiderWatch(row, 0);
 }
 
 async function main() {
   const store = new MemoryStore();
   const batch1 = [
-    sample("house_id1", "house"),
-    sample("house_id2", "house"),
-    sample("senate_id1", "senate"),
+    sample("f1", "house", "AAA"),
+    sample("f2", "house", "BBB"),
+    sample("f3", "senate", "AAA"),
   ];
 
   const r1 = await store.upsert(batch1);
   assert.equal(r1.newCount, 3);
   assert.equal(r1.total, 3);
-  assert.ok(store.rows.has("kadoa:house_id1"));
-  assert.ok(store.rows.has("kadoa:senate_id1"));
-  assert.equal(store.rows.get("kadoa:house_id1")!.chamber, "house");
-  assert.equal(store.rows.get("kadoa:senate_id1")!.chamber, "senate");
+  assert.ok([...store.rows.keys()].every((h) => h.startsWith("trade:")));
 
   const r2 = await store.upsert([
-    sample("house_id1", "house"),
-    sample("house_id2", "house"),
-    sample("house_id3", "house"),
+    sample("f1", "house", "AAA"),
+    sample("f2", "house", "BBB"),
+    sample("f4", "house", "CCC"),
   ]);
   assert.equal(r2.newCount, 1);
   assert.equal(r2.updatedCount, 2);
