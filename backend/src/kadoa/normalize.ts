@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import type { Chamber, CongressTrade } from "../types.js";
+import { stableContentSourceId } from "../tradeIdentity.js";
 import type { KadoaFiler, KadoaTrade } from "./types.js";
 
 const TICKER_RE = /^[A-Z]{1,5}(\.[A-Z])?$/;
@@ -120,24 +120,23 @@ export function stableKadoaSourceId(
   trade: KadoaTrade,
   chamber: Chamber,
   member: string,
+  transactionType: "purchase" | "sale",
+  amountLow: number | null,
+  amountHigh: number | null,
+  transactionDate: string,
+  owner: CongressTrade["owner"],
 ): string {
-  if (trade.id?.trim()) {
-    return `kadoa:${trade.id.trim()}`;
-  }
-  const basis = [
+  // Prefer cross-source content hash so InsiderWatch updates can match.
+  return stableContentSourceId({
     chamber,
     member,
-    trade.transaction_date ?? "",
-    trade.filing_date ?? "",
-    normalizeTickerValue(trade.ticker) ?? "",
-    (trade.asset_name ?? "").trim(),
-    trade.transaction_type ?? "",
-    String(trade.amount_range_low ?? ""),
-    String(trade.amount_range_high ?? ""),
-    trade.owner ?? "",
-  ].join("|");
-  const hash = createHash("sha256").update(basis).digest("hex").slice(0, 32);
-  return `kadoa:${hash}`;
+    ticker: normalizeTickerValue(trade.ticker),
+    transactionType,
+    amountLow,
+    amountHigh,
+    transactionDate,
+    owner,
+  });
 }
 
 export function toCongressTradeFromKadoa(
@@ -164,22 +163,36 @@ export function toCongressTradeFromKadoa(
     throw new Error(`Invalid filing_date: ${trade.filing_date}`);
   }
 
+  const amountLow =
+    trade.amount_range_low == null ? null : Number(trade.amount_range_low);
+  const amountHigh =
+    trade.amount_range_high == null ? null : Number(trade.amount_range_high);
+  const owner = normalizeOwner(trade.owner);
+
   return {
-    sourceId: stableKadoaSourceId(trade, chamber, member),
+    sourceId: stableKadoaSourceId(
+      trade,
+      chamber,
+      member,
+      txn,
+      amountLow,
+      amountHigh,
+      transactionDate,
+      owner,
+    ),
     chamber,
     member,
     ticker: normalizeTickerValue(trade.ticker),
     assetName: (trade.asset_name ?? "").trim() || "Unknown",
     assetType: trade.asset_type?.trim() ? trade.asset_type.trim() : null,
     transactionType: txn,
-    amountLow:
-      trade.amount_range_low == null ? null : Number(trade.amount_range_low),
-    amountHigh:
-      trade.amount_range_high == null ? null : Number(trade.amount_range_high),
+    amountLow,
+    amountHigh,
     transactionDate,
     disclosureDate,
-    owner: normalizeOwner(trade.owner),
+    owner,
     rawSource: {
+      provider: "kadoa",
       kadoa_id: trade.id,
       filer_id: filer.id,
       source_id: trade.source_id,

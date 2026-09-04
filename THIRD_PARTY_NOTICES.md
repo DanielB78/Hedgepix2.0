@@ -2,8 +2,8 @@
 
 ## kadoa-org/congress-trading-monitor
 
-Congressional disclosure history for this application is imported from the
-open-source dataset published by:
+Historical congressional disclosure data for this application is imported from
+the open-source dataset published by:
 
 - Repository: https://github.com/kadoa-org/congress-trading-monitor
 - License: MIT
@@ -32,3 +32,20 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## InsiderWatch open congress trades CSV
+
+Ongoing disclosure updates are imported from the public CSV published by
+InsiderWatch:
+
+- Live CSV: https://insiderwatch.ai/api/data/congress-trades.csv
+- Dataset notes: https://github.com/saminjafari/insiderwatch-data
+- Analysis page: https://insiderwatch.ai/congress-disclosure-lag
+- License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+Please attribute “InsiderWatch, insiderwatch.ai” and link to
+https://insiderwatch.ai/congress-disclosure-lag when redistributing the
+InsiderWatch dataset.
+
+We download the CSV for House/Senate stock-row ingestion only; we do not copy
+InsiderWatch application or alert code.

@@ -3,7 +3,6 @@ import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { BackendConfig } from "../config.js";
-import { PROVIDER } from "../config.js";
 import { amountRange, memberSlug } from "../normalize.js";
 import type { CongressTrade, UpsertStats } from "../types.js";
 
@@ -262,11 +261,12 @@ export async function upsertTrades(
 
 export async function getLastSuccessAt(
   supabase: SupabaseClient,
+  provider: string,
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from("congress_sync_state")
     .select("last_success_at")
-    .eq("provider", PROVIDER)
+    .eq("provider", provider)
     .maybeSingle();
 
   if (error) {
@@ -277,6 +277,7 @@ export async function getLastSuccessAt(
 
 export async function startSyncRun(
   supabase: SupabaseClient,
+  provider: string,
   mode: "manual" | "backfill" = "manual",
 ): Promise<string> {
   const attemptedAt = new Date().toISOString();
@@ -284,7 +285,7 @@ export async function startSyncRun(
   const { data, error } = await supabase
     .from("congress_sync_runs")
     .insert({
-      provider: PROVIDER,
+      provider,
       mode,
       status: "running",
     })
@@ -296,7 +297,7 @@ export async function startSyncRun(
   }
 
   await supabase.from("congress_sync_state").upsert({
-    provider: PROVIDER,
+    provider,
     last_attempt_at: attemptedAt,
     last_error: null,
   });
@@ -306,6 +307,7 @@ export async function startSyncRun(
 
 export async function finishSyncRunSuccess(
   supabase: SupabaseClient,
+  provider: string,
   runId: string,
   stats: {
     rowsReceived: number;
@@ -329,7 +331,7 @@ export async function finishSyncRunSuccess(
     .eq("id", runId);
 
   const statePatch: Record<string, unknown> = {
-    provider: PROVIDER,
+    provider,
     last_attempt_at: now,
     last_success_at: now,
     last_rows_received: stats.rowsReceived,
@@ -348,6 +350,7 @@ export async function finishSyncRunSuccess(
 
 export async function finishSyncRunFailed(
   supabase: SupabaseClient,
+  provider: string,
   runId: string,
   message: string,
 ): Promise<void> {
@@ -362,7 +365,7 @@ export async function finishSyncRunFailed(
     .eq("id", runId);
 
   await supabase.from("congress_sync_state").upsert({
-    provider: PROVIDER,
+    provider,
     last_attempt_at: now,
     last_error: message,
   });

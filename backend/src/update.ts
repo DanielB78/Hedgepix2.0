@@ -1,12 +1,16 @@
 import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "./config.js";
-import { loadKadoaCongressStockTrades, printKadoaLoadStats } from "./kadoa/load.js";
+import { INSIDERWATCH_PROVIDER, loadConfig } from "./config.js";
+import {
+  loadInsiderWatchStockTrades,
+  printInsiderWatchStats,
+} from "./insiderwatch/load.js";
 import {
   createSupabase,
   finishSyncRunFailed,
   finishSyncRunSuccess,
+  getLastSuccessAt,
   startSyncRun,
   upsertTrades,
 } from "./store/supabaseStore.js";
@@ -83,44 +87,73 @@ async function syncHoldingsAfterTrades(
 }
 
 /**
- * Incremental refresh from the Kadoa dataset (upsert only, no clear).
- * Prefer `npm run backfill-kadoa` for the one-time migration/replace.
+ * Ongoing updater: InsiderWatch CSV → stocks only → upsert → holdings → prices.
+ * Historical backfill remains `npm run backfill-kadoa`.
  */
 async function main(): Promise<void> {
-  console.log("START UPDATE (Kadoa)");
+  console.log("START UPDATE (InsiderWatch)");
   console.log("");
 
   let runId: string | null = null;
   let supabase: ReturnType<typeof createSupabase> | null = null;
+  const provider = INSIDERWATCH_PROVIDER;
 
   try {
     const config = loadConfig();
     supabase = createSupabase(config);
-    runId = await startSyncRun(supabase, "manual");
 
-    const refresh = process.env.KADOA_REFRESH === "1";
-    const { trades, stats } = await loadKadoaCongressStockTrades({ refresh });
-
+    const lastSuccessAt = await getLastSuccessAt(supabase, provider);
     console.log(
-      `Upserting ${trades.length.toLocaleString("en-US")} House/Senate stock trades…`,
+      lastSuccessAt
+        ? `Last InsiderWatch success: ${lastSuccessAt}`
+        : `No prior InsiderWatch sync — using ${config.insiderwatchInitialDays}-day lookback (Kadoa history kept)`,
+    );
+    console.log(
+      `Overlap days: ${config.insiderwatchOverlapDays} (filed_date filter)`,
+    );
+    console.log("");
+
+    runId = await startSyncRun(supabase, provider, "manual");
+
+    let loadResult;
+    try {
+      loadResult = await loadInsiderWatchStockTrades({
+        lastSuccessAt,
+        overlapDays: config.insiderwatchOverlapDays,
+        initialLookbackDays: config.insiderwatchInitialDays,
+      });
+    } catch (downloadErr) {
+      const message =
+        downloadErr instanceof Error ? downloadErr.message : String(downloadErr);
+      console.error(`InsiderWatch download/parse failed: ${message}`);
+      console.error("Existing Supabase data left untouched; last_success_at not advanced.");
+      await finishSyncRunFailed(supabase, provider, runId, message);
+      process.exitCode = 1;
+      return;
+    }
+
+    const { trades, stats } = loadResult;
+    console.log(
+      `Upserting ${trades.length.toLocaleString("en-US")} stock trades…`,
     );
     const upsert = await upsertTrades(supabase, trades);
 
-    printKadoaLoadStats(stats, {
+    printInsiderWatchStats(stats, {
       newCount: upsert.newCount,
       updatedCount: upsert.updatedCount,
-      duplicatesSkipped: upsert.updatedCount,
+      errors: upsert.errors,
     });
 
     if (upsert.errors > 0) {
       throw new Error(`Upsert completed with ${upsert.errors} chunk error(s)`);
     }
 
-    await finishSyncRunSuccess(supabase, runId, {
-      rowsReceived: stats.kadoaRowsLoaded,
+    // Advance sync timestamp only after a fully successful import.
+    await finishSyncRunSuccess(supabase, provider, runId, {
+      rowsReceived: stats.rowsDownloaded,
       rowsUpserted: upsert.newCount + upsert.updatedCount,
       latestDisclosure: stats.dateTo,
-      latestTransaction: stats.dateTo,
+      latestTransaction: null,
       partialError: null,
     });
 
@@ -131,6 +164,9 @@ async function main(): Promise<void> {
     console.log(`Tickers checked: ${prices.tickersChecked}`);
     console.log(`Tickers updated: ${prices.tickersUpdated}`);
     console.log(`New daily bars: ${prices.newDailyBars}`);
+    console.log(`Skipped unsupported assets: ${prices.skippedUnsupported}`);
+    console.log(`Skipped (no Alpaca history): ${prices.skippedNoHistory}`);
+    console.log(`Errors: ${prices.errors}`);
     console.log("");
 
     console.log("Recomputing member holdings…");
@@ -151,7 +187,7 @@ async function main(): Promise<void> {
     console.error(`UPDATE FAILED: ${message}`);
     if (supabase && runId) {
       try {
-        await finishSyncRunFailed(supabase, runId, message);
+        await finishSyncRunFailed(supabase, provider, runId, message);
       } catch (finishErr) {
         console.error(
           `Also failed to record sync failure: ${

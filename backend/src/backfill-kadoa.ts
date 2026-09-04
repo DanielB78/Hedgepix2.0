@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig } from "./config.js";
+import { KADOA_PROVIDER, loadConfig } from "./config.js";
 import { loadKadoaCongressStockTrades, printKadoaLoadStats } from "./kadoa/load.js";
 import {
   clearCongressTrades,
@@ -115,7 +115,8 @@ export async function runKadoaBackfill(options?: {
   const replace = options?.replace !== false;
   const config = loadConfig();
   const supabase = createSupabase(config);
-  const runId = await startSyncRun(supabase, "backfill");
+  const provider = KADOA_PROVIDER;
+  const runId = await startSyncRun(supabase, provider, "backfill");
 
   try {
     console.log("START KADOA BACKFILL");
@@ -156,7 +157,7 @@ export async function runKadoaBackfill(options?: {
       throw new Error(`Upsert completed with ${upsert.errors} chunk error(s)`);
     }
 
-    await finishSyncRunSuccess(supabase, runId, {
+    await finishSyncRunSuccess(supabase, provider, runId, {
       rowsReceived: stats.kadoaRowsLoaded,
       rowsUpserted: upsert.newCount + upsert.updatedCount,
       latestDisclosure: stats.dateTo,
@@ -196,7 +197,7 @@ export async function runKadoaBackfill(options?: {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`KADOA BACKFILL FAILED: ${message}`);
     try {
-      await finishSyncRunFailed(supabase, runId, message);
+      await finishSyncRunFailed(supabase, provider, runId, message);
     } catch {
       /* ignore */
     }
