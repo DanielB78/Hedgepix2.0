@@ -256,7 +256,9 @@ async function parseHousePdf(
 ): Promise<RawTransaction[]> {
   const first = await runPdfplumberOnBuffer(pdf, filing);
   const ocrMinYear = Number.parseInt(process.env['HOUSE_OCR_MIN_YEAR'] ?? '2018', 10);
-  const paddleEnabled = process.env['HOUSE_PADDLEOCR'] !== '0';
+  // Opt-in: scanned recovery is useful on typed paper forms but still noisy on
+  // munis/handwriting/large packet scans. Set HOUSE_PADDLEOCR=1 to enable.
+  const paddleEnabled = process.env['HOUSE_PADDLEOCR'] === '1';
   const ocrImageOnly = process.env['HOUSE_OCR_IMAGE_ONLY'] === '1';
 
   // Usable structured data: either we parsed all expected stock rows, or there
