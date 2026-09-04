@@ -14,6 +14,10 @@ import {
   parseHousePdfWithPdfplumber,
   type PdfPlumberTransaction,
 } from '../../../../../src/house-pdfplumber.js';
+import {
+  isPaddleOcrAvailable,
+  parseHousePdfWithPaddleOcr,
+} from '../../../../../src/house-paddleocr.js';
 
 const log = makeLogger('houseFetcher');
 
@@ -212,13 +216,38 @@ async function runPdfplumberOnBuffer(
   }
 }
 
+async function runPaddleOcrOnBuffer(
+  pdf: Buffer,
+  filing: FilingIndex,
+): Promise<{ rows: RawTransaction[]; parsedStock: number }> {
+  const dir = await mkdtemp(join(tmpdir(), 'house-paddleocr-'));
+  const pdfPath = join(dir, `${filing.docId}.pdf`);
+  try {
+    await writeFile(pdfPath, pdf);
+    const result = await parseHousePdfWithPaddleOcr(pdfPath, {
+      filingDate: filing.filingDate,
+      docId: filing.docId,
+      member: filing.member,
+    });
+    const rows = toRawTransactions(result.transactions ?? [], filing);
+    return {
+      rows,
+      parsedStock: result.parsed_stock_count ?? rows.length,
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 /**
- * pdfplumber first; OCRmyPDF only when there is no usable extractable text /
- * incomplete stock coverage; then pdfplumber again on the OCR'd PDF.
+ * pdfplumber first for born-digital PDFs.
  *
- * Low-quality scanned PDFs (no extractable text, typically pre-2018 image
- * forms) are skipped after a failed OCR attempt — or without OCR when the
- * filing year is below HOUSE_OCR_MIN_YEAR (default 2018).
+ * Image-only / no usable text layer:
+ *   PaddleOCR PP-StructureV3 → same transaction schema (when available).
+ * Mixed/incomplete text PDFs may still use OCRmyPDF → pdfplumber.
+ *
+ * One bad scan is logged and skipped; it never aborts the year backfill.
+ * Disable scanned fallback with HOUSE_PADDLEOCR=0.
  */
 async function parseHousePdf(
   pdf: Buffer,
@@ -227,6 +256,10 @@ async function parseHousePdf(
 ): Promise<RawTransaction[]> {
   const first = await runPdfplumberOnBuffer(pdf, filing);
   const ocrMinYear = Number.parseInt(process.env['HOUSE_OCR_MIN_YEAR'] ?? '2018', 10);
+  // Opt-in: scanned recovery is useful on typed paper forms but still noisy on
+  // munis/handwriting/large packet scans. Set HOUSE_PADDLEOCR=1 to enable.
+  const paddleEnabled = process.env['HOUSE_PADDLEOCR'] === '1';
+  const ocrImageOnly = process.env['HOUSE_OCR_IMAGE_ONLY'] === '1';
 
   // Usable structured data: either we parsed all expected stock rows, or there
   // were no stock rows to parse and pdfplumber could read the PDF.
@@ -242,10 +275,43 @@ async function parseHousePdf(
     );
   }
 
-  // Image-only / too-low-quality scans: ignore without OCR. House scan OCR
-  // almost never yields usable [ST] markers, and burns minutes per filing.
-  // Set HOUSE_OCR_IMAGE_ONLY=1 to force OCR attempts on no-text PDFs.
-  const ocrImageOnly = process.env['HOUSE_OCR_IMAGE_ONLY'] === '1';
+  const cacheKey = `${filing.year}:${filing.docId}`;
+
+  // Image-only: prefer PaddleOCR / PP-StructureV3 (layout + table + OCR).
+  if (!first.hasText && paddleEnabled && isPaddleOcrAvailable()) {
+    if (options.ocrFailedKeys.has(cacheKey)) {
+      options.stats.lowQualitySkipped += 1;
+      return first.rows;
+    }
+    options.stats.ocrAttempted += 1;
+    try {
+      const paddle = await runPaddleOcrOnBuffer(pdf, filing);
+      if (paddle.parsedStock > 0) {
+        options.stats.ocrSuccess += 1;
+        log.info(
+          `House PTR ${filing.year}/${filing.docId} (${filing.member}): PaddleOCR recovered ${paddle.parsedStock} stock row(s)`,
+        );
+        return paddle.rows;
+      }
+      options.stats.lowQualitySkipped += 1;
+      options.ocrFailedKeys.add(cacheKey);
+      log.warn(
+        `House PTR ${filing.year}/${filing.docId} (${filing.member}): PaddleOCR found no validated stock rows — skipping`,
+      );
+      return [];
+    } catch (err) {
+      options.stats.lowQualitySkipped += 1;
+      options.ocrFailedKeys.add(cacheKey);
+      log.warn(
+        `House PTR ${filing.year}/${filing.docId} (${filing.member}) PaddleOCR failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return [];
+    }
+  }
+
+  // No PaddleOCR available for image-only: skip unless legacy OCR forced.
   if (!first.hasText && !ocrImageOnly) {
     options.stats.lowQualitySkipped += 1;
     return first.rows;
@@ -264,7 +330,6 @@ async function parseHousePdf(
     return first.rows;
   }
 
-  const cacheKey = `${filing.year}:${filing.docId}`;
   if (options.ocrFailedKeys.has(cacheKey)) {
     if (first.rows.length > 0) options.stats.normalParsed += 1;
     else if (!first.hasText) options.stats.lowQualitySkipped += 1;

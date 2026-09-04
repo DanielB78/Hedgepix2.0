@@ -7,6 +7,7 @@
     "update-data": "tsx src/update.ts",
     "backfill-history": "tsx src/backfill-history.ts",
     "validate:house-2026": "tsx src/validate-2026-house.ts",
+    "test:paddleocr-scans": "/workspace/.venv-paddle/bin/python scripts/test_paddleocr_2026_scans.py",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/backfill-history.test.ts && tsx src/__tests__/house-pdf-stats.test.ts"
   },

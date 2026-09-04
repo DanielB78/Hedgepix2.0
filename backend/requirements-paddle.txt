@@ -1,0 +1,9 @@
+# Optional House scanned-PDF fallback (PaddleOCR / PP-StructureV3)
+# Create with: python3 -m venv .venv-paddle && .venv-paddle/bin/pip install -r backend/requirements-paddle.txt
+paddlepaddle==3.0.0
+paddleocr==3.7.0
+paddlex[ocr]==3.7.2
+pdfplumber>=0.11.0
+pypdfium2>=4.30.0
+Pillow>=10.0.0
+numpy>=1.26.0
