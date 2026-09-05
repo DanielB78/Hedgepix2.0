@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
 import type {
   FeedPayload,
@@ -86,12 +86,23 @@ function TradeRow({ trade }: { trade: CongressTrade }) {
   );
 }
 
+function useScrollIntoView(active: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [active]);
+  return ref;
+}
+
 export function FeedBoard({ view, payload }: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
+  const requestId = useRef(0);
 
   const openStock = useCallback(
     async (ticker: string, chamber: "all" | Chamber = "all") => {
+      const id = ++requestId.current;
       setMemberPanel(null);
       setStockPanel({
         ticker,
@@ -104,6 +115,7 @@ export function FeedBoard({ view, payload }: Props) {
         const data = await loadJson<StockPreviewPayload>(
           `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&chamber=${chamber}`,
         );
+        if (id !== requestId.current) return;
         setStockPanel({
           ticker,
           chamber,
@@ -112,6 +124,7 @@ export function FeedBoard({ view, payload }: Props) {
           error: null,
         });
       } catch (err) {
+        if (id !== requestId.current) return;
         setStockPanel({
           ticker,
           chamber,
@@ -124,7 +137,19 @@ export function FeedBoard({ view, payload }: Props) {
     [],
   );
 
+  const toggleStock = useCallback(
+    (ticker: string) => {
+      if (stockPanel?.ticker === ticker) {
+        setStockPanel(null);
+        return;
+      }
+      void openStock(ticker);
+    },
+    [openStock, stockPanel?.ticker],
+  );
+
   const openMember = useCallback(async (slug: string) => {
+    const id = ++requestId.current;
     setStockPanel(null);
     setMemberPanel({
       slug,
@@ -139,6 +164,7 @@ export function FeedBoard({ view, payload }: Props) {
       const data = await loadJson<MemberPreviewPayload>(
         `/api/feed/preview?kind=member&slug=${encodeURIComponent(slug)}`,
       );
+      if (id !== requestId.current) return;
       setMemberPanel({
         slug,
         data,
@@ -149,6 +175,7 @@ export function FeedBoard({ view, payload }: Props) {
         nestedLoading: false,
       });
     } catch (err) {
+      if (id !== requestId.current) return;
       setMemberPanel({
         slug,
         data: null,
@@ -161,7 +188,19 @@ export function FeedBoard({ view, payload }: Props) {
     }
   }, []);
 
+  const toggleMember = useCallback(
+    (slug: string) => {
+      if (memberPanel?.slug === slug && !memberPanel.nestedTicker) {
+        setMemberPanel(null);
+        return;
+      }
+      void openMember(slug);
+    },
+    [memberPanel?.nestedTicker, memberPanel?.slug, openMember],
+  );
+
   const openMemberStock = useCallback(async (slug: string, ticker: string) => {
+    const id = ++requestId.current;
     setMemberPanel((prev) =>
       prev
         ? { ...prev, nestedTicker: ticker, nested: null, nestedLoading: true }
@@ -171,6 +210,7 @@ export function FeedBoard({ view, payload }: Props) {
       const data = await loadJson<MemberStockPreviewPayload>(
         `/api/feed/preview?kind=member-stock&slug=${encodeURIComponent(slug)}&ticker=${encodeURIComponent(ticker)}`,
       );
+      if (id !== requestId.current) return;
       setMemberPanel((prev) =>
         prev
           ? {
@@ -182,6 +222,7 @@ export function FeedBoard({ view, payload }: Props) {
           : prev,
       );
     } catch {
+      if (id !== requestId.current) return;
       setMemberPanel((prev) =>
         prev
           ? {
@@ -218,24 +259,28 @@ export function FeedBoard({ view, payload }: Props) {
             {payload.trending.length === 0 ? (
               <Empty text="No trending tickers right now." />
             ) : (
-              payload.trending.slice(0, trendingLimit).map((row, i) => (
-                <TickerCard
-                  key={row.ticker}
-                  rank={i + 1}
-                  row={row}
-                  active={stockPanel?.ticker === row.ticker}
-                  onOpen={() => void openStock(row.ticker)}
-                />
-              ))
+              payload.trending.slice(0, trendingLimit).map((row, i) => {
+                const active = stockPanel?.ticker === row.ticker;
+                return (
+                  <div key={row.ticker} className="space-y-3">
+                    <TickerCard
+                      rank={i + 1}
+                      row={row}
+                      active={active}
+                      onOpen={() => toggleStock(row.ticker)}
+                    />
+                    {active && stockPanel ? (
+                      <StockPanel
+                        state={stockPanel}
+                        onClose={() => setStockPanel(null)}
+                        onChamber={(c) => void openStock(stockPanel.ticker, c)}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
-          {stockPanel ? (
-            <StockPanel
-              state={stockPanel}
-              onClose={() => setStockPanel(null)}
-              onChamber={(c) => void openStock(stockPanel.ticker, c)}
-            />
-          ) : null}
         </section>
       ) : null}
 
@@ -245,7 +290,7 @@ export function FeedBoard({ view, payload }: Props) {
           subtitle="Popular representatives"
           members={payload.houseMembers}
           panel={memberPanel}
-          onOpen={(slug) => void openMember(slug)}
+          onToggle={(slug) => toggleMember(slug)}
           onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
           onClose={() => setMemberPanel(null)}
           onBackNested={() =>
@@ -269,7 +314,7 @@ export function FeedBoard({ view, payload }: Props) {
           subtitle="Popular senators"
           members={payload.senateMembers}
           panel={memberPanel}
-          onOpen={(slug) => void openMember(slug)}
+          onToggle={(slug) => toggleMember(slug)}
           onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
           onClose={() => setMemberPanel(null)}
           onBackNested={() =>
@@ -368,8 +413,13 @@ function StockPanel({
   onClose: () => void;
   onChamber: (chamber: "all" | Chamber) => void;
 }) {
+  const ref = useScrollIntoView(true);
+
   return (
-    <div className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]">
+    <div
+      ref={ref}
+      className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
+    >
       <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
         <div>
           <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">
@@ -401,7 +451,10 @@ function StockPanel({
               <button
                 key={value}
                 type="button"
-                onClick={() => onChamber(value)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onChamber(value);
+                }}
                 className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
                   state.chamber === value
                     ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
@@ -459,7 +512,7 @@ function MemberBlock({
   subtitle,
   members,
   panel,
-  onOpen,
+  onToggle,
   onOpenStock,
   onClose,
   onBackNested,
@@ -468,7 +521,7 @@ function MemberBlock({
   subtitle: string;
   members: PopularMember[];
   panel: MemberPanelState | null;
-  onOpen: (slug: string) => void;
+  onToggle: (slug: string) => void;
   onOpenStock: (slug: string, ticker: string) => void;
   onClose: () => void;
   onBackNested: () => void;
@@ -489,7 +542,7 @@ function MemberBlock({
               <button
                 key={member.slug}
                 type="button"
-                onClick={() => onOpen(member.slug)}
+                onClick={() => onToggle(member.slug)}
                 className={`rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
                   expanded
                     ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
@@ -535,8 +588,13 @@ function MemberPanel({
   onOpenTicker: (ticker: string) => void;
   onBackNested: () => void;
 }) {
+  const ref = useScrollIntoView(true);
+
   return (
-    <div className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]">
+    <div
+      ref={ref}
+      className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
+    >
       <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
         <div>
           <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">

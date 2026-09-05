@@ -23,6 +23,14 @@
   --radius-card: 18px;
   --radius-control: 999px;
   --shadow-soft: 0 18px 50px color-mix(in srgb, black 45%, transparent);
+
+  /* Legacy aliases used by PriceChart and detail pages */
+  --deep-navy: var(--fog);
+  --navy: var(--fog-dim);
+  --oatmeal: color-mix(in srgb, var(--fog) 28%, transparent);
+  --cream: var(--fog);
+  --rust: var(--coral);
+  --orange: var(--mint);
 }
 
 @theme inline {
