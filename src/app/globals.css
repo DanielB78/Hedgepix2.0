@@ -1,47 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --cream: #eee9df;
-  --oatmeal: #c9c1b1;
-  --navy: #2c3b4d;
-  --orange: #ffb162;
-  --rust: #a35139;
-  --deep-navy: #1b2632;
+  --ink: #071014;
+  --panel: #0e181d;
+  --panel-elevated: #142229;
+  --fog: #d5e0db;
+  --fog-dim: #8a9a94;
+  --mint: #5dffb0;
+  --mint-deep: #1f8f5f;
+  --coral: #ff6b5b;
+  --gold: #e8c56a;
+  --line: color-mix(in srgb, var(--mint) 14%, transparent);
+  --glow: color-mix(in srgb, var(--mint) 18%, transparent);
 
-  --background: var(--cream);
-  --foreground: var(--deep-navy);
-  --muted: color-mix(in srgb, var(--navy) 72%, transparent);
-  --surface: color-mix(in srgb, var(--oatmeal) 28%, var(--cream));
-  --surface-strong: color-mix(in srgb, var(--oatmeal) 48%, var(--cream));
-  --accent: var(--orange);
-  --accent-sale: var(--rust);
-  --radius-card: 20px;
-  --radius-control: 14px;
-  --shadow-soft: 0 8px 28px color-mix(in srgb, var(--deep-navy) 6%, transparent);
+  --background: var(--ink);
+  --foreground: var(--fog);
+  --muted: var(--fog-dim);
+  --surface: var(--panel);
+  --surface-strong: var(--panel-elevated);
+  --accent: var(--mint);
+  --accent-sale: var(--coral);
+  --radius-card: 18px;
+  --radius-control: 999px;
+  --shadow-soft: 0 18px 50px color-mix(in srgb, black 45%, transparent);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-cream: var(--cream);
-  --color-oatmeal: var(--oatmeal);
-  --color-navy: var(--navy);
-  --color-orange: var(--orange);
-  --color-rust: var(--rust);
-  --color-deep-navy: var(--deep-navy);
-  --font-sans: var(--font-sans);
+  --color-ink: var(--ink);
+  --color-panel: var(--panel);
+  --color-fog: var(--fog);
+  --color-mint: var(--mint);
+  --color-coral: var(--coral);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 body {
-  background: var(--cream);
-  color: var(--deep-navy);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "ss01" on;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, color-mix(in srgb, var(--mint) 16%, transparent), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, color-mix(in srgb, var(--coral) 10%, transparent), transparent 50%),
+    linear-gradient(180deg, #0a1216 0%, var(--ink) 40%, #05090b 100%);
+  background-attachment: fixed;
+  color: var(--fog);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  min-height: 100%;
+}
+
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+  opacity: 0.35;
+  z-index: 0;
+}
+
+#__next,
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--orange) 45%, transparent);
-  color: var(--deep-navy);
+  background: color-mix(in srgb, var(--mint) 40%, transparent);
+  color: var(--ink);
 }
 
 a {
@@ -53,4 +83,48 @@ button,
 input,
 select {
   font: inherit;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes brand-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 0 transparent;
+  }
+  50% {
+    text-shadow: 0 0 42px var(--glow);
+  }
+}
+
+@keyframes expand-panel {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-brand {
+  animation: brand-glow 4.5s ease-in-out infinite;
+}
+
+.animate-expand {
+  animation: expand-panel 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
