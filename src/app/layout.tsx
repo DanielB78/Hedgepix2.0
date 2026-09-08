@@ -1,22 +1,31 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { Manrope, Syne } from "next/font/google";
 import "./globals.css";
 
-const sans = DM_Sans({
-  variable: "--font-sans",
+const display = Syne({
+  variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["600", "700", "800"],
+});
+
+const body = Manrope({
+  variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Congress Trade Monitor",
+  title: "hedgpix",
   description:
-    "Recent U.S. House and Senate STOCK Act securities disclosures.",
+    "Congressional stock disclosures — trending tickers, House and Senate activity.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${display.variable} ${body.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );

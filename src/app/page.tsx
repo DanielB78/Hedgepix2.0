@@ -1,9 +1,6 @@
-import { MainNav } from "@/components/MainNav";
-import { Pagination } from "@/components/Pagination";
-import { SiteHeader } from "@/components/SiteHeader";
-import { TradeFiltersForm } from "@/components/TradeFiltersForm";
-import { TradeTable } from "@/components/TradeTable";
-import { fetchTrades, parseTradeFilters } from "@/lib/trades";
+import { BrandMark, SideNav, TopTabs } from "@/components/AppChrome";
+import { FeedBoard } from "@/components/FeedBoard";
+import { fetchFeedPayload, parseFeedView } from "@/lib/feed";
 
 export const dynamic = "force-dynamic";
 
@@ -13,31 +10,17 @@ type PageProps = {
 
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filters = parseTradeFilters(params);
-  const result = await fetchTrades(filters);
+  const view = parseFeedView(params.view);
+  const payload = await fetchFeedPayload();
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-      <SiteHeader syncState={result.syncState} />
-      <MainNav active="latest" />
-
-      {!result.configured || result.error ? (
-        <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--rust)]">
-          {result.error ?? "Configuration incomplete."}
-        </div>
-      ) : null}
-
-      <TradeFiltersForm filters={filters} />
-
-      <section className="space-y-4">
-        <TradeTable trades={result.trades} />
-        <Pagination
-          filters={filters}
-          page={result.page}
-          pageSize={result.pageSize}
-          totalCount={result.totalCount}
-        />
-      </section>
-    </main>
+    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">
+      <SideNav active={view} />
+      <main className="min-w-0 flex-1 space-y-8 pb-16">
+        <BrandMark />
+        <TopTabs active={view} />
+        <FeedBoard view={view} payload={payload} />
+      </main>
+    </div>
   );
 }
