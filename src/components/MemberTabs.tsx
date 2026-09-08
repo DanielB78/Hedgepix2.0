@@ -26,8 +26,8 @@ export function MemberTabs({ slug, active }: Props) {
             href={memberHref(slug, tab.id === "holdings" ? "holdings" : undefined)}
             className={
               selected
-                ? "rounded-[14px] bg-[color:var(--deep-navy)] px-4 py-2 text-sm font-medium !text-[#EEE9DF]"
-                : "rounded-[14px] bg-[color:var(--surface)] px-4 py-2 text-sm font-medium text-[color:var(--navy)] transition hover:bg-[color:var(--surface-strong)]"
+                ? "rounded-full bg-[color:var(--mint)] px-4 py-2 text-sm font-medium text-[color:var(--ink)]"
+                : "rounded-full bg-[color:var(--panel-elevated)] px-4 py-2 text-sm font-medium text-[color:var(--fog-dim)] transition hover:text-[color:var(--fog)]"
             }
             aria-current={selected ? "page" : undefined}
           >

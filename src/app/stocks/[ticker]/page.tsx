@@ -76,10 +76,10 @@ export default async function StockPage({ params, searchParams }: PageProps) {
       <SiteHeader syncState={syncState} compact />
       <div className="flex items-center justify-between gap-3">
         <Link
-          href="/"
-          className="text-sm text-[color:var(--navy)] transition-opacity duration-200 hover:opacity-70"
+          href="/?view=feed"
+          className="text-sm text-[color:var(--fog-dim)] transition-opacity duration-200 hover:text-[color:var(--fog)]"
         >
-          ← Latest
+          ← Feed
         </Link>
         <MainNav />
       </div>
