@@ -6,15 +6,19 @@
   "scripts": {
     "update-data": "tsx src/update.ts",
     "backfill-kadoa": "tsx src/backfill-kadoa.ts",
+    "backfill-ceo-buys": "tsx src/backfill-ceo-buys.ts",
+    "apply-ceo-buys-schema": "tsx src/apply-ceo-buys-schema.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts"
+    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.2",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.19.3",
     "typescript": "^5.4.5"
   }

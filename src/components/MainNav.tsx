@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 type Props = {
-  active?: "latest" | "trending";
+  active?: "latest" | "trending" | "ceo-buys";
 };
 
 export function MainNav({ active }: Props) {
@@ -34,6 +34,17 @@ export function MainNav({ active }: Props) {
         aria-current={active === "trending" ? "page" : undefined}
       >
         Trending
+      </Link>
+      <Link
+        href="/ceo-buys"
+        className={
+          active === "ceo-buys"
+            ? `${item} bg-[#1B2632] !text-[#EEE9DF]`
+            : `${item} text-[#2C3B4D] hover:bg-[#C9C1B1]/45`
+        }
+        aria-current={active === "ceo-buys" ? "page" : undefined}
+      >
+        CEO Buys
       </Link>
     </nav>
   );
