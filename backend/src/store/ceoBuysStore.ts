@@ -30,6 +30,20 @@ const BUCKET = "ceo-buys";
 const PURCHASES_OBJECT = "purchases.json";
 const QUARTERS_OBJECT = "quarters.json";
 
+function quarterObject(quarter: string) {
+  return `by-quarter/${quarter}.json`;
+}
+
+function storageRow(row: CeoDbRow): Record<string, unknown> {
+  // Omit bulky raw_source from the public snapshot.
+  const { raw_source: _raw, ...rest } = row;
+  return {
+    ...rest,
+    id: row.source_id,
+    created_at: row.updated_at,
+  };
+}
+
 export function toCeoDbRow(
   purchase: CeoStockPurchase,
   nowIso: string,
@@ -163,29 +177,48 @@ async function mergePurchasesIntoStorage(
   supabase: SupabaseClient,
   rows: CeoDbRow[],
 ): Promise<void> {
-  type Stored = CeoDbRow & { id?: string; created_at?: string };
-  const existing = await downloadJson<Stored[]>(supabase, PURCHASES_OBJECT, []);
-  const map = new Map<string, Stored>();
-  for (const row of existing) {
-    if (row?.source_id) map.set(row.source_id, row);
+  if (rows.length === 0) return;
+  const quarter = rows[0]!.quarter;
+  const stored = rows.map(storageRow);
+  await uploadJson(supabase, quarterObject(quarter), stored);
+  await rebuildPurchasesSnapshot(supabase);
+}
+
+async function rebuildPurchasesSnapshot(
+  supabase: SupabaseClient,
+): Promise<void> {
+  await ensureBucket(supabase);
+  const { data: files, error } = await supabase.storage
+    .from(BUCKET)
+    .list("by-quarter", { limit: 1000 });
+  if (error) throw new Error(`list by-quarter failed: ${error.message}`);
+  const names = (files ?? [])
+    .map((f) => f.name)
+    .filter((n) => n.endsWith(".json"))
+    .sort();
+  const all: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    const rows = await downloadJson<Record<string, unknown>[]>(
+      supabase,
+      `by-quarter/${name}`,
+      [],
+    );
+    for (const row of rows) {
+      const id = String(row.source_id ?? "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      all.push(row);
+    }
   }
-  const nowIso = new Date().toISOString();
-  for (const row of rows) {
-    const prev = map.get(row.source_id);
-    map.set(row.source_id, {
-      ...row,
-      id: prev?.id ?? row.source_id,
-      created_at: prev?.created_at ?? nowIso,
-    });
-  }
-  const merged = [...map.values()].sort((a, b) => {
+  all.sort((a, b) => {
     const fd = String(b.filing_date ?? "").localeCompare(String(a.filing_date ?? ""));
     if (fd !== 0) return fd;
     return String(b.transaction_date ?? "").localeCompare(
       String(a.transaction_date ?? ""),
     );
   });
-  await uploadJson(supabase, PURCHASES_OBJECT, merged);
+  await uploadJson(supabase, PURCHASES_OBJECT, all);
 }
 
 export async function getSuccessfulQuarters(
