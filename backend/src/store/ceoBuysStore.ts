@@ -170,6 +170,28 @@ export async function upsertCeoPurchases(
   return { upserted: rows.length, errors: 0, via: "storage" };
 }
 
+async function rewriteQuartersManifest(
+  supabase: SupabaseClient,
+): Promise<void> {
+  await ensureBucket(supabase);
+  const { data: files, error } = await supabase.storage
+    .from(BUCKET)
+    .list("by-quarter", { limit: 1000 });
+  if (error) throw new Error(`Failed to list by-quarter: ${error.message}`);
+  const now = new Date().toISOString();
+  const quarters: Record<string, Record<string, unknown>> = {};
+  for (const file of files ?? []) {
+    if (!file.name.endsWith(".json")) continue;
+    const quarter = file.name.replace(/\.json$/i, "");
+    quarters[quarter] = {
+      status: "success",
+      updated_at: now,
+      source: "by-quarter",
+    };
+  }
+  await uploadJson(supabase, QUARTERS_OBJECT, quarters);
+}
+
 async function writeQuarterStorage(
   supabase: SupabaseClient,
   rows: CeoDbRow[],
@@ -177,6 +199,7 @@ async function writeQuarterStorage(
   if (rows.length === 0) return;
   const quarter = rows[0]!.quarter;
   await uploadJson(supabase, quarterObject(quarter), rows.map(storageRow));
+  await rewriteQuartersManifest(supabase);
 }
 
 export async function getSuccessfulQuarters(
@@ -192,15 +215,20 @@ export async function getSuccessfulQuarters(
     }
     return new Set((data ?? []).map((r) => String(r.quarter)));
   }
-  const quarters = await downloadJson<Record<string, { status?: string }>>(
-    supabase,
-    QUARTERS_OBJECT,
-    {},
-  );
+
+  // Prefer by-quarter object presence — shared quarters.json can race.
+  await ensureBucket(supabase);
+  const { data: files, error } = await supabase.storage
+    .from(BUCKET)
+    .list("by-quarter", { limit: 1000 });
+  if (error) {
+    throw new Error(`Failed to list by-quarter objects: ${error.message}`);
+  }
   return new Set(
-    Object.entries(quarters)
-      .filter(([, v]) => v?.status === "success")
-      .map(([q]) => q),
+    (files ?? [])
+      .map((f) => f.name)
+      .filter((n) => n.endsWith(".json"))
+      .map((n) => n.replace(/\.json$/i, "")),
   );
 }
 
