@@ -26,19 +26,19 @@ export function SiteHeader({ syncState, compact = false }: Props) {
     <header className="flex items-end justify-between gap-4">
       <div className="min-w-0 space-y-1">
         <Link
-          href="/"
-          className="text-[13px] font-medium tracking-[0.14em] text-[color:var(--navy)] uppercase"
+          href="/?view=feed"
+          className="text-[13px] font-semibold tracking-[0.28em] text-[color:var(--mint)] uppercase"
         >
-          Hedgepix
+          hedgpix
         </Link>
         {!compact ? (
-          <h1 className="text-3xl font-medium tracking-tight text-[color:var(--deep-navy)] sm:text-4xl">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-[color:var(--fog)] sm:text-4xl">
             Congress Trades
           </h1>
         ) : null}
       </div>
       {synced ? (
-        <p className="shrink-0 text-sm text-[color:var(--muted)]">
+        <p className="shrink-0 text-sm text-[color:var(--fog-dim)]">
           Updated {synced}
         </p>
       ) : null}

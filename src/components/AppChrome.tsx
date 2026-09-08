@@ -2,19 +2,23 @@ import Link from "next/link";
 import type { FeedView } from "@/lib/feed";
 import { viewHref as hrefForView } from "@/lib/format";
 
-function viewHref(view: FeedView) {
-  return hrefForView(view);
+export type ChromeNavKey = FeedView | "ceo-buys";
+
+function navHref(key: ChromeNavKey) {
+  if (key === "ceo-buys") return "/ceo-buys";
+  return hrefForView(key);
 }
 
 const NAV: Array<{
-  view: FeedView;
+  key: ChromeNavKey;
   label: string;
-  icon: "home" | "trend" | "house" | "senate";
+  icon: "home" | "trend" | "house" | "senate" | "ceo";
 }> = [
-  { view: "feed", label: "Feed", icon: "home" },
-  { view: "trending", label: "Trending", icon: "trend" },
-  { view: "house", label: "House", icon: "house" },
-  { view: "senate", label: "Senate", icon: "senate" },
+  { key: "feed", label: "Feed", icon: "home" },
+  { key: "trending", label: "Trending", icon: "trend" },
+  { key: "house", label: "House", icon: "house" },
+  { key: "senate", label: "Senate", icon: "senate" },
+  { key: "ceo-buys", label: "CEO Buys", icon: "ceo" },
 ];
 
 function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
@@ -52,6 +56,14 @@ function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
       </svg>
     );
   }
+  if (icon === "ceo") {
+    return (
+      <svg {...common}>
+        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
+        <path d="M4 20c1.5-3.5 4.2-5 8-5s6.5 1.5 8 5" />
+      </svg>
+    );
+  }
   return (
     <svg {...common}>
       <path d="M5 20V8" />
@@ -63,7 +75,7 @@ function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
 }
 
 type Props = {
-  active: FeedView;
+  active: ChromeNavKey;
 };
 
 export function SideNav({ active }: Props) {
@@ -73,16 +85,17 @@ export function SideNav({ active }: Props) {
       className="hidden w-[88px] shrink-0 flex-col items-center gap-2 pt-4 lg:flex"
     >
       {NAV.map((item) => {
-        const isActive = item.view === active;
+        const isActive = item.key === active;
         return (
           <Link
-            key={item.view}
-            href={viewHref(item.view)}
+            key={item.key}
+            href={navHref(item.key)}
             className={`group flex w-full flex-col items-center gap-1 rounded-2xl px-2 py-3 text-[11px] font-medium tracking-wide transition-all duration-300 ${
               isActive
                 ? "bg-[color:var(--mint)] text-[color:var(--ink)] shadow-[0_0_24px_var(--glow)]"
                 : "text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
             }`}
+            aria-current={isActive ? "page" : undefined}
           >
             <NavIcon icon={item.icon} />
             <span>{item.label}</span>
@@ -97,16 +110,17 @@ export function TopTabs({ active }: Props) {
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
       {NAV.map((item) => {
-        const isActive = item.view === active;
+        const isActive = item.key === active;
         return (
           <Link
-            key={item.view}
-            href={viewHref(item.view)}
+            key={item.key}
+            href={navHref(item.key)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${
               isActive
                 ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
                 : "bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
             }`}
+            aria-current={isActive ? "page" : undefined}
           >
             {item.label}
           </Link>

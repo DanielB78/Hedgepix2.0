@@ -6,30 +6,30 @@ type Props = {
 
 export function MainNav({ active }: Props) {
   const item =
-    "rounded-[12px] px-4 py-2 text-sm font-medium transition-colors duration-200";
+    "rounded-full px-4 py-2 text-sm font-medium transition-all duration-300";
 
   return (
     <nav
       aria-label="Primary"
-      className="inline-flex gap-1 rounded-[16px] bg-[#C9C1B1]/35 p-1"
+      className="inline-flex flex-wrap gap-2"
     >
       <Link
-        href="/"
+        href="/?view=feed"
         className={
           active === "latest"
-            ? `${item} bg-[#1B2632] !text-[#EEE9DF]`
-            : `${item} text-[#2C3B4D] hover:bg-[#C9C1B1]/45`
+            ? `${item} bg-[color:var(--mint)] text-[color:var(--ink)]`
+            : `${item} bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]`
         }
         aria-current={active === "latest" ? "page" : undefined}
       >
-        Latest
+        Feed
       </Link>
       <Link
-        href="/trending"
+        href="/?view=trending"
         className={
           active === "trending"
-            ? `${item} bg-[#1B2632] !text-[#EEE9DF]`
-            : `${item} text-[#2C3B4D] hover:bg-[#C9C1B1]/45`
+            ? `${item} bg-[color:var(--mint)] text-[color:var(--ink)]`
+            : `${item} bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]`
         }
         aria-current={active === "trending" ? "page" : undefined}
       >
@@ -39,8 +39,8 @@ export function MainNav({ active }: Props) {
         href="/ceo-buys"
         className={
           active === "ceo-buys"
-            ? `${item} bg-[#1B2632] !text-[#EEE9DF]`
-            : `${item} text-[#2C3B4D] hover:bg-[#C9C1B1]/45`
+            ? `${item} bg-[color:var(--mint)] text-[color:var(--ink)]`
+            : `${item} bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]`
         }
         aria-current={active === "ceo-buys" ? "page" : undefined}
       >
