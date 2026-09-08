@@ -1,9 +1,7 @@
+import { BrandMark, SideNav, TopTabs } from "@/components/AppChrome";
 import { CeoBuysList } from "@/components/CeoBuysList";
-import { MainNav } from "@/components/MainNav";
 import { Pagination } from "@/components/Pagination";
-import { SiteHeader } from "@/components/SiteHeader";
 import { fetchCeoBuys, parseCeoBuysFilters } from "@/lib/ceoBuys";
-import { fetchSyncState } from "@/lib/trades";
 
 export const dynamic = "force-dynamic";
 
@@ -14,41 +12,41 @@ type PageProps = {
 export default async function CeoBuysPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = parseCeoBuysFilters(params);
-  const [result, syncState] = await Promise.all([
-    fetchCeoBuys(filters),
-    fetchSyncState(),
-  ]);
+  const result = await fetchCeoBuys(filters);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
-      <SiteHeader syncState={syncState} />
-      <MainNav active="ceo-buys" />
+    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">
+      <SideNav active="ceo-buys" />
+      <main className="min-w-0 flex-1 space-y-8 pb-16">
+        <BrandMark />
+        <TopTabs active="ceo-buys" />
 
-      {!result.configured || result.error ? (
-        <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--rust)]">
-          {result.error ?? "Configuration incomplete."}
-        </div>
-      ) : null}
+        {!result.configured || result.error ? (
+          <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--accent-sale)]">
+            {result.error ?? "Configuration incomplete."}
+          </div>
+        ) : null}
 
-      <section className="space-y-5">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-medium tracking-tight text-[color:var(--deep-navy)]">
-            CEO Buys
-          </h2>
-          <p className="text-sm text-[color:var(--muted)]">
-            Open-market Form 4 stock purchases by CEOs from the SEC Insider
-            Transactions Data Sets.
-          </p>
-        </div>
-        <CeoBuysList rows={result.rows} />
-        <Pagination
-          filters={{}}
-          page={result.page}
-          pageSize={result.pageSize}
-          totalCount={result.totalCount}
-          basePath="/ceo-buys"
-        />
-      </section>
-    </main>
+        <section className="space-y-5">
+          <div className="space-y-1 text-center sm:text-left">
+            <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-[color:var(--fog)]">
+              CEO Buys
+            </h2>
+            <p className="text-sm text-[color:var(--fog-dim)]">
+              Open-market Form 4 stock purchases by CEOs from the SEC Insider
+              Transactions Data Sets.
+            </p>
+          </div>
+          <CeoBuysList rows={result.rows} />
+          <Pagination
+            filters={{}}
+            page={result.page}
+            pageSize={result.pageSize}
+            totalCount={result.totalCount}
+            basePath="/ceo-buys"
+          />
+        </section>
+      </main>
+    </div>
   );
 }

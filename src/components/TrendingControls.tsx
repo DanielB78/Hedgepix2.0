@@ -20,8 +20,8 @@ const PERIODS: { value: TrendingPeriodDays; label: string }[] = [
 
 function chipClass(active: boolean) {
   return active
-    ? "rounded-[12px] bg-[#1B2632] px-3 py-1.5 text-sm font-medium !text-[#EEE9DF]"
-    : "rounded-[12px] px-3 py-1.5 text-sm font-medium text-[#2C3B4D] hover:bg-[#C9C1B1]/45";
+    ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
+    : "rounded-full px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
 }
 
 export function TrendingControls({ filters }: Props) {
