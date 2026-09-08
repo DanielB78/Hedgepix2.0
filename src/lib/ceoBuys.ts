@@ -15,10 +15,12 @@ export type CeoBuysResult = {
 };
 
 const PAGE_SIZE = 50;
-const STORAGE_PUBLIC =
-  typeof process.env.NEXT_PUBLIC_SUPABASE_URL === "string"
-    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/ceo-buys/purchases.json`
-    : null;
+
+function publicObjectUrl(objectPath: string): string | null {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/ceo-buys/${objectPath}`;
+}
 
 export function parseCeoBuysFilters(
   params: Record<string, string | string[] | undefined>,
@@ -38,13 +40,50 @@ function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
   });
 }
 
+async function fetchJson<T>(url: string): Promise<T | null> {
+  const res = await fetch(url, { next: { revalidate: 120 } });
+  if (!res.ok) return null;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
-  if (!STORAGE_PUBLIC) return [];
-  const res = await fetch(STORAGE_PUBLIC, { next: { revalidate: 60 } });
-  if (!res.ok) return [];
-  const data = (await res.json()) as CeoStockPurchaseRow[];
-  if (!Array.isArray(data)) return [];
-  return sortRows(data);
+  const quartersUrl = publicObjectUrl("quarters.json");
+  if (!quartersUrl) return [];
+  const quarters = await fetchJson<Record<string, { status?: string }>>(
+    quartersUrl,
+  );
+  if (!quarters) return [];
+
+  const successQuarters = Object.entries(quarters)
+    .filter(([, meta]) => meta?.status === "success")
+    .map(([q]) => q)
+    .sort()
+    .reverse();
+
+  const chunks = await Promise.all(
+    successQuarters.map(async (quarter) => {
+      const url = publicObjectUrl(`by-quarter/${quarter}.json`);
+      if (!url) return [] as CeoStockPurchaseRow[];
+      const rows = await fetchJson<CeoStockPurchaseRow[]>(url);
+      return rows ?? [];
+    }),
+  );
+
+  const seen = new Set<string>();
+  const all: CeoStockPurchaseRow[] = [];
+  for (const rows of chunks) {
+    for (const row of rows) {
+      const id = row.source_id || row.id;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      all.push(row);
+    }
+  }
+  return sortRows(all);
 }
 
 export async function fetchCeoBuys(
@@ -89,13 +128,11 @@ export async function fetchCeoBuys(
       };
     }
 
-    // Table missing / not yet migrated — public Storage snapshot written by backfill.
     const all = await fetchFromStorage();
-    const slice = all.slice(from, from + PAGE_SIZE);
     return {
       configured: true,
       error: null,
-      rows: slice,
+      rows: all.slice(from, from + PAGE_SIZE),
       page,
       pageSize: PAGE_SIZE,
       totalCount: all.length,

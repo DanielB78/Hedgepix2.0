@@ -27,7 +27,6 @@ export type CeoDbRow = {
 
 const UPSERT_CHUNK = 200;
 const BUCKET = "ceo-buys";
-const PURCHASES_OBJECT = "purchases.json";
 const QUARTERS_OBJECT = "quarters.json";
 
 function quarterObject(quarter: string) {
@@ -35,7 +34,6 @@ function quarterObject(quarter: string) {
 }
 
 function storageRow(row: CeoDbRow): Record<string, unknown> {
-  // Omit bulky raw_source from the public snapshot.
   const { raw_source: _raw, ...rest } = row;
   return {
     ...rest,
@@ -160,8 +158,7 @@ export async function upsertCeoPurchases(
       }
       upserted += slice.length;
     }
-    // Keep storage snapshot in sync for public fallback readers.
-    await mergePurchasesIntoStorage(supabase, rows).catch((err) => {
+    await writeQuarterStorage(supabase, rows).catch((err) => {
       console.warn(
         `[ceo-buys] storage mirror failed: ${err instanceof Error ? err.message : err}`,
       );
@@ -169,56 +166,17 @@ export async function upsertCeoPurchases(
     return { upserted, errors, via: "table" };
   }
 
-  await mergePurchasesIntoStorage(supabase, rows);
+  await writeQuarterStorage(supabase, rows);
   return { upserted: rows.length, errors: 0, via: "storage" };
 }
 
-async function mergePurchasesIntoStorage(
+async function writeQuarterStorage(
   supabase: SupabaseClient,
   rows: CeoDbRow[],
 ): Promise<void> {
   if (rows.length === 0) return;
   const quarter = rows[0]!.quarter;
-  const stored = rows.map(storageRow);
-  await uploadJson(supabase, quarterObject(quarter), stored);
-  await rebuildPurchasesSnapshot(supabase);
-}
-
-async function rebuildPurchasesSnapshot(
-  supabase: SupabaseClient,
-): Promise<void> {
-  await ensureBucket(supabase);
-  const { data: files, error } = await supabase.storage
-    .from(BUCKET)
-    .list("by-quarter", { limit: 1000 });
-  if (error) throw new Error(`list by-quarter failed: ${error.message}`);
-  const names = (files ?? [])
-    .map((f) => f.name)
-    .filter((n) => n.endsWith(".json"))
-    .sort();
-  const all: Record<string, unknown>[] = [];
-  const seen = new Set<string>();
-  for (const name of names) {
-    const rows = await downloadJson<Record<string, unknown>[]>(
-      supabase,
-      `by-quarter/${name}`,
-      [],
-    );
-    for (const row of rows) {
-      const id = String(row.source_id ?? "");
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      all.push(row);
-    }
-  }
-  all.sort((a, b) => {
-    const fd = String(b.filing_date ?? "").localeCompare(String(a.filing_date ?? ""));
-    if (fd !== 0) return fd;
-    return String(b.transaction_date ?? "").localeCompare(
-      String(a.transaction_date ?? ""),
-    );
-  });
-  await uploadJson(supabase, PURCHASES_OBJECT, all);
+  await uploadJson(supabase, quarterObject(quarter), rows.map(storageRow));
 }
 
 export async function getSuccessfulQuarters(
