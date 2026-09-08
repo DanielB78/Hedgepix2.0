@@ -101,3 +101,24 @@ export type MemberProfile = {
 };
 
 export type MemberTab = "activity" | "holdings";
+
+export type CeoStockPurchaseRow = {
+  id: string;
+  source_id: string;
+  accession_number: string;
+  ceo_name: string;
+  officer_title: string | null;
+  issuer_name: string | null;
+  ticker: string | null;
+  security_title: string | null;
+  transaction_date: string | null;
+  filing_date: string | null;
+  shares_purchased: number | null;
+  price_per_share: number | null;
+  shares_owned_after: number | null;
+  ownership_type: string | null;
+  filing_url: string | null;
+  form_type: string;
+  quarter: string;
+  created_at: string;
+};

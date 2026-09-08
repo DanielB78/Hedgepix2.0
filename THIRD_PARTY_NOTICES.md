@@ -49,3 +49,15 @@ InsiderWatch dataset.
 
 We download the CSV for House/Senate stock-row ingestion only; we do not copy
 InsiderWatch application or alert code.
+
+## SEC Insider Transactions Data Sets
+
+CEO open-market purchase rows are extracted from the SEC’s public Insider
+Transactions Data Sets (Forms 3/4/5 structured TSV archives):
+
+- https://www.sec.gov/data-research/sec-markets-data/insider-transactions-data-sets
+
+Data is used as filed by registrants. This application filters to Form 4
+non-derivative transaction code **P** where the reporting person is an officer
+with a high-confidence CEO title. Investors should review the original Form 4
+filing before making any investment decision.
