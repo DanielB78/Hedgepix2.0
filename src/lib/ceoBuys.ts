@@ -117,25 +117,51 @@ export async function fetchCeoBuys(
       .order("transaction_date", { ascending: false, nullsFirst: false })
       .range(from, to);
 
-    if (!error) {
+    // Prefer Postgres when populated. An empty table still succeeds, so fall
+    // back to the public ceo-buys storage snapshot used for historical backfill.
+    const tableRows = (data as CeoStockPurchaseRow[] | null) ?? [];
+    const tableCount = count ?? 0;
+    if (!error && tableCount > 0) {
       return {
         configured: true,
         error: null,
-        rows: (data as CeoStockPurchaseRow[] | null) ?? [],
+        rows: tableRows,
         page,
         pageSize: PAGE_SIZE,
-        totalCount: count ?? 0,
+        totalCount: tableCount,
       };
     }
 
     const all = await fetchFromStorage();
+    if (all.length > 0) {
+      return {
+        configured: true,
+        error: null,
+        rows: all.slice(from, from + PAGE_SIZE),
+        page,
+        pageSize: PAGE_SIZE,
+        totalCount: all.length,
+      };
+    }
+
+    if (!error) {
+      return {
+        configured: true,
+        error: null,
+        rows: tableRows,
+        page,
+        pageSize: PAGE_SIZE,
+        totalCount: tableCount,
+      };
+    }
+
     return {
       configured: true,
-      error: null,
-      rows: all.slice(from, from + PAGE_SIZE),
+      error: error.message,
+      rows: [],
       page,
       pageSize: PAGE_SIZE,
-      totalCount: all.length,
+      totalCount: 0,
     };
   } catch (err) {
     return {
