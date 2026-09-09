@@ -133,10 +133,11 @@ async function fetchFromTable(q?: string): Promise<CeoStockPurchaseRow[] | null>
       .range(from, from + pageSize - 1);
 
     if (q) {
-      const safe = q.replace(/[%(),]/g, " ").trim();
+      const safe = q.replace(/[%*,()]/g, " ").trim();
       if (safe) {
+        // PostgREST `or` filter wildcards use * (not SQL %).
         query = query.or(
-          `ceo_name.ilike.%${safe}%,ticker.ilike.%${safe}%,issuer_name.ilike.%${safe}%`,
+          `ceo_name.ilike.*${safe}*,ticker.ilike.*${safe}*,issuer_name.ilike.*${safe}*`,
         );
       }
     } else {
