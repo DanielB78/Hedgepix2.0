@@ -1,20 +1,30 @@
+import {
+  aggregateCeoActivity,
+  filterCeoActivity,
+  type CeoActivityCard,
+} from "@/lib/ceoAggregate";
 import type { CeoStockPurchaseRow } from "@/lib/types";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "@/lib/supabase";
 
 export type CeoBuysFilters = {
   page?: number;
+  q?: string;
 };
 
 export type CeoBuysResult = {
   configured: boolean;
   error: string | null;
-  rows: CeoStockPurchaseRow[];
+  rows: CeoActivityCard[];
   page: number;
   pageSize: number;
   totalCount: number;
 };
 
-const PAGE_SIZE = 50;
+/** Two cards per page to match House/Senate layout. */
+export const CEO_PAGE_SIZE = 2;
+
+const SELECT_COLUMNS =
+  "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source";
 
 function publicObjectUrl(objectPath: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
@@ -27,12 +37,15 @@ export function parseCeoBuysFilters(
 ): CeoBuysFilters {
   const pageRaw = typeof params.page === "string" ? params.page : "1";
   const page = Math.max(1, Number.parseInt(pageRaw, 10) || 1);
-  return { page };
+  const qRaw = typeof params.q === "string" ? params.q.trim() : "";
+  return { page, q: qRaw || undefined };
 }
 
 function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
   return [...rows].sort((a, b) => {
-    const fd = String(b.filing_date ?? "").localeCompare(String(a.filing_date ?? ""));
+    const fd = String(b.filing_date ?? "").localeCompare(
+      String(a.filing_date ?? ""),
+    );
     if (fd !== 0) return fd;
     return String(b.transaction_date ?? "").localeCompare(
       String(a.transaction_date ?? ""),
@@ -40,8 +53,22 @@ function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
   });
 }
 
+function normalizeRow(row: CeoStockPurchaseRow): CeoStockPurchaseRow {
+  const fromRaw =
+    typeof row.raw_source === "object" &&
+    row.raw_source &&
+    "trans_code" in row.raw_source
+      ? String(
+          (row.raw_source as { trans_code?: string }).trans_code ?? "",
+        ).toUpperCase()
+      : "";
+  const fromCol = String(row.transaction_code ?? "").toUpperCase();
+  const code = fromCol === "S" || fromRaw === "S" ? "S" : "P";
+  return { ...row, transaction_code: code };
+}
+
 async function fetchJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url, { next: { revalidate: 120 } });
+  const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) return null;
   try {
     return (await res.json()) as T;
@@ -50,7 +77,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
+async function fetchFromStorage(limitQuarters = 8): Promise<CeoStockPurchaseRow[]> {
   const quartersUrl = publicObjectUrl("quarters.json");
   if (!quartersUrl) return [];
   const quarters = await fetchJson<Record<string, { status?: string }>>(
@@ -62,7 +89,8 @@ async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
     .filter(([, meta]) => meta?.status === "success")
     .map(([q]) => q)
     .sort()
-    .reverse();
+    .reverse()
+    .slice(0, limitQuarters);
 
   const chunks = await Promise.all(
     successQuarters.map(async (quarter) => {
@@ -80,10 +108,55 @@ async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
       const id = row.source_id || row.id;
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      all.push(row);
+      all.push(normalizeRow(row));
     }
   }
   return sortRows(all);
+}
+
+async function fetchFromTable(q?: string): Promise<CeoStockPurchaseRow[] | null> {
+  const supabase = createBrowserSupabase();
+  const pageSize = q ? 1000 : 800;
+  const maxRows = q ? 3000 : 800;
+  const all: CeoStockPurchaseRow[] = [];
+  let from = 0;
+  const cutoff = new Date();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - 9);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  for (;;) {
+    let query = supabase
+      .from("ceo_stock_purchases")
+      .select(SELECT_COLUMNS)
+      .order("filing_date", { ascending: false, nullsFirst: false })
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .range(from, from + pageSize - 1);
+
+    if (q) {
+      const safe = q.replace(/[%*,()]/g, " ").trim();
+      if (safe) {
+        // PostgREST `or` filter wildcards use * (not SQL %).
+        query = query.or(
+          `ceo_name.ilike.*${safe}*,ticker.ilike.*${safe}*,issuer_name.ilike.*${safe}*`,
+        );
+      }
+    } else {
+      query = query.gte("filing_date", cutoffDate);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return null;
+    }
+
+    const rows = ((data as CeoStockPurchaseRow[] | null) ?? []).map(normalizeRow);
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+    if (from >= maxRows) break;
+  }
+
+  return all;
 }
 
 export async function fetchCeoBuys(
@@ -97,79 +170,52 @@ export async function fetchCeoBuys(
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
       rows: [],
       page,
-      pageSize: PAGE_SIZE,
+      pageSize: CEO_PAGE_SIZE,
       totalCount: 0,
     };
   }
 
   try {
-    const supabase = createBrowserSupabase();
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    const { data, error, count } = await supabase
-      .from("ceo_stock_purchases")
-      .select(
-        "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at",
-        { count: "exact" },
-      )
-      .order("filing_date", { ascending: false, nullsFirst: false })
-      .order("transaction_date", { ascending: false, nullsFirst: false })
-      .range(from, to);
-
-    // Prefer Postgres when populated. An empty table still succeeds, so fall
-    // back to the public ceo-buys storage snapshot used for historical backfill.
-    const tableRows = (data as CeoStockPurchaseRow[] | null) ?? [];
-    const tableCount = count ?? 0;
-    if (!error && tableCount > 0) {
-      return {
-        configured: true,
-        error: null,
-        rows: tableRows,
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: tableCount,
-      };
+    let raw: CeoStockPurchaseRow[] | null = null;
+    if (filters.q) {
+      raw = await fetchFromTable(filters.q);
+      if (!raw || raw.length === 0) {
+        // Keep storage fallback tiny to avoid OOM on multi-MB quarter files.
+        raw = await fetchFromStorage(2);
+        const q = filters.q.toLowerCase();
+        raw = raw.filter(
+          (row) =>
+            row.ceo_name.toLowerCase().includes(q) ||
+            (row.ticker ?? "").toLowerCase().includes(q) ||
+            (row.issuer_name ?? "").toLowerCase().includes(q),
+        );
+      }
+    } else {
+      // Prefer Postgres recent window; avoid loading multi-MB storage blobs by default.
+      raw = await fetchFromTable();
+      if (!raw || raw.length === 0) {
+        raw = await fetchFromStorage(2);
+      }
     }
 
-    const all = await fetchFromStorage();
-    if (all.length > 0) {
-      return {
-        configured: true,
-        error: null,
-        rows: all.slice(from, from + PAGE_SIZE),
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: all.length,
-      };
-    }
-
-    if (!error) {
-      return {
-        configured: true,
-        error: null,
-        rows: tableRows,
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: tableCount,
-      };
-    }
+    const cards = filterCeoActivity(aggregateCeoActivity(raw), filters.q);
+    const from = (page - 1) * CEO_PAGE_SIZE;
 
     return {
       configured: true,
-      error: error.message,
-      rows: [],
+      error: null,
+      rows: cards.slice(from, from + CEO_PAGE_SIZE),
       page,
-      pageSize: PAGE_SIZE,
-      totalCount: 0,
+      pageSize: CEO_PAGE_SIZE,
+      totalCount: cards.length,
     };
   } catch (err) {
     return {
       configured: true,
-      error: err instanceof Error ? err.message : "Failed to load CEO buys",
+      error: err instanceof Error ? err.message : "Failed to load CEO activity",
       rows: [],
       page,
-      pageSize: PAGE_SIZE,
+      pageSize: CEO_PAGE_SIZE,
       totalCount: 0,
     };
   }

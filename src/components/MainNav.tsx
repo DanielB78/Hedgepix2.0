@@ -44,7 +44,7 @@ export function MainNav({ active }: Props) {
         }
         aria-current={active === "ceo-buys" ? "page" : undefined}
       >
-        CEO Buys
+        CEO
       </Link>
     </nav>
   );

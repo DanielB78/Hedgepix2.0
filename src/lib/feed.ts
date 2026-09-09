@@ -237,10 +237,10 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
   const [trending, houseMembers, senateMembers, recentHouse, recentSenate] =
     await Promise.all([
       fetchTrending({ mode: "all", periodDays: 30 }),
-      fetchPopularMembers("house", 8),
-      fetchPopularMembers("senate", 8),
-      fetchRecentByChamber("house", 10),
-      fetchRecentByChamber("senate", 10),
+      fetchPopularMembers("house", 40),
+      fetchPopularMembers("senate", 40),
+      fetchRecentByChamber("house", 80),
+      fetchRecentByChamber("senate", 80),
     ]);
 
   const error =

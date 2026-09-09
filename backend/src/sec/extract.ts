@@ -101,6 +101,7 @@ export type ExtractStats = {
   transactions: number;
   form4: number;
   codeP: number;
+  codeS: number;
   ceoHits: number;
   kept: number;
   skippedNoTicker: number;
@@ -145,6 +146,7 @@ export async function extractCeoPurchasesFromDir(
     transactions: transFile.rows.length,
     form4: 0,
     codeP: 0,
+    codeS: 0,
     ceoHits: 0,
     kept: 0,
     skippedNoTicker: 0,
@@ -157,11 +159,14 @@ export async function extractCeoPurchasesFromDir(
 
   for (const tx of transFile.rows) {
     const code = (tx.TRANS_CODE ?? "").trim().toUpperCase();
-    if (code !== "P") continue;
-    stats.codeP += 1;
+    if (code !== "P" && code !== "S") continue;
+    if (code === "P") stats.codeP += 1;
+    else stats.codeS += 1;
 
     const ad = (tx.TRANS_ACQUIRED_DISP_CD ?? "").trim().toUpperCase();
-    if (ad && ad !== "A") continue;
+    // Purchases should be acquired (A); sales should be disposed (D).
+    if (code === "P" && ad && ad !== "A") continue;
+    if (code === "S" && ad && ad !== "D") continue;
 
     const acc = tx.ACCESSION_NUMBER ?? "";
     const sub = submissions.get(acc);
@@ -223,6 +228,7 @@ export async function extractCeoPurchasesFromDir(
       filingUrl: filingUrlFor(issuerCik, acc),
       formType: "4",
       quarter,
+      transactionCode: code as "P" | "S",
       rawSource: {
         accession_number: acc,
         nonderiv_trans_sk: nonderivSk,

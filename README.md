@@ -20,9 +20,10 @@ during updates, then read from Supabase by the website.
 
 ## Features
 
-- **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination and same-member/same-disclosure-date groups
+- **Feed** — hedgpix home with trending tickers plus House/Senate buys & sales (2-up cards with Next)
+- **Search** — find House/Senate/CEO names or tickers from the feed and CEO pages
 - **Trending** — tickers ranked by distinct members active (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
-- **CEO Buys** — SEC Form 4 open-market CEO stock purchases (`npm run backfill-ceo-buys`)
+- **CEO activity** — SEC Form 4 open-market CEO purchases and sales (`npm run backfill-ceo-buys`), combined by CEO+ticker with shares summed
 - **Stock detail** (`/stocks/[ticker]`) — cached daily closing-price chart with congressional purchase/sale markers on **transaction date**
 - **Member pages** (`/members/[slug]`) — activity feed and estimated current stock holdings since 2012
 
@@ -33,7 +34,8 @@ during updates, then read from Supabase by the website.
    - `supabase/migrations/20260829150000_local_pipeline_columns.sql`
    - `supabase/migrations/20260830140000_stock_price_bars.sql`
    - `supabase/migrations/20260901150000_member_holdings.sql`
-   - `supabase/migrations/20260908160000_ceo_stock_purchases.sql` (CEO Buys)
+   - `supabase/migrations/20260908160000_ceo_stock_purchases.sql` (CEO activity)
+   - `supabase/migrations/20260909120000_ceo_transaction_code.sql` (purchase vs sale)
 3. Configure the backend updater:
    ```bash
    cd backend

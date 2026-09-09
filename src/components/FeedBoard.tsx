@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
 import type {
   FeedPayload,
@@ -22,6 +22,9 @@ import type { Chamber, CongressTrade, TrendingTicker } from "@/lib/types";
 type Props = {
   view: FeedView;
   payload: FeedPayload;
+  query?: string;
+  housePage?: number;
+  senatePage?: number;
 };
 
 type StockPanelState = {
@@ -95,10 +98,44 @@ function useScrollIntoView(active: boolean) {
   return ref;
 }
 
-export function FeedBoard({ view, payload }: Props) {
+export function FeedBoard({
+  view,
+  payload,
+  query,
+  housePage = 1,
+  senatePage = 1,
+}: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
   const requestId = useRef(0);
+  const q = query?.trim().toLowerCase() ?? "";
+
+  const filterTrade = useCallback(
+    (trade: CongressTrade) => {
+      if (!q) return true;
+      const ticker = (trade.ticker ?? "").toLowerCase();
+      const member = (trade.member ?? "").toLowerCase();
+      const asset = (trade.asset ?? "").toLowerCase();
+      return (
+        ticker.includes(q) ||
+        member.includes(q) ||
+        asset.includes(q) ||
+        ticker === q.toUpperCase().toLowerCase()
+      );
+    },
+    [q],
+  );
+
+  const filterTicker = useCallback(
+    (row: TrendingTicker) => {
+      if (!q) return true;
+      return (
+        row.ticker.toLowerCase().includes(q) ||
+        (row.asset ?? "").toLowerCase().includes(q)
+      );
+    },
+    [q],
+  );
 
   const openStock = useCallback(
     async (ticker: string, chamber: "all" | Chamber = "all") => {
@@ -240,6 +277,32 @@ export function FeedBoard({ view, payload }: Props) {
   const showHouse = view === "feed" || view === "house";
   const showSenate = view === "feed" || view === "senate";
   const trendingLimit = view === "trending" ? 20 : 8;
+  const trendingRows = useMemo(
+    () => payload.trending.filter(filterTicker),
+    [filterTicker, payload.trending],
+  );
+  const houseTrades = useMemo(
+    () => payload.recentHouse.filter(filterTrade),
+    [filterTrade, payload.recentHouse],
+  );
+  const senateTrades = useMemo(
+    () => payload.recentSenate.filter(filterTrade),
+    [filterTrade, payload.recentSenate],
+  );
+  const houseMembers = useMemo(
+    () =>
+      payload.houseMembers.filter((member) =>
+        q ? member.name.toLowerCase().includes(q) : true,
+      ),
+    [payload.houseMembers, q],
+  );
+  const senateMembers = useMemo(
+    () =>
+      payload.senateMembers.filter((member) =>
+        q ? member.name.toLowerCase().includes(q) : true,
+      ),
+    [payload.senateMembers, q],
+  );
 
   return (
     <div className="space-y-10">
@@ -249,6 +312,20 @@ export function FeedBoard({ view, payload }: Props) {
         </div>
       ) : null}
 
+      {q ? (
+        <p className="text-center text-sm text-[color:var(--fog-dim)]">
+          Showing results for{" "}
+          <span className="font-semibold text-[color:var(--fog)]">{query}</span>
+          .{" "}
+          <Link
+            href={`/ceo-buys?q=${encodeURIComponent(query ?? "")}`}
+            className="text-[color:var(--mint)] hover:opacity-80"
+          >
+            Search CEO activity →
+          </Link>
+        </p>
+      ) : null}
+
       {showTrending ? (
         <section className="animate-rise space-y-4">
           <SectionTitle
@@ -256,10 +333,10 @@ export function FeedBoard({ view, payload }: Props) {
             subtitle="Tickers with the most congressional attention"
           />
           <div className="space-y-3">
-            {payload.trending.length === 0 ? (
-              <Empty text="No trending tickers right now." />
+            {trendingRows.length === 0 ? (
+              <Empty text="No trending tickers match this search." />
             ) : (
-              payload.trending.slice(0, trendingLimit).map((row, i) => {
+              trendingRows.slice(0, trendingLimit).map((row, i) => {
                 const active = stockPanel?.ticker === row.ticker;
                 return (
                   <div key={row.ticker} className="space-y-3">
@@ -285,51 +362,81 @@ export function FeedBoard({ view, payload }: Props) {
       ) : null}
 
       {showHouse ? (
-        <MemberBlock
-          title="House"
-          subtitle="Popular representatives"
-          members={payload.houseMembers}
-          panel={memberPanel}
-          onToggle={(slug) => toggleMember(slug)}
-          onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-          onClose={() => setMemberPanel(null)}
-          onBackNested={() =>
-            setMemberPanel((p) =>
-              p
-                ? {
-                    ...p,
-                    nestedTicker: null,
-                    nested: null,
-                    nestedLoading: false,
-                  }
-                : p,
-            )
-          }
-        />
+        <>
+          <TradeActivityBlock
+            title="House"
+            subtitle="Recent buys and sales"
+            trades={houseTrades}
+            page={housePage}
+            pageParam="housePage"
+            query={query}
+            view={view}
+            stockPanel={stockPanel}
+            onOpenTicker={(ticker) => toggleStock(ticker)}
+            onCloseStock={() => setStockPanel(null)}
+            onChamber={(ticker, c) => void openStock(ticker, c)}
+          />
+          <MemberBlock
+            title="House members"
+            subtitle="Popular representatives"
+            members={houseMembers}
+            panel={memberPanel}
+            onToggle={(slug) => toggleMember(slug)}
+            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
+            onClose={() => setMemberPanel(null)}
+            onBackNested={() =>
+              setMemberPanel((p) =>
+                p
+                  ? {
+                      ...p,
+                      nestedTicker: null,
+                      nested: null,
+                      nestedLoading: false,
+                    }
+                  : p,
+              )
+            }
+          />
+        </>
       ) : null}
 
       {showSenate ? (
-        <MemberBlock
-          title="Senate"
-          subtitle="Popular senators"
-          members={payload.senateMembers}
-          panel={memberPanel}
-          onToggle={(slug) => toggleMember(slug)}
-          onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-          onClose={() => setMemberPanel(null)}
-          onBackNested={() =>
-            setMemberPanel((p) =>
-              p
-                ? {
-                    ...p,
-                    nestedTicker: null,
-                    nested: null,
-                    nestedLoading: false,
-                  }
-                : p,
-            )
-          }
-        />
+        <>
+          <TradeActivityBlock
+            title="Senate"
+            subtitle="Recent buys and sales"
+            trades={senateTrades}
+            page={senatePage}
+            pageParam="senatePage"
+            query={query}
+            view={view}
+            stockPanel={stockPanel}
+            onOpenTicker={(ticker) => toggleStock(ticker)}
+            onCloseStock={() => setStockPanel(null)}
+            onChamber={(ticker, c) => void openStock(ticker, c)}
+          />
+          <MemberBlock
+            title="Senate members"
+            subtitle="Popular senators"
+            members={senateMembers}
+            panel={memberPanel}
+            onToggle={(slug) => toggleMember(slug)}
+            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
+            onClose={() => setMemberPanel(null)}
+            onBackNested={() =>
+              setMemberPanel((p) =>
+                p
+                  ? {
+                      ...p,
+                      nestedTicker: null,
+                      nested: null,
+                      nestedLoading: false,
+                    }
+                  : p,
+              )
+            }
+          />
+        </>
       ) : null}
     </div>
   );
@@ -507,6 +614,183 @@ function StockPanel({
   );
 }
 
+function tradePageHref(opts: {
+  page: number;
+  pageParam: "housePage" | "senatePage";
+  query?: string;
+  view: FeedView;
+}): string {
+  const params = new URLSearchParams();
+  if (opts.view && opts.view !== "feed") params.set("view", opts.view);
+  if (opts.query) params.set("q", opts.query);
+  if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
+}
+
+function TradeActivityBlock({
+  title,
+  subtitle,
+  trades,
+  page,
+  pageParam,
+  query,
+  view,
+  stockPanel,
+  onOpenTicker,
+  onCloseStock,
+  onChamber,
+}: {
+  title: string;
+  subtitle: string;
+  trades: CongressTrade[];
+  page: number;
+  pageParam: "housePage" | "senatePage";
+  query?: string;
+  view: FeedView;
+  stockPanel: StockPanelState | null;
+  onOpenTicker: (ticker: string) => void;
+  onCloseStock: () => void;
+  onChamber: (ticker: string, chamber: "all" | Chamber) => void;
+}) {
+  const pageSize = 2;
+  const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const slice = trades.slice(
+    (safePage - 1) * pageSize,
+    (safePage - 1) * pageSize + pageSize,
+  );
+  const activeTicker =
+    stockPanel &&
+    slice.some((t) => (t.ticker ?? "").toUpperCase() === stockPanel.ticker)
+      ? stockPanel
+      : null;
+
+  return (
+    <section className="animate-rise space-y-4">
+      <SectionTitle title={title} subtitle={subtitle} />
+      {trades.length === 0 ? (
+        <Empty text={`No ${title.toLowerCase()} buys or sales match.`} />
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {slice.map((trade) => {
+              const ticker = (trade.ticker ?? "").toUpperCase();
+              const buy = trade.transaction_type === "purchase";
+              const expanded = activeTicker?.ticker === ticker;
+              return (
+                <button
+                  key={trade.id}
+                  type="button"
+                  onClick={() => {
+                    if (!ticker) return;
+                    onOpenTicker(ticker);
+                  }}
+                  className={`rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
+                    expanded
+                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
+                      : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+                        {trade.member ?? "Unknown"}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
+                        {chamberLabel(trade.chamber)}
+                        {trade.state ? ` · ${trade.state}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)]">
+                      {ticker || "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span
+                      className={`font-semibold uppercase tracking-wide ${
+                        buy
+                          ? "text-[color:var(--mint)]"
+                          : "text-[color:var(--coral)]"
+                      }`}
+                    >
+                      {tradeVerb(trade.transaction_type)}
+                    </span>
+                    <span className="text-[color:var(--fog-dim)]">
+                      {formatAmountRange(
+                        trade.amount_low,
+                        trade.amount_high,
+                        trade.amount_range,
+                      )}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
+                    {formatShortDate(
+                      trade.disclosure_date ?? trade.transaction_date,
+                    )}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          {activeTicker ? (
+            <StockPanel
+              state={activeTicker}
+              onClose={onCloseStock}
+              onChamber={(c) => onChamber(activeTicker.ticker, c)}
+            />
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
+            <p>
+              {(safePage - 1) * pageSize + 1}–
+              {Math.min(safePage * pageSize, trades.length)} of {trades.length}
+            </p>
+            <div className="flex items-center gap-2">
+              {safePage > 1 ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage - 1,
+                    pageParam,
+                    query,
+                    view,
+                  })}
+                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="rounded-full px-3 py-1.5 opacity-40">
+                  Previous
+                </span>
+              )}
+              <span>
+                {safePage} / {totalPages}
+              </span>
+              {safePage < totalPages ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage + 1,
+                    pageParam,
+                    query,
+                    view,
+                  })}
+                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="rounded-full px-3 py-1.5 opacity-40">Next</span>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function MemberBlock({
   title,
   subtitle,
@@ -526,8 +810,20 @@ function MemberBlock({
   onClose: () => void;
   onBackNested: () => void;
 }) {
+  const pageSize = 2;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageMembers = members.slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize,
+  );
   const active =
-    panel && members.some((m) => m.slug === panel.slug) ? panel : null;
+    panel && pageMembers.some((m) => m.slug === panel.slug) ? panel : null;
+
+  useEffect(() => {
+    setPage(0);
+  }, [members.length, members[0]?.slug]);
 
   return (
     <section className="animate-rise space-y-4">
@@ -536,7 +832,7 @@ function MemberBlock({
         {members.length === 0 ? (
           <Empty text={`No active ${title.toLowerCase()} members yet.`} />
         ) : (
-          members.map((member) => {
+          pageMembers.map((member) => {
             const expanded = panel?.slug === member.slug;
             return (
               <button
@@ -564,6 +860,37 @@ function MemberBlock({
           })
         )}
       </div>
+
+      {members.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
+          <p>
+            {safePage * pageSize + 1}–
+            {Math.min((safePage + 1) * pageSize, members.length)} of{" "}
+            {members.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span>
+              {safePage + 1} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {active ? (
         <MemberPanel

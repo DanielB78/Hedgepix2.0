@@ -21,6 +21,7 @@ export type CeoDbRow = {
   filing_url: string | null;
   form_type: string;
   quarter: string;
+  transaction_code: "P" | "S";
   raw_source: unknown;
   updated_at: string;
 };
@@ -66,6 +67,7 @@ export function toCeoDbRow(
     filing_url: purchase.filingUrl,
     form_type: purchase.formType,
     quarter: purchase.quarter,
+    transaction_code: purchase.transactionCode,
     raw_source: purchase.rawSource,
     updated_at: nowIso,
   };
@@ -143,31 +145,46 @@ export async function upsertCeoPurchases(
   }
   const rows = [...byId.values()];
 
-  if (await ceoTableAvailable(supabase)) {
-    let upserted = 0;
-    let errors = 0;
-    for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
-      const slice = rows.slice(i, i + UPSERT_CHUNK);
-      const { error } = await supabase
-        .from("ceo_stock_purchases")
-        .upsert(slice, { onConflict: "source_id" });
-      if (error) {
-        errors += 1;
-        console.error(`[ceo-buys] upsert chunk failed: ${error.message}`);
-        continue;
-      }
-      upserted += slice.length;
-    }
-    await writeQuarterStorage(supabase, rows).catch((err) => {
-      console.warn(
-        `[ceo-buys] storage mirror failed: ${err instanceof Error ? err.message : err}`,
-      );
-    });
-    return { upserted, errors, via: "table" };
+  // Always mirror to storage (includes transaction_code even if Postgres lags).
+  await writeQuarterStorage(supabase, rows);
+
+  if (!(await ceoTableAvailable(supabase))) {
+    return { upserted: rows.length, errors: 0, via: "storage" };
   }
 
-  await writeQuarterStorage(supabase, rows);
-  return { upserted: rows.length, errors: 0, via: "storage" };
+  let upserted = 0;
+  let errors = 0;
+  let omitTransactionCode = false;
+
+  for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
+    const slice = rows.slice(i, i + UPSERT_CHUNK);
+    const payload = omitTransactionCode
+      ? slice.map(({ transaction_code: _code, ...rest }) => rest)
+      : slice;
+    const { error } = await supabase
+      .from("ceo_stock_purchases")
+      .upsert(payload, { onConflict: "source_id" });
+    if (error) {
+      if (!omitTransactionCode && /transaction_code/i.test(error.message)) {
+        omitTransactionCode = true;
+        console.warn(
+          "[ceo-buys] transaction_code column missing on table — upserting without it (storage still has full rows). Apply 20260909120000_ceo_transaction_code.sql when convenient.",
+        );
+        i -= UPSERT_CHUNK;
+        continue;
+      }
+      errors += 1;
+      console.error(`[ceo-buys] upsert chunk failed: ${error.message}`);
+      continue;
+    }
+    upserted += slice.length;
+  }
+
+  return {
+    upserted: upserted > 0 ? upserted : rows.length,
+    errors,
+    via: upserted > 0 ? "table" : "storage",
+  };
 }
 
 async function rewriteQuartersManifest(
