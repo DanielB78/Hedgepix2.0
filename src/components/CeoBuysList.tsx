@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { CeoActivityCard } from "@/lib/ceoAggregate";
 import { TickerLink } from "@/components/TickerLink";
-import type { CeoStockPurchaseRow } from "@/lib/types";
 
 type Props = {
-  rows: CeoStockPurchaseRow[];
+  rows: CeoActivityCard[];
 };
 
 function formatDate(value: string | null) {
@@ -34,123 +35,115 @@ function formatPrice(value: number | null) {
   return `${new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-  }).format(value)} per share`;
+  }).format(value)} avg`;
 }
 
-function CeoBuyCard({ row }: { row: CeoStockPurchaseRow }) {
+function CeoActivityCardView({ card }: { card: CeoActivityCard }) {
   const [open, setOpen] = useState(false);
+  const buy = card.side === "purchase";
 
   return (
-    <details
-      className="group overflow-hidden rounded-[20px] bg-[color:var(--surface)] open:bg-[color:var(--surface-strong)] open:shadow-[var(--shadow-soft)]"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      className={`rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
+        open
+          ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
+          : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
+      }`}
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+            {card.ceo_name}
+          </p>
+          <p className="mt-1 truncate text-sm text-[color:var(--fog-dim)]">
+            {card.issuer_name ?? "Issuer"}
+          </p>
+        </div>
+        {card.ticker ? (
+          <TickerLink
+            ticker={card.ticker}
+            className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+          />
+        ) : (
+          <span className="text-[color:var(--fog-dim)]">—</span>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <span
-          aria-hidden
-          className="text-lg text-[color:var(--muted)] transition-transform duration-200 group-open:rotate-90"
+          className={`font-semibold uppercase tracking-wide ${
+            buy ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
+          }`}
         >
-          ›
+          {buy ? "Bought" : "Sold"}
         </span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="truncate text-base font-medium text-[color:var(--deep-navy)]">
-              {row.ceo_name}
-            </p>
-            <div className="shrink-0">
-              {row.ticker ? (
-                <TickerLink
-                  ticker={row.ticker}
-                  className="inline-flex items-center gap-1 font-medium tracking-tight text-[color:var(--deep-navy)] transition-opacity duration-200 hover:opacity-70"
-                />
-              ) : (
-                <span className="text-[color:var(--muted)]">—</span>
-              )}
-            </div>
-          </div>
-          {row.issuer_name ? (
-            <p className="truncate text-sm text-[color:var(--muted)]">
-              {row.issuer_name}
+        <span className="text-[color:var(--fog)]">
+          {formatShares(card.shares)}
+        </span>
+        <span className="text-[color:var(--fog-dim)]">
+          {formatPrice(card.price_per_share)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
+        {formatDate(card.transaction_date)}
+        {card.transaction_count > 1
+          ? ` · ${card.transaction_count} filings combined`
+          : ""}
+      </p>
+
+      {open ? (
+        <div
+          className="mt-4 space-y-2 border-t border-[color:var(--line)] pt-3 text-sm text-[color:var(--fog-dim)]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {card.officer_title ? <p>Title · {card.officer_title}</p> : null}
+          {card.security_title ? <p>Security · {card.security_title}</p> : null}
+          <p>Filed · {formatDate(card.filing_date)}</p>
+          {card.filing_url ? (
+            <p>
+              <a
+                href={card.filing_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[color:var(--mint)] hover:opacity-80"
+              >
+                View latest Form 4 filing
+              </a>
             </p>
           ) : null}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-[color:var(--navy)]">
-            <span>{formatShares(row.shares_purchased)}</span>
-            <span>{formatPrice(row.price_per_share)}</span>
-            <span className="text-[color:var(--muted)]">
-              {formatDate(row.transaction_date)}
-            </span>
-          </div>
+          {card.ticker ? (
+            <p>
+              <Link
+                href={`/stocks/${encodeURIComponent(card.ticker)}`}
+                className="text-[color:var(--mint)] hover:opacity-80"
+              >
+                Open {card.ticker} chart
+              </Link>
+            </p>
+          ) : null}
         </div>
-      </summary>
-
-      <div className="space-y-2 border-t border-[color:var(--oatmeal)]/40 px-5 py-4 text-sm text-[color:var(--navy)]">
-        {row.officer_title ? (
-          <p>
-            <span className="text-[color:var(--muted)]">Title · </span>
-            {row.officer_title}
-          </p>
-        ) : null}
-        {row.security_title ? (
-          <p>
-            <span className="text-[color:var(--muted)]">Security · </span>
-            {row.security_title}
-          </p>
-        ) : null}
-        <p>
-          <span className="text-[color:var(--muted)]">Filed · </span>
-          {formatDate(row.filing_date)}
-        </p>
-        {row.shares_owned_after != null ? (
-          <p>
-            <span className="text-[color:var(--muted)]">Owned after · </span>
-            {new Intl.NumberFormat("en-US", {
-              maximumFractionDigits: 2,
-            }).format(row.shares_owned_after)}
-          </p>
-        ) : null}
-        {row.ownership_type ? (
-          <p>
-            <span className="text-[color:var(--muted)]">Ownership · </span>
-            {row.ownership_type}
-          </p>
-        ) : null}
-        <p>
-          <span className="text-[color:var(--muted)]">Accession · </span>
-          {row.accession_number}
-        </p>
-        {row.filing_url ? (
-          <p>
-            <a
-              href={row.filing_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[color:var(--deep-navy)] underline-offset-2 hover:underline"
-            >
-              View Form 4 filing
-            </a>
-          </p>
-        ) : null}
-      </div>
-    </details>
+      ) : null}
+    </button>
   );
 }
 
 export function CeoBuysList({ rows }: Props) {
-  if (rows.length === 0) {
+  const empty = useMemo(() => rows.length === 0, [rows.length]);
+
+  if (empty) {
     return (
-      <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-8 text-center text-sm text-[color:var(--muted)]">
-        No CEO purchases yet. Run{" "}
-        <code className="text-[color:var(--deep-navy)]">npm run backfill-ceo-buys</code>{" "}
-        after applying the CEO buys migration.
+      <div className="rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-5 py-8 text-center text-sm text-[color:var(--fog-dim)]">
+        No matching CEO buys or sales.
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {rows.map((row) => (
-        <CeoBuyCard key={row.id} row={row} />
+    <div className="grid gap-3 sm:grid-cols-2">
+      {rows.map((card) => (
+        <CeoActivityCardView key={card.id} card={card} />
       ))}
     </div>
   );

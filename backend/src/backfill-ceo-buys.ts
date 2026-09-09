@@ -66,7 +66,7 @@ async function processQuarter(opts: {
       quarter,
     );
     console.log(
-      `extract: submissions=${stats.submissions} tx=${stats.transactions} codeP=${stats.codeP} kept=${stats.kept}`,
+      `extract: submissions=${stats.submissions} tx=${stats.transactions} codeP=${stats.codeP} codeS=${stats.codeS} kept=${stats.kept}`,
     );
 
     let upserted = 0;

@@ -18,7 +18,7 @@ const NAV: Array<{
   { key: "trending", label: "Trending", icon: "trend" },
   { key: "house", label: "House", icon: "house" },
   { key: "senate", label: "Senate", icon: "senate" },
-  { key: "ceo-buys", label: "CEO Buys", icon: "ceo" },
+  { key: "ceo-buys", label: "CEO", icon: "ceo" },
 ];
 
 function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {

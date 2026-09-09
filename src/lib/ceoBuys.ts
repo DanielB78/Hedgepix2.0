@@ -1,20 +1,27 @@
+import {
+  aggregateCeoActivity,
+  filterCeoActivity,
+  type CeoActivityCard,
+} from "@/lib/ceoAggregate";
 import type { CeoStockPurchaseRow } from "@/lib/types";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "@/lib/supabase";
 
 export type CeoBuysFilters = {
   page?: number;
+  q?: string;
 };
 
 export type CeoBuysResult = {
   configured: boolean;
   error: string | null;
-  rows: CeoStockPurchaseRow[];
+  rows: CeoActivityCard[];
   page: number;
   pageSize: number;
   totalCount: number;
 };
 
-const PAGE_SIZE = 50;
+/** Two cards per page to match House/Senate layout. */
+export const CEO_PAGE_SIZE = 2;
 
 function publicObjectUrl(objectPath: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
@@ -27,17 +34,32 @@ export function parseCeoBuysFilters(
 ): CeoBuysFilters {
   const pageRaw = typeof params.page === "string" ? params.page : "1";
   const page = Math.max(1, Number.parseInt(pageRaw, 10) || 1);
-  return { page };
+  const qRaw = typeof params.q === "string" ? params.q.trim() : "";
+  return { page, q: qRaw || undefined };
 }
 
 function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
   return [...rows].sort((a, b) => {
-    const fd = String(b.filing_date ?? "").localeCompare(String(a.filing_date ?? ""));
+    const fd = String(b.filing_date ?? "").localeCompare(
+      String(a.filing_date ?? ""),
+    );
     if (fd !== 0) return fd;
     return String(b.transaction_date ?? "").localeCompare(
       String(a.transaction_date ?? ""),
     );
   });
+}
+
+function normalizeRow(row: CeoStockPurchaseRow): CeoStockPurchaseRow {
+  const rawCode =
+    row.transaction_code ??
+    (typeof row.raw_source === "object" &&
+    row.raw_source &&
+    "trans_code" in row.raw_source
+      ? String((row.raw_source as { trans_code?: string }).trans_code ?? "P")
+      : "P");
+  const code = rawCode.toUpperCase() === "S" ? "S" : "P";
+  return { ...row, transaction_code: code };
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -80,10 +102,59 @@ async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
       const id = row.source_id || row.id;
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      all.push(row);
+      all.push(normalizeRow(row));
     }
   }
   return sortRows(all);
+}
+
+async function fetchAllFromTable(): Promise<CeoStockPurchaseRow[] | null> {
+  const supabase = createBrowserSupabase();
+  const pageSize = 1000;
+  const all: CeoStockPurchaseRow[] = [];
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from("ceo_stock_purchases")
+      .select(
+        "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, transaction_code, created_at, raw_source",
+      )
+      .order("filing_date", { ascending: false, nullsFirst: false })
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      // Older schemas may lack transaction_code / raw_source.
+      if (/transaction_code|raw_source/i.test(error.message)) {
+        const fallback = await supabase
+          .from("ceo_stock_purchases")
+          .select(
+            "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at",
+          )
+          .order("filing_date", { ascending: false, nullsFirst: false })
+          .order("transaction_date", { ascending: false, nullsFirst: false })
+          .range(from, from + pageSize - 1);
+        if (fallback.error) return null;
+        const rows = ((fallback.data as CeoStockPurchaseRow[] | null) ?? []).map(
+          normalizeRow,
+        );
+        all.push(...rows);
+        if (rows.length < pageSize) break;
+        from += pageSize;
+        continue;
+      }
+      return null;
+    }
+
+    const rows = ((data as CeoStockPurchaseRow[] | null) ?? []).map(normalizeRow);
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+    if (from > 200_000) break;
+  }
+
+  return all;
 }
 
 export async function fetchCeoBuys(
@@ -97,79 +168,35 @@ export async function fetchCeoBuys(
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
       rows: [],
       page,
-      pageSize: PAGE_SIZE,
+      pageSize: CEO_PAGE_SIZE,
       totalCount: 0,
     };
   }
 
   try {
-    const supabase = createBrowserSupabase();
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    const { data, error, count } = await supabase
-      .from("ceo_stock_purchases")
-      .select(
-        "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at",
-        { count: "exact" },
-      )
-      .order("filing_date", { ascending: false, nullsFirst: false })
-      .order("transaction_date", { ascending: false, nullsFirst: false })
-      .range(from, to);
-
-    // Prefer Postgres when populated. An empty table still succeeds, so fall
-    // back to the public ceo-buys storage snapshot used for historical backfill.
-    const tableRows = (data as CeoStockPurchaseRow[] | null) ?? [];
-    const tableCount = count ?? 0;
-    if (!error && tableCount > 0) {
-      return {
-        configured: true,
-        error: null,
-        rows: tableRows,
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: tableCount,
-      };
+    let raw = await fetchAllFromTable();
+    if (!raw || raw.length === 0) {
+      raw = await fetchFromStorage();
     }
 
-    const all = await fetchFromStorage();
-    if (all.length > 0) {
-      return {
-        configured: true,
-        error: null,
-        rows: all.slice(from, from + PAGE_SIZE),
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: all.length,
-      };
-    }
-
-    if (!error) {
-      return {
-        configured: true,
-        error: null,
-        rows: tableRows,
-        page,
-        pageSize: PAGE_SIZE,
-        totalCount: tableCount,
-      };
-    }
+    const cards = filterCeoActivity(aggregateCeoActivity(raw), filters.q);
+    const from = (page - 1) * CEO_PAGE_SIZE;
 
     return {
       configured: true,
-      error: error.message,
-      rows: [],
+      error: null,
+      rows: cards.slice(from, from + CEO_PAGE_SIZE),
       page,
-      pageSize: PAGE_SIZE,
-      totalCount: 0,
+      pageSize: CEO_PAGE_SIZE,
+      totalCount: cards.length,
     };
   } catch (err) {
     return {
       configured: true,
-      error: err instanceof Error ? err.message : "Failed to load CEO buys",
+      error: err instanceof Error ? err.message : "Failed to load CEO activity",
       rows: [],
       page,
-      pageSize: PAGE_SIZE,
+      pageSize: CEO_PAGE_SIZE,
       totalCount: 0,
     };
   }

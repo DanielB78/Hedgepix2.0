@@ -120,5 +120,8 @@ export type CeoStockPurchaseRow = {
   filing_url: string | null;
   form_type: string;
   quarter: string;
+  /** SEC Form 4 TRANS_CODE. Missing on older storage rows → treat as P. */
+  transaction_code?: "P" | "S" | string | null;
+  raw_source?: Record<string, unknown> | null;
   created_at: string;
 };

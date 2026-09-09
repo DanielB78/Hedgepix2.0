@@ -21,6 +21,7 @@ export type CeoDbRow = {
   filing_url: string | null;
   form_type: string;
   quarter: string;
+  transaction_code: "P" | "S";
   raw_source: unknown;
   updated_at: string;
 };
@@ -66,6 +67,7 @@ export function toCeoDbRow(
     filing_url: purchase.filingUrl,
     form_type: purchase.formType,
     quarter: purchase.quarter,
+    transaction_code: purchase.transactionCode,
     raw_source: purchase.rawSource,
     updated_at: nowIso,
   };
