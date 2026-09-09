@@ -23,6 +23,8 @@ type Props = {
   view: FeedView;
   payload: FeedPayload;
   query?: string;
+  housePage?: number;
+  senatePage?: number;
 };
 
 type StockPanelState = {
@@ -96,7 +98,13 @@ function useScrollIntoView(active: boolean) {
   return ref;
 }
 
-export function FeedBoard({ view, payload, query }: Props) {
+export function FeedBoard({
+  view,
+  payload,
+  query,
+  housePage = 1,
+  senatePage = 1,
+}: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
   const requestId = useRef(0);
@@ -359,6 +367,10 @@ export function FeedBoard({ view, payload, query }: Props) {
             title="House"
             subtitle="Recent buys and sales"
             trades={houseTrades}
+            page={housePage}
+            pageParam="housePage"
+            query={query}
+            view={view}
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
@@ -394,6 +406,10 @@ export function FeedBoard({ view, payload, query }: Props) {
             title="Senate"
             subtitle="Recent buys and sales"
             trades={senateTrades}
+            page={senatePage}
+            pageParam="senatePage"
+            query={query}
+            view={view}
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
@@ -598,10 +614,28 @@ function StockPanel({
   );
 }
 
+function tradePageHref(opts: {
+  page: number;
+  pageParam: "housePage" | "senatePage";
+  query?: string;
+  view: FeedView;
+}): string {
+  const params = new URLSearchParams();
+  if (opts.view && opts.view !== "feed") params.set("view", opts.view);
+  if (opts.query) params.set("q", opts.query);
+  if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
+  const qs = params.toString();
+  return qs ? `/?${qs}` : "/";
+}
+
 function TradeActivityBlock({
   title,
   subtitle,
   trades,
+  page,
+  pageParam,
+  query,
+  view,
   stockPanel,
   onOpenTicker,
   onCloseStock,
@@ -610,25 +644,27 @@ function TradeActivityBlock({
   title: string;
   subtitle: string;
   trades: CongressTrade[];
+  page: number;
+  pageParam: "housePage" | "senatePage";
+  query?: string;
+  view: FeedView;
   stockPanel: StockPanelState | null;
   onOpenTicker: (ticker: string) => void;
   onCloseStock: () => void;
   onChamber: (ticker: string, chamber: "all" | Chamber) => void;
 }) {
   const pageSize = 2;
-  const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const slice = trades.slice(safePage * pageSize, safePage * pageSize + pageSize);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const slice = trades.slice(
+    (safePage - 1) * pageSize,
+    (safePage - 1) * pageSize + pageSize,
+  );
   const activeTicker =
     stockPanel &&
     slice.some((t) => (t.ticker ?? "").toUpperCase() === stockPanel.ticker)
       ? stockPanel
       : null;
-
-  useEffect(() => {
-    setPage(0);
-  }, [trades.length, trades[0]?.id]);
 
   return (
     <section className="animate-rise space-y-4">
@@ -708,32 +744,45 @@ function TradeActivityBlock({
 
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
             <p>
-              {safePage * pageSize + 1}–
-              {Math.min((safePage + 1) * pageSize, trades.length)} of{" "}
-              {trades.length}
+              {(safePage - 1) * pageSize + 1}–
+              {Math.min(safePage * pageSize, trades.length)} of {trades.length}
             </p>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={safePage <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
-              >
-                Previous
-              </button>
+              {safePage > 1 ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage - 1,
+                    pageParam,
+                    query,
+                    view,
+                  })}
+                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="rounded-full px-3 py-1.5 opacity-40">
+                  Previous
+                </span>
+              )}
               <span>
-                {safePage + 1} / {totalPages}
+                {safePage} / {totalPages}
               </span>
-              <button
-                type="button"
-                disabled={safePage >= totalPages - 1}
-                onClick={() =>
-                  setPage((p) => Math.min(totalPages - 1, p + 1))
-                }
-                className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
-              >
-                Next
-              </button>
+              {safePage < totalPages ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage + 1,
+                    pageParam,
+                    query,
+                    view,
+                  })}
+                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="rounded-full px-3 py-1.5 opacity-40">Next</span>
+              )}
             </div>
           </div>
         </>

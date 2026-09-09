@@ -9,10 +9,17 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function parsePage(value: string | string[] | undefined): number {
+  const raw = typeof value === "string" ? value : "1";
+  return Math.max(1, Number.parseInt(raw, 10) || 1);
+}
+
 export default async function HomePage({ searchParams }: PageProps) {
   const params = await searchParams;
   const view = parseFeedView(params.view);
   const q = typeof params.q === "string" ? params.q.trim() : "";
+  const housePage = parsePage(params.housePage);
+  const senatePage = parsePage(params.senatePage);
   const payload = await fetchFeedPayload();
 
   return (
@@ -22,7 +29,13 @@ export default async function HomePage({ searchParams }: PageProps) {
         <BrandMark />
         <TopTabs active={view} />
         <FeedSearch q={q || undefined} view={view === "feed" ? undefined : view} />
-        <FeedBoard view={view} payload={payload} query={q || undefined} />
+        <FeedBoard
+          view={view}
+          payload={payload}
+          query={q || undefined}
+          housePage={housePage}
+          senatePage={senatePage}
+        />
       </main>
     </div>
   );
