@@ -116,8 +116,8 @@ async function fetchFromStorage(limitQuarters = 8): Promise<CeoStockPurchaseRow[
 
 async function fetchFromTable(q?: string): Promise<CeoStockPurchaseRow[] | null> {
   const supabase = createBrowserSupabase();
-  const pageSize = 1000;
-  const maxRows = q ? 5000 : 2500;
+  const pageSize = q ? 1000 : 800;
+  const maxRows = q ? 3000 : 800;
   const all: CeoStockPurchaseRow[] = [];
   let from = 0;
   const cutoff = new Date();
@@ -179,7 +179,8 @@ export async function fetchCeoBuys(
     if (filters.q) {
       raw = await fetchFromTable(filters.q);
       if (!raw || raw.length === 0) {
-        raw = await fetchFromStorage(26);
+        // Keep storage fallback tiny to avoid OOM on multi-MB quarter files.
+        raw = await fetchFromStorage(2);
         const q = filters.q.toLowerCase();
         raw = raw.filter(
           (row) =>
@@ -189,10 +190,10 @@ export async function fetchCeoBuys(
         );
       }
     } else {
-      // Prefer recent storage quarters for the default 2-up feed (fast + has sales codes).
-      raw = await fetchFromStorage(6);
-      if (raw.length === 0) {
-        raw = (await fetchFromTable()) ?? [];
+      // Prefer Postgres recent window; avoid loading multi-MB storage blobs by default.
+      raw = await fetchFromTable();
+      if (!raw || raw.length === 0) {
+        raw = await fetchFromStorage(2);
       }
     }
 
