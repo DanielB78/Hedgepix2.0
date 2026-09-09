@@ -23,6 +23,9 @@ export type CeoBuysResult = {
 /** Two cards per page to match House/Senate layout. */
 export const CEO_PAGE_SIZE = 2;
 
+const SELECT_COLUMNS =
+  "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source";
+
 function publicObjectUrl(objectPath: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   if (!base) return null;
@@ -51,19 +54,21 @@ function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
 }
 
 function normalizeRow(row: CeoStockPurchaseRow): CeoStockPurchaseRow {
-  const rawCode =
-    row.transaction_code ??
-    (typeof row.raw_source === "object" &&
+  const fromRaw =
+    typeof row.raw_source === "object" &&
     row.raw_source &&
     "trans_code" in row.raw_source
-      ? String((row.raw_source as { trans_code?: string }).trans_code ?? "P")
-      : "P");
-  const code = rawCode.toUpperCase() === "S" ? "S" : "P";
+      ? String(
+          (row.raw_source as { trans_code?: string }).trans_code ?? "",
+        ).toUpperCase()
+      : "";
+  const fromCol = String(row.transaction_code ?? "").toUpperCase();
+  const code = fromCol === "S" || fromRaw === "S" ? "S" : "P";
   return { ...row, transaction_code: code };
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url, { next: { revalidate: 120 } });
+  const res = await fetch(url, { next: { revalidate: 300 } });
   if (!res.ok) return null;
   try {
     return (await res.json()) as T;
@@ -72,7 +77,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
+async function fetchFromStorage(limitQuarters = 8): Promise<CeoStockPurchaseRow[]> {
   const quartersUrl = publicObjectUrl("quarters.json");
   if (!quartersUrl) return [];
   const quarters = await fetchJson<Record<string, { status?: string }>>(
@@ -84,7 +89,8 @@ async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
     .filter(([, meta]) => meta?.status === "success")
     .map(([q]) => q)
     .sort()
-    .reverse();
+    .reverse()
+    .slice(0, limitQuarters);
 
   const chunks = await Promise.all(
     successQuarters.map(async (quarter) => {
@@ -108,42 +114,37 @@ async function fetchFromStorage(): Promise<CeoStockPurchaseRow[]> {
   return sortRows(all);
 }
 
-async function fetchAllFromTable(): Promise<CeoStockPurchaseRow[] | null> {
+async function fetchFromTable(q?: string): Promise<CeoStockPurchaseRow[] | null> {
   const supabase = createBrowserSupabase();
   const pageSize = 1000;
+  const maxRows = q ? 5000 : 2500;
   const all: CeoStockPurchaseRow[] = [];
   let from = 0;
+  const cutoff = new Date();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - 9);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
 
   for (;;) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("ceo_stock_purchases")
-      .select(
-        "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, transaction_code, created_at, raw_source",
-      )
+      .select(SELECT_COLUMNS)
       .order("filing_date", { ascending: false, nullsFirst: false })
       .order("transaction_date", { ascending: false, nullsFirst: false })
       .range(from, from + pageSize - 1);
 
-    if (error) {
-      // Older schemas may lack transaction_code / raw_source.
-      if (/transaction_code|raw_source/i.test(error.message)) {
-        const fallback = await supabase
-          .from("ceo_stock_purchases")
-          .select(
-            "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source",
-          )
-          .order("filing_date", { ascending: false, nullsFirst: false })
-          .order("transaction_date", { ascending: false, nullsFirst: false })
-          .range(from, from + pageSize - 1);
-        if (fallback.error) return null;
-        const rows = ((fallback.data as CeoStockPurchaseRow[] | null) ?? []).map(
-          normalizeRow,
+    if (q) {
+      const safe = q.replace(/[%(),]/g, " ").trim();
+      if (safe) {
+        query = query.or(
+          `ceo_name.ilike.%${safe}%,ticker.ilike.%${safe}%,issuer_name.ilike.%${safe}%`,
         );
-        all.push(...rows);
-        if (rows.length < pageSize) break;
-        from += pageSize;
-        continue;
       }
+    } else {
+      query = query.gte("filing_date", cutoffDate);
+    }
+
+    const { data, error } = await query;
+    if (error) {
       return null;
     }
 
@@ -151,7 +152,7 @@ async function fetchAllFromTable(): Promise<CeoStockPurchaseRow[] | null> {
     all.push(...rows);
     if (rows.length < pageSize) break;
     from += pageSize;
-    if (from > 200_000) break;
+    if (from >= maxRows) break;
   }
 
   return all;
@@ -174,9 +175,20 @@ export async function fetchCeoBuys(
   }
 
   try {
-    let raw = await fetchAllFromTable();
+    let raw = await fetchFromTable(filters.q);
     if (!raw || raw.length === 0) {
-      raw = await fetchFromStorage();
+      raw = await fetchFromStorage(filters.q ? 26 : 8);
+      if (filters.q) {
+        // Storage path still needs client-side name/ticker filter.
+        raw = raw.filter((row) => {
+          const q = filters.q!.toLowerCase();
+          return (
+            row.ceo_name.toLowerCase().includes(q) ||
+            (row.ticker ?? "").toLowerCase().includes(q) ||
+            (row.issuer_name ?? "").toLowerCase().includes(q)
+          );
+        });
+      }
     }
 
     const cards = filterCeoActivity(aggregateCeoActivity(raw), filters.q);
