@@ -175,19 +175,24 @@ export async function fetchCeoBuys(
   }
 
   try {
-    let raw = await fetchFromTable(filters.q);
-    if (!raw || raw.length === 0) {
-      raw = await fetchFromStorage(filters.q ? 26 : 8);
-      if (filters.q) {
-        // Storage path still needs client-side name/ticker filter.
-        raw = raw.filter((row) => {
-          const q = filters.q!.toLowerCase();
-          return (
+    let raw: CeoStockPurchaseRow[] | null = null;
+    if (filters.q) {
+      raw = await fetchFromTable(filters.q);
+      if (!raw || raw.length === 0) {
+        raw = await fetchFromStorage(26);
+        const q = filters.q.toLowerCase();
+        raw = raw.filter(
+          (row) =>
             row.ceo_name.toLowerCase().includes(q) ||
             (row.ticker ?? "").toLowerCase().includes(q) ||
-            (row.issuer_name ?? "").toLowerCase().includes(q)
-          );
-        });
+            (row.issuer_name ?? "").toLowerCase().includes(q),
+        );
+      }
+    } else {
+      // Prefer recent storage quarters for the default 2-up feed (fast + has sales codes).
+      raw = await fetchFromStorage(6);
+      if (raw.length === 0) {
+        raw = (await fetchFromTable()) ?? [];
       }
     }
 
