@@ -22,7 +22,10 @@ during updates, then read from Supabase by the website.
 
 - **Latest** — filterable disclosure feed (member, ticker, chamber, type) with 50-row pagination and same-member/same-disclosure-date groups
 - **Trending** — tickers ranked by distinct members active (`disclosure_date` window: 7 / 30 / 90 days; All / Buys / Sales)
-- **CEO Buys** — SEC Form 4 open-market CEO stock purchases (`npm run backfill-ceo-buys`)
+- **CEO Buys** — SEC Form 4 open-market CEO stock purchases and sales (`npm run backfill-ceo-buys`)
+- Apply migrations:
+   - `supabase/migrations/20260908160000_ceo_stock_purchases.sql` (CEO activity)
+   - `supabase/migrations/20260909120000_ceo_transaction_code.sql` (purchase/sale code)
 - **Stock detail** (`/stocks/[ticker]`) — cached daily closing-price chart with congressional purchase/sale markers on **transaction date**
 - **Member pages** (`/members/[slug]`) — activity feed and estimated current stock holdings since 2012
 
