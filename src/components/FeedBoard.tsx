@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
 import type {
   FeedPayload,
@@ -269,14 +269,31 @@ export function FeedBoard({ view, payload, query }: Props) {
   const showHouse = view === "feed" || view === "house";
   const showSenate = view === "feed" || view === "senate";
   const trendingLimit = view === "trending" ? 20 : 8;
-  const trendingRows = payload.trending.filter(filterTicker);
-  const houseTrades = payload.recentHouse.filter(filterTrade);
-  const senateTrades = payload.recentSenate.filter(filterTrade);
-  const houseMembers = payload.houseMembers.filter((member) =>
-    q ? member.name.toLowerCase().includes(q) : true,
+  const trendingRows = useMemo(
+    () => payload.trending.filter(filterTicker),
+    [filterTicker, payload.trending],
   );
-  const senateMembers = payload.senateMembers.filter((member) =>
-    q ? member.name.toLowerCase().includes(q) : true,
+  const houseTrades = useMemo(
+    () => payload.recentHouse.filter(filterTrade),
+    [filterTrade, payload.recentHouse],
+  );
+  const senateTrades = useMemo(
+    () => payload.recentSenate.filter(filterTrade),
+    [filterTrade, payload.recentSenate],
+  );
+  const houseMembers = useMemo(
+    () =>
+      payload.houseMembers.filter((member) =>
+        q ? member.name.toLowerCase().includes(q) : true,
+      ),
+    [payload.houseMembers, q],
+  );
+  const senateMembers = useMemo(
+    () =>
+      payload.senateMembers.filter((member) =>
+        q ? member.name.toLowerCase().includes(q) : true,
+      ),
+    [payload.senateMembers, q],
   );
 
   return (
@@ -611,7 +628,7 @@ function TradeActivityBlock({
 
   useEffect(() => {
     setPage(0);
-  }, [trades]);
+  }, [trades.length, trades[0]?.id]);
 
   return (
     <section className="animate-rise space-y-4">
@@ -757,7 +774,7 @@ function MemberBlock({
 
   useEffect(() => {
     setPage(0);
-  }, [members]);
+  }, [members.length, members[0]?.slug]);
 
   return (
     <section className="animate-rise space-y-4">
