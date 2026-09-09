@@ -130,7 +130,7 @@ async function fetchAllFromTable(): Promise<CeoStockPurchaseRow[] | null> {
         const fallback = await supabase
           .from("ceo_stock_purchases")
           .select(
-            "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at",
+            "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source",
           )
           .order("filing_date", { ascending: false, nullsFirst: false })
           .order("transaction_date", { ascending: false, nullsFirst: false })
