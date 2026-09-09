@@ -282,7 +282,7 @@ export async function fetchStockPreview(
     .eq("ticker", symbol)
     .order("disclosure_date", { ascending: false, nullsFirst: false })
     .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(40);
+    .limit(400);
 
   if (chamber !== "all") {
     tradesQuery = tradesQuery.eq("chamber", chamber);
@@ -306,7 +306,7 @@ export async function fetchStockPreview(
       .eq("ticker", symbol)
       .order("disclosure_date", { ascending: false, nullsFirst: false })
       .order("transaction_date", { ascending: false, nullsFirst: false })
-      .limit(80);
+      .limit(400);
     if (chamber !== "all") fallback = fallback.eq("chamber", chamber);
     const fb = await fallback;
     trades = applyListedEquityFallback(
@@ -315,12 +315,10 @@ export async function fetchStockPreview(
     ).rows;
   }
 
-  const topTrades = trades
-    .filter(
-      (t) =>
-        t.transaction_type === "purchase" || t.transaction_type === "sale",
-    )
-    .slice(0, 5);
+  const topTrades = trades.filter(
+    (t) =>
+      t.transaction_type === "purchase" || t.transaction_type === "sale",
+  );
 
   return {
     ticker: symbol,

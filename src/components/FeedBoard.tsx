@@ -545,55 +545,64 @@ function StockPanel({
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
-        <aside className="border-b border-[color:var(--line)] p-5 lg:border-b-0 lg:border-r">
-          <div className="mb-4 flex gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
-            {(
-              [
-                ["all", "All"],
-                ["house", "House"],
-                ["senate", "Senate"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChamber(value);
-                }}
-                className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
-                  state.chamber === value
-                    ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                    : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-            Top 5 latest
-          </p>
-          {state.loading ? (
-            <p className="text-sm text-[color:var(--fog-dim)]">Loading…</p>
-          ) : state.error ? (
-            <p className="text-sm text-[color:var(--coral)]">{state.error}</p>
-          ) : state.data?.topTrades.length ? (
-            state.data.topTrades.map((trade) => (
-              <TradeRow key={trade.id} trade={trade} />
-            ))
-          ) : (
-            <p className="text-sm text-[color:var(--fog-dim)]">
-              No matching trades.
+      <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+        <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
+          <div className="shrink-0 space-y-3 p-5 pb-3">
+            <div className="flex gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+              {(
+                [
+                  ["all", "All"],
+                  ["house", "House"],
+                  ["senate", "Senate"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onChamber(value);
+                  }}
+                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
+                    state.chamber === value
+                      ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
+                      : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+              Members
+              {state.data?.topTrades.length
+                ? ` · ${state.data.topTrades.length}`
+                : ""}
             </p>
-          )}
-          <Link
-            href={`/stocks/${encodeURIComponent(state.ticker)}`}
-            className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
-          >
-            More
-          </Link>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5">
+            {state.loading ? (
+              <p className="text-sm text-[color:var(--fog-dim)]">Loading…</p>
+            ) : state.error ? (
+              <p className="text-sm text-[color:var(--coral)]">{state.error}</p>
+            ) : state.data?.topTrades.length ? (
+              state.data.topTrades.map((trade) => (
+                <TradeRow key={trade.id} trade={trade} />
+              ))
+            ) : (
+              <p className="text-sm text-[color:var(--fog-dim)]">
+                No matching trades.
+              </p>
+            )}
+          </div>
+          <div className="shrink-0 p-5 pt-3">
+            <Link
+              href={`/stocks/${encodeURIComponent(state.ticker)}`}
+              className="inline-flex w-full items-center justify-center rounded-full border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
+            >
+              Open full view
+            </Link>
+          </div>
         </aside>
 
         <div className="p-4 sm:p-5">

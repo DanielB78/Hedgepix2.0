@@ -1,9 +1,6 @@
-import Link from "next/link";
 import { MainNav } from "@/components/MainNav";
-import { PriceChart } from "@/components/PriceChart";
 import { SiteHeader } from "@/components/SiteHeader";
-import { StockRangeControls } from "@/components/StockRangeControls";
-import { TradeTable } from "@/components/TradeTable";
+import { StockDetailBoard } from "@/components/StockDetailBoard";
 import { fetchStockPage, parseChartRange } from "@/lib/prices";
 import { fetchSyncState } from "@/lib/trades";
 import { notFound } from "next/navigation";
@@ -16,32 +13,11 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function cleanAssetName(asset: string | null) {
-  if (!asset) return null;
-  return asset
-    .replace(/\s*-\s*Common Stock.*$/i, "")
-    .replace(/\s*Common Stock.*$/i, "")
-    .trim();
-}
-
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function formatPct(value: number) {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { ticker: rawTicker } = await params;
   const ticker = decodeURIComponent(rawTicker ?? "").trim().toUpperCase();
   return {
-    title: ticker ? `${ticker} · Congress Trades` : "Congress Trades",
+    title: ticker ? `${ticker} · hedgpix` : "hedgpix",
   };
 }
 
@@ -52,8 +28,9 @@ export default async function StockPage({ params, searchParams }: PageProps) {
 
   const query = await searchParams;
   const range = parseChartRange(query.range);
+  // Load full history so the interactive chart can zoom / filter client-side.
   const [stock, syncState] = await Promise.all([
-    fetchStockPage(ticker, range),
+    fetchStockPage(ticker, "all"),
     fetchSyncState(),
   ]);
 
@@ -72,64 +49,21 @@ export default async function StockPage({ params, searchParams }: PageProps) {
       : null;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6">
+    <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
       <SiteHeader syncState={syncState} compact />
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/?view=feed"
-          className="text-sm text-[color:var(--fog-dim)] transition-opacity duration-200 hover:text-[color:var(--fog)]"
-        >
-          ← Feed
-        </Link>
+      <div className="flex items-center justify-end">
         <MainNav />
       </div>
-
-      {stock.error ? (
-        <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--rust)]">
-          {stock.error}
-        </div>
-      ) : null}
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-4xl font-medium tracking-tight text-[color:var(--deep-navy)]">
-            {stock.ticker}
-          </h2>
-          <p className="mt-1 text-[color:var(--muted)]">
-            {cleanAssetName(stock.asset) ?? "Listed security"}
-          </p>
-        </div>
-
-        {latest != null ? (
-          <div className="flex items-baseline gap-3">
-            <div className="text-3xl font-medium tracking-tight text-[color:var(--deep-navy)]">
-              {formatMoney(latest)}
-            </div>
-            {changePct != null ? (
-              <div
-                className={
-                  changePct >= 0
-                    ? "text-sm text-[color:var(--orange)]"
-                    : "text-sm text-[color:var(--rust)]"
-                }
-              >
-                {formatPct(changePct)}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <StockRangeControls ticker={stock.ticker} range={range} />
-      </section>
-
-      <PriceChart bars={stock.bars} trades={stock.trades} />
-
-      <section className="space-y-4">
-        <h3 className="text-lg font-medium text-[color:var(--deep-navy)]">
-          Recent activity
-        </h3>
-        <TradeTable trades={stock.trades} />
-      </section>
+      <StockDetailBoard
+        ticker={stock.ticker}
+        asset={stock.asset}
+        bars={stock.bars}
+        trades={stock.trades}
+        range={range}
+        latest={latest}
+        changePct={changePct}
+        error={stock.error}
+      />
     </main>
   );
 }

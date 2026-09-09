@@ -1,17 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #071014;
-  --panel: #0e181d;
-  --panel-elevated: #142229;
-  --fog: #d5e0db;
-  --fog-dim: #8a9a94;
-  --mint: #5dffb0;
-  --mint-deep: #1f8f5f;
-  --coral: #ff6b5b;
-  --gold: #e8c56a;
-  --line: color-mix(in srgb, var(--mint) 14%, transparent);
-  --glow: color-mix(in srgb, var(--mint) 18%, transparent);
+  /* Ocean theme — deep blues + aquamarine */
+  --ink: #020d18;
+  --panel: #0a1f33;
+  --panel-elevated: #0f2f4a;
+  --fog: #dff4f8;
+  --fog-dim: #7eacbc;
+  --mint: #3dffe8;
+  --mint-deep: #1a9e8f;
+  --aqua: #5ce1e6;
+  --teal: #2ec4b6;
+  --coral: #ff7a6e;
+  --gold: #7ed7c1;
+  --line: color-mix(in srgb, var(--aqua) 16%, transparent);
+  --glow: color-mix(in srgb, var(--mint) 22%, transparent);
 
   --background: var(--ink);
   --foreground: var(--fog);
@@ -22,12 +25,12 @@
   --accent-sale: var(--coral);
   --radius-card: 18px;
   --radius-control: 999px;
-  --shadow-soft: 0 18px 50px color-mix(in srgb, black 45%, transparent);
+  --shadow-soft: 0 18px 50px color-mix(in srgb, #000814 55%, transparent);
 
-  /* Legacy aliases used by PriceChart and detail pages */
-  --deep-navy: var(--fog);
+  /* Legacy aliases — keep chart/detail pages readable */
+  --deep-navy: var(--panel-elevated);
   --navy: var(--fog-dim);
-  --oatmeal: color-mix(in srgb, var(--fog) 28%, transparent);
+  --oatmeal: color-mix(in srgb, var(--aqua) 28%, transparent);
   --cream: var(--fog);
   --rust: var(--coral);
   --orange: var(--mint);
@@ -42,15 +45,17 @@
   --color-mint: var(--mint);
   --color-coral: var(--coral);
   --color-gold: var(--gold);
+  --color-aqua: var(--aqua);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
 
 body {
   background:
-    radial-gradient(1200px 600px at 10% -10%, color-mix(in srgb, var(--mint) 16%, transparent), transparent 55%),
-    radial-gradient(900px 500px at 90% 0%, color-mix(in srgb, var(--coral) 10%, transparent), transparent 50%),
-    linear-gradient(180deg, #0a1216 0%, var(--ink) 40%, #05090b 100%);
+    radial-gradient(1100px 620px at 8% -12%, color-mix(in srgb, #0b4f6c 55%, transparent), transparent 58%),
+    radial-gradient(900px 520px at 92% 4%, color-mix(in srgb, var(--mint) 14%, transparent), transparent 52%),
+    radial-gradient(700px 420px at 50% 110%, color-mix(in srgb, var(--teal) 12%, transparent), transparent 55%),
+    linear-gradient(180deg, #031525 0%, var(--ink) 42%, #01070f 100%);
   background-attachment: fixed;
   color: var(--fog);
   font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
@@ -66,8 +71,8 @@ body::before {
     linear-gradient(var(--line) 1px, transparent 1px),
     linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
-  opacity: 0.35;
+  mask-image: radial-gradient(ellipse at center, black 18%, transparent 78%);
+  opacity: 0.28;
   z-index: 0;
 }
 
@@ -78,7 +83,7 @@ body > * {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--mint) 40%, transparent);
+  background: color-mix(in srgb, var(--aqua) 42%, transparent);
   color: var(--ink);
 }
 
