@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { LandingPage } from "@/components/LandingPage";
 
+export const dynamic = "force-dynamic";
+
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };

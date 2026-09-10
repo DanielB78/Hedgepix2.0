@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Manrope, Syne } from "next/font/google";
-import { AuthProvider } from "@/components/AuthProvider";
+import { Providers } from "@/components/Providers";
 import "./globals.css";
+
+// Never statically prerender the shell — auth + public env differ per deploy.
+export const dynamic = "force-dynamic";
 
 const display = Syne({
   variable: "--font-display",
@@ -28,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${display.variable} ${body.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
-        <AuthProvider>{children}</AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

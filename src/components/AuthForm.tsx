@@ -8,7 +8,7 @@ import { useAuth } from "@/components/AuthProvider";
 type Mode = "login" | "signup";
 
 export function AuthForm({ mode }: { mode: Mode }) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, configured, loading } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,6 +30,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
     }
     router.push("/app?view=feed");
     router.refresh();
+  }
+
+  if (!loading && !configured) {
+    return (
+      <p className="mx-auto max-w-md text-center text-sm text-[color:var(--coral)]">
+        Auth is unavailable because Supabase public env vars are not configured
+        for this deployment.
+      </p>
+    );
   }
 
   return (
@@ -66,7 +75,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       ) : null}
       <button
         type="submit"
-        disabled={busy}
+        disabled={busy || loading}
         className="w-full rounded-full bg-[color:var(--mint)] px-4 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:opacity-90 disabled:opacity-60"
       >
         {busy

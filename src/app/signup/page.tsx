@@ -2,6 +2,8 @@ import Link from "next/link";
 import { AuthForm } from "@/components/AuthForm";
 import { SideNav } from "@/components/AppChrome";
 
+export const dynamic = "force-dynamic";
+
 export default function SignupPage() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-10 sm:px-6">
