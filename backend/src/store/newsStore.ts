@@ -49,7 +49,7 @@ export async function upsertNewsArticles(
     if (error) {
       stats.errors += 1;
       stats.errorMessages.push(error.message);
-      continue;
+      return stats;
     }
     for (const row of data ?? []) {
       existing.add(String(row.source_hash));
