@@ -3,24 +3,26 @@ import type { FeedView } from "@/lib/feed";
 import { viewHref as hrefForView } from "@/lib/format";
 import { AuthControls } from "@/components/AuthControls";
 
-export type ChromeNavKey = FeedView | "ceo-buys" | "landing";
+export type ChromeNavKey = FeedView | "ceo-buys" | "news" | "landing";
 
 function navHref(key: ChromeNavKey) {
   if (key === "landing") return "/";
   if (key === "ceo-buys") return "/ceo-buys";
+  if (key === "news") return "/news";
   return hrefForView(key);
 }
 
 const NAV: Array<{
   key: Exclude<ChromeNavKey, "landing">;
   label: string;
-  icon: "home" | "trend" | "house" | "senate" | "ceo";
+  icon: "home" | "trend" | "house" | "senate" | "ceo" | "news";
 }> = [
   { key: "feed", label: "Feed", icon: "home" },
   { key: "trending", label: "Trending", icon: "trend" },
   { key: "house", label: "House", icon: "house" },
   { key: "senate", label: "Senate", icon: "senate" },
   { key: "ceo-buys", label: "CEO", icon: "ceo" },
+  { key: "news", label: "News", icon: "news" },
 ];
 
 function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
@@ -63,6 +65,17 @@ function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
       <svg {...common}>
         <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
         <path d="M4 20c1.5-3.5 4.2-5 8-5s6.5 1.5 8 5" />
+      </svg>
+    );
+  }
+  if (icon === "news") {
+    return (
+      <svg {...common}>
+        <path d="M4 5h12a2 2 0 0 1 2 2v12H6a2 2 0 0 1-2-2V5Z" />
+        <path d="M18 7h2a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3h-1" />
+        <path d="M8 9h6" />
+        <path d="M8 13h6" />
+        <path d="M8 17h4" />
       </svg>
     );
   }

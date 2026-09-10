@@ -36,6 +36,7 @@ during updates, then read from Supabase by the website.
    - `supabase/migrations/20260901150000_member_holdings.sql`
    - `supabase/migrations/20260908160000_ceo_stock_purchases.sql` (CEO activity)
    - `supabase/migrations/20260909120000_ceo_transaction_code.sql` (purchase vs sale)
+   - `supabase/migrations/20260910180000_news_articles.sql` (offline GDELT news)
 3. Configure the backend updater:
    ```bash
    cd backend
@@ -57,7 +58,9 @@ Kadoa (historical)  ──backfill-kadoa──▶  congress_trades
 InsiderWatch (new)  ──update-data────▶  congress_trades
                                               │
                                               ├─▶ holdings
-                                              └─▶ Alpaca missing prices
+                                              ├─▶ Alpaca missing prices
+                                              └─▶ GDELT → news_articles
+Website News tab  ◀── reads Supabase only (never calls GDELT live)
 ```
 
 Only House + Senate **ordinary listed stocks** are kept. Bonds, ETFs, funds,
@@ -88,7 +91,8 @@ npm run update-data
 4. Keeps House/Senate stocks only
 5. Upserts into Supabase
 6. Rebuilds holdings + missing Alpaca prices
-7. Advances `last_success_at` only on full success
+7. Fetches recent GDELT finance articles into `news_articles` (soft-fail if GDELT is down)
+8. Advances `last_success_at` only on full Congress import success (news failure does not roll back trades/prices)
 
 Useful env vars (backend `.env`):
 

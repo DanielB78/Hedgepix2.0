@@ -8,8 +8,9 @@
     "backfill-kadoa": "tsx src/backfill-kadoa.ts",
     "backfill-ceo-buys": "tsx src/backfill-ceo-buys.ts",
     "apply-ceo-buys-schema": "tsx src/apply-ceo-buys-schema.ts",
+    "apply-news-schema": "tsx src/apply-news-schema.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts"
+    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts && tsx src/__tests__/gdelt-unit.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

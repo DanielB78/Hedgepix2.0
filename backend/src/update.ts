@@ -14,6 +14,8 @@ import {
   startSyncRun,
   upsertTrades,
 } from "./store/supabaseStore.js";
+import { fetchGdeltArticles } from "./news/gdelt.js";
+import { upsertNewsArticles } from "./store/newsStore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +29,56 @@ type PriceSummary = {
   errors: number;
   errorMessages?: string[];
 };
+
+type NewsSummary = {
+  status: "SUCCESS" | "FAILED";
+  fetched: number;
+  inserted: number;
+  duplicatesSkipped: number;
+  error: string | null;
+};
+
+async function syncGdeltNews(
+  supabase: ReturnType<typeof createSupabase>,
+): Promise<NewsSummary> {
+  try {
+    const fetchResult = await fetchGdeltArticles({ maxRecords: 40 });
+    if (fetchResult.status === "FAILED") {
+      return {
+        status: "FAILED",
+        fetched: 0,
+        inserted: 0,
+        duplicatesSkipped: 0,
+        error: fetchResult.error,
+      };
+    }
+    const upsert = await upsertNewsArticles(supabase, fetchResult.articles);
+    if (upsert.errors > 0) {
+      return {
+        status: "FAILED",
+        fetched: fetchResult.fetched,
+        inserted: upsert.inserted,
+        duplicatesSkipped: upsert.duplicatesSkipped,
+        error: upsert.errorMessages[0] ?? "News upsert failed",
+      };
+    }
+    return {
+      status: "SUCCESS",
+      fetched: fetchResult.fetched,
+      inserted: upsert.inserted,
+      duplicatesSkipped: upsert.duplicatesSkipped,
+      error: null,
+    };
+  } catch (err) {
+    return {
+      status: "FAILED",
+      fetched: 0,
+      inserted: 0,
+      duplicatesSkipped: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
 
 async function syncPricesAfterTrades(
   supabase: ReturnType<typeof createSupabase>,
@@ -179,8 +231,31 @@ async function main(): Promise<void> {
       console.log("Status: FAILED");
     }
     console.log("");
+
+    console.log("Fetching GDELT finance news…");
+    const news = await syncGdeltNews(supabase);
+    console.log("NEWS");
+    if (news.status === "SUCCESS") {
+      console.log(`GDELT articles fetched: ${news.fetched}`);
+      console.log(`New articles stored: ${news.inserted}`);
+      console.log(`Duplicates skipped: ${news.duplicatesSkipped}`);
+    } else {
+      console.log("Status: FAILED");
+      if (news.error) console.log(`Error: ${news.error}`);
+      console.log(
+        `GDELT articles fetched: ${news.fetched} (Congress/prices left unchanged)`,
+      );
+    }
+    console.log("");
+
     console.log("========================================");
-    console.log("CONGRESS TRADE UPDATE COMPLETE");
+    console.log("UPDATE SUMMARY");
+    console.log("========================================");
+    console.log("Congress updates: SUCCESS");
+    console.log(
+      `Stock prices: ${prices.status === "FAILED" ? "FAILED" : "SUCCESS"}`,
+    );
+    console.log(`GDELT news: ${news.status}`);
     console.log("========================================");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
