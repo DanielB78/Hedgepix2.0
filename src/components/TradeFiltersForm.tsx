@@ -90,7 +90,7 @@ export function TradeFiltersForm({ filters }: Props) {
               Apply
             </button>
             <Link
-              href="/"
+              href="/app"
               className="rounded-[14px] px-4 py-2 text-sm text-[color:var(--navy)] hover:bg-[color:var(--surface-strong)]"
             >
               Clear

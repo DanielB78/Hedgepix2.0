@@ -26,7 +26,7 @@ export function SiteHeader({ syncState, compact = false }: Props) {
     <header className="flex items-end justify-between gap-4">
       <div className="min-w-0 space-y-1">
         <Link
-          href="/?view=feed"
+          href="/app?view=feed"
           className="text-[13px] font-semibold tracking-[0.28em] text-[color:var(--mint)] uppercase"
         >
           hedgpix

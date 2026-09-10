@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { FollowButton } from "@/components/FollowButton";
 import { PriceChart } from "@/components/PriceChart";
 import type { ChartRange, CongressTrade, StockPriceBar } from "@/lib/types";
 import {
@@ -135,8 +136,9 @@ export function StockDetailBoard({
               ) : null}
             </div>
           ) : null}
+          <FollowButton type="ticker" targetKey={ticker} label={ticker} />
           <Link
-            href="/?view=feed"
+            href="/app?view=feed"
             className="rounded-full px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
           >
             ← Feed

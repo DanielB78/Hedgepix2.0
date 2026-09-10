@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
+import { FollowingFeed } from "@/components/FollowingFeed";
+import { useAuth } from "@/components/AuthProvider";
 import type {
   FeedPayload,
   FeedView,
@@ -109,6 +111,8 @@ export function FeedBoard({
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
   const requestId = useRef(0);
   const q = query?.trim().toLowerCase() ?? "";
+  const { user, loading: authLoading } = useAuth();
+  const personalFeed = view === "feed" && !!user;
 
   const filterTrade = useCallback(
     (trade: CongressTrade) => {
@@ -273,9 +277,12 @@ export function FeedBoard({
     }
   }, []);
 
-  const showTrending = view === "feed" || view === "trending";
-  const showHouse = view === "feed" || view === "house";
-  const showSenate = view === "feed" || view === "senate";
+  const showTrending =
+    view === "trending" || (view === "feed" && !user && !authLoading);
+  const showHouse =
+    view === "house" || (view === "feed" && !user && !authLoading);
+  const showSenate =
+    view === "senate" || (view === "feed" && !user && !authLoading);
   const trendingLimit = view === "trending" ? 20 : 8;
   const trendingRows = useMemo(
     () => payload.trending.filter(filterTicker),
@@ -324,6 +331,47 @@ export function FeedBoard({
             Search CEO activity →
           </Link>
         </p>
+      ) : null}
+
+      {personalFeed || (view === "feed" && authLoading) ? (
+        <section className="animate-rise space-y-4">
+          <SectionTitle
+            title="Following"
+            subtitle="Stocks and people you follow"
+          />
+          <FollowingFeed
+            onOpenTicker={(ticker) => toggleStock(ticker)}
+            onOpenMember={(slug) => toggleMember(slug)}
+          />
+          {stockPanel ? (
+            <StockPanel
+              state={stockPanel}
+              onClose={() => setStockPanel(null)}
+              onChamber={(c) => void openStock(stockPanel.ticker, c)}
+            />
+          ) : null}
+          {memberPanel ? (
+            <MemberPanel
+              state={memberPanel}
+              onClose={() => setMemberPanel(null)}
+              onOpenTicker={(ticker) =>
+                void openMemberStock(memberPanel.slug, ticker)
+              }
+              onBackNested={() =>
+                setMemberPanel((p) =>
+                  p
+                    ? {
+                        ...p,
+                        nestedTicker: null,
+                        nested: null,
+                        nestedLoading: false,
+                      }
+                    : p,
+                )
+              }
+            />
+          ) : null}
+        </section>
       ) : null}
 
       {showTrending ? (
@@ -634,7 +682,7 @@ function tradePageHref(opts: {
   if (opts.query) params.set("q", opts.query);
   if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
   const qs = params.toString();
-  return qs ? `/?${qs}` : "/";
+  return qs ? `/app?${qs}` : "/app";
 }
 
 function TradeActivityBlock({

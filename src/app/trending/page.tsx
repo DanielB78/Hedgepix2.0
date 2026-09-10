@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function TrendingPage() {
-  redirect("/?view=trending");
+  redirect("/app?view=trending");
 }

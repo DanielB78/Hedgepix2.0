@@ -1,16 +1,18 @@
 import Link from "next/link";
 import type { FeedView } from "@/lib/feed";
 import { viewHref as hrefForView } from "@/lib/format";
+import { AuthControls } from "@/components/AuthControls";
 
-export type ChromeNavKey = FeedView | "ceo-buys";
+export type ChromeNavKey = FeedView | "ceo-buys" | "landing";
 
 function navHref(key: ChromeNavKey) {
+  if (key === "landing") return "/";
   if (key === "ceo-buys") return "/ceo-buys";
   return hrefForView(key);
 }
 
 const NAV: Array<{
-  key: ChromeNavKey;
+  key: Exclude<ChromeNavKey, "landing">;
   label: string;
   icon: "home" | "trend" | "house" | "senate" | "ceo";
 }> = [
@@ -76,9 +78,34 @@ function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
 
 type Props = {
   active: ChromeNavKey;
+  horizontal?: boolean;
+  showAuth?: boolean;
 };
 
-export function SideNav({ active }: Props) {
+export function SideNav({ active, horizontal = false, showAuth = false }: Props) {
+  if (horizontal) {
+    return (
+      <nav aria-label="Primary" className="flex flex-wrap justify-center gap-2">
+        {NAV.map((item) => {
+          const isActive = item.key === active;
+          return (
+            <Link
+              key={item.key}
+              href={navHref(item.key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                isActive
+                  ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
+                  : "bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)]"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+    );
+  }
+
   return (
     <nav
       aria-label="Primary"
@@ -102,6 +129,11 @@ export function SideNav({ active }: Props) {
           </Link>
         );
       })}
+      {showAuth ? (
+        <div className="mt-4">
+          <AuthControls />
+        </div>
+      ) : null}
     </nav>
   );
 }
@@ -133,12 +165,14 @@ export function TopTabs({ active }: Props) {
 export function BrandMark() {
   return (
     <div className="animate-rise text-center">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--mint)]">
-        congressional markets
-      </p>
-      <h1 className="animate-brand font-[family-name:var(--font-display)] text-6xl font-extrabold lowercase leading-none tracking-tight text-[color:var(--fog)] sm:text-7xl md:text-8xl">
-        hedgpix
-      </h1>
+      <Link href="/" className="inline-block">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--mint)]">
+          congressional markets
+        </p>
+        <h1 className="animate-brand font-[family-name:var(--font-display)] text-5xl font-extrabold lowercase leading-none tracking-tight text-[color:var(--fog)] sm:text-6xl">
+          hedgpix
+        </h1>
+      </Link>
       <p className="mx-auto mt-4 max-w-md text-sm text-[color:var(--fog-dim)] sm:text-base">
         Watch what Congress is buying and selling — then dig into the chart.
       </p>

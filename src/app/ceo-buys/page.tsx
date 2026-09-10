@@ -1,4 +1,5 @@
 import { BrandMark, SideNav, TopTabs } from "@/components/AppChrome";
+import { AuthControls } from "@/components/AuthControls";
 import { CeoBuysList } from "@/components/CeoBuysList";
 import { FeedSearch } from "@/components/FeedSearch";
 import { Pagination } from "@/components/Pagination";
@@ -17,9 +18,17 @@ export default async function CeoBuysPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">
-      <SideNav active="ceo-buys" />
+      <SideNav active="ceo-buys" showAuth />
       <main className="min-w-0 flex-1 space-y-8 pb-16">
-        <BrandMark />
+        <div className="flex items-start justify-between gap-3 lg:hidden">
+          <div className="flex-1">
+            <BrandMark />
+          </div>
+          <AuthControls compact />
+        </div>
+        <div className="hidden lg:block">
+          <BrandMark />
+        </div>
         <TopTabs active="ceo-buys" />
         <FeedSearch
           q={filters.q}

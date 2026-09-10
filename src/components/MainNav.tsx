@@ -14,7 +14,7 @@ export function MainNav({ active }: Props) {
       className="inline-flex flex-wrap gap-2"
     >
       <Link
-        href="/?view=feed"
+        href="/app?view=feed"
         className={
           active === "latest"
             ? `${item} bg-[color:var(--mint)] text-[color:var(--ink)]`
@@ -25,7 +25,7 @@ export function MainNav({ active }: Props) {
         Feed
       </Link>
       <Link
-        href="/?view=trending"
+        href="/app?view=trending"
         className={
           active === "trending"
             ? `${item} bg-[color:var(--mint)] text-[color:var(--ink)]`

@@ -8,5 +8,5 @@ export function buildHref(filters: TradeFilters, page: number) {
   if (filters.type) params.set("type", filters.type);
   if (page > 1) params.set("page", String(page));
   const qs = params.toString();
-  return qs ? `/?${qs}` : "/";
+  return qs ? `/app?${qs}` : "/app";
 }

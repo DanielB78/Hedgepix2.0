@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FollowButton } from "@/components/FollowButton";
 import { MemberHoldingsList } from "@/components/MemberHoldingsList";
 import { MemberTabs } from "@/components/MemberTabs";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -35,10 +36,10 @@ export default async function MemberPage({ params, searchParams }: PageProps) {
 
       <div className="space-y-4">
         <Link
-          href="/"
+          href="/app?view=feed"
           className="inline-block text-sm text-[color:var(--navy)] transition hover:opacity-70"
         >
-          ← Latest disclosures
+          ← Feed
         </Link>
 
         {!result.configured || result.error ? (
@@ -54,16 +55,25 @@ export default async function MemberPage({ params, searchParams }: PageProps) {
         ) : (
           <>
             <div className="space-y-3">
-              <h1 className="text-2xl font-medium tracking-tight text-[color:var(--deep-navy)]">
-                {profile.name}
-              </h1>
-              {profile.chamber || profile.state ? (
-                <p className="text-sm capitalize text-[color:var(--muted)]">
-                  {[profile.chamber, profile.state?.toUpperCase()]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              ) : null}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <h1 className="text-2xl font-medium tracking-tight text-[color:var(--deep-navy)]">
+                    {profile.name}
+                  </h1>
+                  {profile.chamber || profile.state ? (
+                    <p className="text-sm capitalize text-[color:var(--muted)]">
+                      {[profile.chamber, profile.state?.toUpperCase()]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  ) : null}
+                </div>
+                <FollowButton
+                  type="member"
+                  targetKey={profile.slug}
+                  label={profile.name}
+                />
+              </div>
               <MemberTabs slug={profile.slug} active={tab} />
             </div>
 

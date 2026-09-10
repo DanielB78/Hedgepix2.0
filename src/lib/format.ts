@@ -48,5 +48,5 @@ export function tradeVerb(
 }
 
 export function viewHref(view: FeedView): string {
-  return `/?view=${view}`;
+  return `/app?view=${view}`;
 }
