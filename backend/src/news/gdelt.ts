@@ -147,63 +147,81 @@ export async function fetchGdeltArticles(options?: {
 
   const url = `${DEFAULT_GDELT_URL}?${params.toString()}`;
 
-  try {
-    const res = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(45_000),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      return {
-        status: "FAILED",
-        fetched: 0,
-        articles: [],
-        error: `GDELT HTTP ${res.status}: ${text.slice(0, 200)}`,
-      };
-    }
-    if (/Please limit requests/i.test(text)) {
-      return {
-        status: "FAILED",
-        fetched: 0,
-        articles: [],
-        error: "GDELT rate limit — try again in a few seconds",
-      };
-    }
+  const maxAttempts = 3;
+  let lastError: string | null = null;
 
-    let parsed: { articles?: GdeltArticleRaw[] };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      parsed = JSON.parse(text) as { articles?: GdeltArticleRaw[] };
-    } catch {
-      return {
-        status: "FAILED",
-        fetched: 0,
-        articles: [],
-        error: `GDELT returned non-JSON: ${text.slice(0, 120)}`,
-      };
-    }
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(45_000),
+      });
+      const text = await res.text();
+      const rateLimited =
+        res.status === 429 || /Please limit requests/i.test(text);
+      if (rateLimited) {
+        lastError = "GDELT rate limit — try again in a few seconds";
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 6_000 * attempt));
+          continue;
+        }
+        return {
+          status: "FAILED",
+          fetched: 0,
+          articles: [],
+          error: lastError,
+        };
+      }
+      if (!res.ok) {
+        return {
+          status: "FAILED",
+          fetched: 0,
+          articles: [],
+          error: `GDELT HTTP ${res.status}: ${text.slice(0, 200)}`,
+        };
+      }
 
-    const rawList = Array.isArray(parsed.articles) ? parsed.articles : [];
-    const byHash = new Map<string, NormalizedNewsArticle>();
-    for (const raw of rawList) {
-      const article = normalizeGdeltArticle(raw);
-      if (!article) continue;
-      if (!byHash.has(article.source_hash)) {
-        byHash.set(article.source_hash, article);
+      let parsed: { articles?: GdeltArticleRaw[] };
+      try {
+        parsed = JSON.parse(text) as { articles?: GdeltArticleRaw[] };
+      } catch {
+        return {
+          status: "FAILED",
+          fetched: 0,
+          articles: [],
+          error: `GDELT returned non-JSON: ${text.slice(0, 120)}`,
+        };
+      }
+
+      const rawList = Array.isArray(parsed.articles) ? parsed.articles : [];
+      const byHash = new Map<string, NormalizedNewsArticle>();
+      for (const raw of rawList) {
+        const article = normalizeGdeltArticle(raw);
+        if (!article) continue;
+        if (!byHash.has(article.source_hash)) {
+          byHash.set(article.source_hash, article);
+        }
+      }
+
+      return {
+        status: "SUCCESS",
+        fetched: rawList.length,
+        articles: [...byHash.values()],
+        error: null,
+      };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 3_000 * attempt));
+        continue;
       }
     }
-
-    return {
-      status: "SUCCESS",
-      fetched: rawList.length,
-      articles: [...byHash.values()],
-      error: null,
-    };
-  } catch (err) {
-    return {
-      status: "FAILED",
-      fetched: 0,
-      articles: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
   }
+
+  return {
+    status: "FAILED",
+    fetched: 0,
+    articles: [],
+    error: lastError,
+  };
 }
