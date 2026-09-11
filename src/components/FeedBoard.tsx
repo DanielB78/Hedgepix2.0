@@ -279,11 +279,11 @@ export function FeedBoard({
     }
   }, []);
 
-  const showFeedDigest = view === "feed" && !authLoading;
+  const showFeedDigest = view === "feed" && (!authLoading || !user);
   const showTrending = view === "trending";
   const showHouse = view === "house";
   const showSenate = view === "senate";
-  const trendingLimit = view === "trending" ? 20 : 3;
+  const trendingLimit = 20;
   const trendingRows = useMemo(
     () => payload.trending.filter(filterTicker),
     [filterTicker, payload.trending],
@@ -353,7 +353,7 @@ export function FeedBoard({
         </p>
       ) : null}
 
-      {personalFeed || (view === "feed" && authLoading) ? (
+      {personalFeed ? (
         <section className="animate-rise space-y-4">
           <SectionTitle
             title="Following"
@@ -392,6 +392,10 @@ export function FeedBoard({
             />
           ) : null}
         </section>
+      ) : null}
+
+      {view === "feed" && authLoading && !user ? (
+        <p className="text-sm text-[color:var(--fog-dim)]">Loading feed…</p>
       ) : null}
 
       {showFeedDigest ? (
