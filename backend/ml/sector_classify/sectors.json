@@ -1,0 +1,162 @@
+{
+  "Semiconductors": [
+    "chip manufacturing",
+    "semiconductor equipment",
+    "GPU demand",
+    "processor manufacturing",
+    "memory chips",
+    "foundry capacity",
+    "AI accelerators",
+    "wafer fabrication"
+  ],
+  "Electric Utilities": [
+    "electricity generation",
+    "power grid",
+    "electricity demand",
+    "utility regulation",
+    "power transmission",
+    "rate case filing",
+    "renewable power utility",
+    "blackout and outage risk"
+  ],
+  "Banks & Financials": [
+    "bank earnings",
+    "loan growth",
+    "interest margins",
+    "credit losses",
+    "investment banking fees",
+    "mortgage lending",
+    "deposit rates",
+    "financial regulation"
+  ],
+  "Oil & Gas": [
+    "crude oil prices",
+    "natural gas production",
+    "oil drilling",
+    "refinery margins",
+    "OPEC output",
+    "energy exploration",
+    "pipeline capacity",
+    "fossil fuel demand"
+  ],
+  "Healthcare & Pharma": [
+    "drug approval",
+    "pharmaceutical sales",
+    "clinical trial results",
+    "biotech funding",
+    "hospital systems",
+    "FDA decision",
+    "prescription drug pricing",
+    "medical devices"
+  ],
+  "Software & Internet": [
+    "cloud computing",
+    "software subscriptions",
+    "cybersecurity breach",
+    "social media platforms",
+    "enterprise software",
+    "app store revenue",
+    "SaaS growth",
+    "search advertising"
+  ],
+  "Consumer Retail": [
+    "retail sales",
+    "e-commerce growth",
+    "consumer spending",
+    "store traffic",
+    "discount retail",
+    "apparel brands",
+    "holiday shopping",
+    "same-store sales"
+  ],
+  "Autos & EVs": [
+    "electric vehicle sales",
+    "auto manufacturing",
+    "EV battery supply",
+    "vehicle recalls",
+    "autonomous driving",
+    "car dealership demand",
+    "charging infrastructure",
+    "auto tariffs"
+  ],
+  "Defense & Aerospace": [
+    "defense contracts",
+    "military spending",
+    "aerospace manufacturing",
+    "weapons systems",
+    "space launch",
+    "fighter jet orders",
+    "defense budget",
+    "airline aircraft orders"
+  ],
+  "Real Estate": [
+    "commercial real estate",
+    "housing market",
+    "REIT dividends",
+    "mortgage rates housing",
+    "office vacancies",
+    "property development",
+    "home prices",
+    "rent growth"
+  ],
+  "Telecom": [
+    "wireless carriers",
+    "5G network buildout",
+    "broadband internet",
+    "spectrum auction",
+    "mobile subscribers",
+    "telecom mergers",
+    "fiber optic expansion",
+    "phone service pricing"
+  ],
+  "Mining & Materials": [
+    "copper mining",
+    "steel production",
+    "lithium supply",
+    "commodity metals",
+    "mining strikes",
+    "iron ore prices",
+    "chemical materials",
+    "industrial metals demand"
+  ],
+  "Insurance": [
+    "insurance premiums",
+    "underwriting results",
+    "catastrophe losses",
+    "life insurance",
+    "property casualty claims",
+    "reinsurance pricing",
+    "insurer capital",
+    "health insurance plans"
+  ],
+  "Media & Entertainment": [
+    "streaming subscribers",
+    "box office revenue",
+    "advertising market",
+    "content licensing",
+    "sports media rights",
+    "music streaming",
+    "TV networks",
+    "gaming publishers"
+  ],
+  "Agriculture & Food": [
+    "crop prices",
+    "food producers",
+    "farm subsidies",
+    "grain exports",
+    "livestock markets",
+    "fertilizer costs",
+    "packaged foods",
+    "commodity agriculture"
+  ],
+  "Macro & Markets": [
+    "Federal Reserve rates",
+    "stock market rally",
+    "inflation data",
+    "bond yields",
+    "recession risk",
+    "jobs report",
+    "index futures",
+    "economic outlook"
+  ]
+}

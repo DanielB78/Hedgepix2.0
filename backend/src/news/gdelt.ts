@@ -22,6 +22,9 @@ export type NormalizedNewsArticle = {
   gdelt_id: string | null;
   source_hash: string;
   raw_source: GdeltArticleRaw;
+  /** Local BGE-small sector label (optional). */
+  sector?: string | null;
+  sector_score?: number | null;
 };
 
 export type GdeltFetchResult = {

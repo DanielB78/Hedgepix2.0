@@ -10,7 +10,8 @@
     "apply-ceo-buys-schema": "tsx src/apply-ceo-buys-schema.ts",
     "apply-news-schema": "tsx src/apply-news-schema.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts && tsx src/__tests__/gdelt-unit.ts"
+    "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts && tsx src/__tests__/gdelt-unit.ts && tsx src/__tests__/sector-classify-unit.ts",
+    "setup:sector-classify": "python3 -m venv ml/.venv && ml/.venv/bin/pip install -r ml/sector_classify/requirements.txt && PYTHONPATH=ml ml/.venv/bin/python -m sector_classify.cli build-cache"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

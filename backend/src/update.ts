@@ -14,6 +14,7 @@ import {
   startSyncRun,
   upsertTrades,
 } from "./store/supabaseStore.js";
+import { classifyNewsSectors } from "./news/classifySectors.js";
 import { fetchGdeltArticles } from "./news/gdelt.js";
 import { upsertNewsArticles } from "./store/newsStore.js";
 
@@ -35,6 +36,8 @@ type NewsSummary = {
   fetched: number;
   inserted: number;
   duplicatesSkipped: number;
+  sectorsLabeled: number;
+  sectorStatus: "SUCCESS" | "SKIPPED" | "FAILED";
   error: string | null;
 };
 
@@ -49,16 +52,32 @@ async function syncGdeltNews(
         fetched: 0,
         inserted: 0,
         duplicatesSkipped: 0,
+        sectorsLabeled: 0,
+        sectorStatus: "SKIPPED",
         error: fetchResult.error,
       };
     }
-    const upsert = await upsertNewsArticles(supabase, fetchResult.articles);
+
+    const articles = fetchResult.articles.map((a) => ({ ...a }));
+    const { byHash, stats: sectorStats } = await classifyNewsSectors(
+      articles.map((a) => ({ source_hash: a.source_hash, title: a.title })),
+    );
+    for (const article of articles) {
+      const label = byHash.get(article.source_hash);
+      if (!label) continue;
+      article.sector = label.sector;
+      article.sector_score = label.sector_score;
+    }
+
+    const upsert = await upsertNewsArticles(supabase, articles);
     if (upsert.errors > 0) {
       return {
         status: "FAILED",
         fetched: fetchResult.fetched,
         inserted: upsert.inserted,
         duplicatesSkipped: upsert.duplicatesSkipped,
+        sectorsLabeled: sectorStats.labeled,
+        sectorStatus: sectorStats.status,
         error: upsert.errorMessages[0] ?? "News upsert failed",
       };
     }
@@ -67,7 +86,10 @@ async function syncGdeltNews(
       fetched: fetchResult.fetched,
       inserted: upsert.inserted,
       duplicatesSkipped: upsert.duplicatesSkipped,
-      error: null,
+      sectorsLabeled: sectorStats.labeled,
+      sectorStatus: sectorStats.status,
+      error:
+        sectorStats.status === "FAILED" ? sectorStats.error : null,
     };
   } catch (err) {
     return {
@@ -75,6 +97,8 @@ async function syncGdeltNews(
       fetched: 0,
       inserted: 0,
       duplicatesSkipped: 0,
+      sectorsLabeled: 0,
+      sectorStatus: "SKIPPED",
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -239,6 +263,12 @@ async function main(): Promise<void> {
       console.log(`GDELT articles fetched: ${news.fetched}`);
       console.log(`New articles stored: ${news.inserted}`);
       console.log(`Duplicates skipped: ${news.duplicatesSkipped}`);
+      console.log(
+        `Sector labels: ${news.sectorStatus} (${news.sectorsLabeled} titled)`,
+      );
+      if (news.sectorStatus === "FAILED" && news.error) {
+        console.log(`Sector note: ${news.error}`);
+      }
     } else {
       console.log("Status: FAILED");
       if (news.error) console.log(`Error: ${news.error}`);

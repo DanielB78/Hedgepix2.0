@@ -31,24 +31,33 @@ async function main() {
   if (!cs) {
     console.error(
       "Missing DATABASE_URL (or SUPABASE_DB_URL / SUPABASE_DB_PASSWORD).\n" +
-        "Apply supabase/migrations/20260910180000_news_articles.sql in the Supabase SQL Editor.",
+        "Apply supabase/migrations/20260910180000_news_articles.sql and\n" +
+        "supabase/migrations/20260911120000_news_article_sectors.sql in the Supabase SQL Editor.",
     );
     process.exitCode = 1;
     return;
   }
-  const sqlPath = resolve(
-    __dirname,
-    "../../supabase/migrations/20260910180000_news_articles.sql",
-  );
-  const sql = await readFile(sqlPath, "utf8");
+  const sqlFiles = [
+    resolve(
+      __dirname,
+      "../../supabase/migrations/20260910180000_news_articles.sql",
+    ),
+    resolve(
+      __dirname,
+      "../../supabase/migrations/20260911120000_news_article_sectors.sql",
+    ),
+  ];
   const client = new pg.Client({
     connectionString: cs,
     ssl: { rejectUnauthorized: false },
   });
   await client.connect();
   try {
-    await client.query(sql);
-    console.log("Applied news_articles schema");
+    for (const sqlPath of sqlFiles) {
+      const sql = await readFile(sqlPath, "utf8");
+      await client.query(sql);
+      console.log(`Applied ${sqlPath.split("/").pop()}`);
+    }
   } finally {
     await client.end();
   }

@@ -21,6 +21,12 @@ function toRow(article: NormalizedNewsArticle) {
     gdelt_id: article.gdelt_id,
     source_hash: article.source_hash,
     raw_source: article.raw_source,
+    sector: article.sector ?? null,
+    sector_score:
+      typeof article.sector_score === "number" &&
+      Number.isFinite(article.sector_score)
+        ? article.sector_score
+        : null,
   };
 }
 
