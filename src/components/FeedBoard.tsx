@@ -19,7 +19,9 @@ import {
   formatShortDate,
   tradeVerb,
 } from "@/lib/format";
+import type { CeoActivityCard } from "@/lib/ceoAggregate";
 import type { Chamber, CongressTrade, TrendingTicker } from "@/lib/types";
+import { TickerLink } from "@/components/TickerLink";
 
 type Props = {
   view: FeedView;
@@ -277,13 +279,11 @@ export function FeedBoard({
     }
   }, []);
 
-  const showTrending =
-    view === "trending" || (view === "feed" && !user && !authLoading);
-  const showHouse =
-    view === "house" || (view === "feed" && !user && !authLoading);
-  const showSenate =
-    view === "senate" || (view === "feed" && !user && !authLoading);
-  const trendingLimit = view === "trending" ? 20 : 8;
+  const showFeedDigest = view === "feed" && !authLoading;
+  const showTrending = view === "trending";
+  const showHouse = view === "house";
+  const showSenate = view === "senate";
+  const trendingLimit = view === "trending" ? 20 : 3;
   const trendingRows = useMemo(
     () => payload.trending.filter(filterTicker),
     [filterTicker, payload.trending],
@@ -295,6 +295,26 @@ export function FeedBoard({
   const senateTrades = useMemo(
     () => payload.recentSenate.filter(filterTrade),
     [filterTrade, payload.recentSenate],
+  );
+  const houseBuys = useMemo(
+    () => payload.recentHouseBuys.filter(filterTrade),
+    [filterTrade, payload.recentHouseBuys],
+  );
+  const senateBuys = useMemo(
+    () => payload.recentSenateBuys.filter(filterTrade),
+    [filterTrade, payload.recentSenateBuys],
+  );
+  const ceoBuys = useMemo(
+    () =>
+      payload.recentCeoBuys.filter((card) => {
+        if (!q) return true;
+        return (
+          card.ceo_name.toLowerCase().includes(q) ||
+          (card.ticker ?? "").toLowerCase().includes(q) ||
+          (card.issuer_name ?? "").toLowerCase().includes(q)
+        );
+      }),
+    [payload.recentCeoBuys, q],
   );
   const houseMembers = useMemo(
     () =>
@@ -372,6 +392,81 @@ export function FeedBoard({
             />
           ) : null}
         </section>
+      ) : null}
+
+      {showFeedDigest ? (
+        <>
+          <section className="animate-rise space-y-4">
+            <SectionTitle
+              title="Top trending"
+              subtitle="Three tickers with the most congressional attention"
+            />
+            <div className="space-y-3">
+              {trendingRows.length === 0 ? (
+                <Empty text="No trending tickers match this search." />
+              ) : (
+                trendingRows.slice(0, 3).map((row, i) => {
+                  const active = stockPanel?.ticker === row.ticker;
+                  return (
+                    <div key={row.ticker} className="space-y-3">
+                      <TickerCard
+                        rank={i + 1}
+                        row={row}
+                        active={active}
+                        onOpen={() => toggleStock(row.ticker)}
+                      />
+                      {active && stockPanel ? (
+                        <StockPanel
+                          state={stockPanel}
+                          onClose={() => setStockPanel(null)}
+                          onChamber={(c) =>
+                            void openStock(stockPanel.ticker, c)
+                          }
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <p className="text-sm text-[color:var(--fog-dim)]">
+              <Link
+                href="/app?view=trending"
+                className="text-[color:var(--mint)] hover:opacity-80"
+              >
+                See full trending →
+              </Link>
+            </p>
+          </section>
+
+          <DigestBuysBlock
+            title="Latest House buys"
+            subtitle="Most recent House purchases"
+            trades={houseBuys}
+            emptyText="No recent House buys."
+            moreHref="/app?view=house"
+            moreLabel="More House activity →"
+            stockPanel={stockPanel}
+            onOpenTicker={(ticker) => toggleStock(ticker)}
+            onCloseStock={() => setStockPanel(null)}
+            onChamber={(ticker, c) => void openStock(ticker, c)}
+          />
+
+          <DigestBuysBlock
+            title="Latest Senate buys"
+            subtitle="Most recent Senate purchases"
+            trades={senateBuys}
+            emptyText="No recent Senate buys."
+            moreHref="/app?view=senate"
+            moreLabel="More Senate activity →"
+            stockPanel={stockPanel}
+            onOpenTicker={(ticker) => toggleStock(ticker)}
+            onCloseStock={() => setStockPanel(null)}
+            onChamber={(ticker, c) => void openStock(ticker, c)}
+          />
+
+          <CeoDigestBlock cards={ceoBuys} />
+        </>
       ) : null}
 
       {showTrending ? (
@@ -504,6 +599,175 @@ function SectionTitle({
       </h2>
       <p className="text-sm text-[color:var(--fog-dim)]">{subtitle}</p>
     </div>
+  );
+}
+
+function DigestBuysBlock({
+  title,
+  subtitle,
+  trades,
+  emptyText,
+  moreHref,
+  moreLabel,
+  stockPanel,
+  onOpenTicker,
+  onCloseStock,
+  onChamber,
+}: {
+  title: string;
+  subtitle: string;
+  trades: CongressTrade[];
+  emptyText: string;
+  moreHref: string;
+  moreLabel: string;
+  stockPanel: StockPanelState | null;
+  onOpenTicker: (ticker: string) => void;
+  onCloseStock: () => void;
+  onChamber: (ticker: string, chamber: "all" | Chamber) => void;
+}) {
+  return (
+    <section className="animate-rise space-y-4">
+      <SectionTitle title={title} subtitle={subtitle} />
+      {trades.length === 0 ? (
+        <Empty text={emptyText} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {trades.map((trade) => {
+            const ticker = (trade.ticker ?? "").toUpperCase();
+            const expanded =
+              !!stockPanel && stockPanel.ticker === ticker;
+            return (
+              <div key={trade.id} className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!ticker) return;
+                    onOpenTicker(ticker);
+                  }}
+                  className={`w-full rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
+                    expanded
+                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
+                      : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+                        {trade.member ?? "Unknown"}
+                      </p>
+                      <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
+                        {chamberLabel(trade.chamber)}
+                        {trade.state ? ` · ${trade.state}` : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)]">
+                      {ticker || "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="font-semibold uppercase tracking-wide text-[color:var(--mint)]">
+                      {tradeVerb(trade.transaction_type)}
+                    </span>
+                    <span className="text-[color:var(--fog-dim)]">
+                      {formatAmountRange(
+                        trade.amount_low,
+                        trade.amount_high,
+                        trade.amount_range,
+                      )}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
+                    {formatShortDate(
+                      trade.disclosure_date ?? trade.transaction_date,
+                    )}
+                  </p>
+                </button>
+                {expanded && stockPanel ? (
+                  <StockPanel
+                    state={stockPanel}
+                    onClose={onCloseStock}
+                    onChamber={(c) => onChamber(ticker, c)}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-sm text-[color:var(--fog-dim)]">
+        <Link
+          href={moreHref}
+          className="text-[color:var(--mint)] hover:opacity-80"
+        >
+          {moreLabel}
+        </Link>
+      </p>
+    </section>
+  );
+}
+
+function CeoDigestBlock({ cards }: { cards: CeoActivityCard[] }) {
+  return (
+    <section className="animate-rise space-y-4">
+      <SectionTitle
+        title="Latest CEO buys"
+        subtitle="Most recent Form 4 purchases"
+      />
+      {cards.length === 0 ? (
+        <Empty text="No recent CEO buys." />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {cards.map((card) => (
+            <div
+              key={card.id}
+              className="rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+                    {card.ceo_name}
+                  </p>
+                  <p className="mt-1 truncate text-sm text-[color:var(--fog-dim)]">
+                    {card.issuer_name ?? "Issuer"}
+                  </p>
+                </div>
+                {card.ticker ? (
+                  <TickerLink
+                    ticker={card.ticker}
+                    className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                  />
+                ) : (
+                  <span className="text-[color:var(--fog-dim)]">—</span>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="font-semibold uppercase tracking-wide text-[color:var(--mint)]">
+                  Bought
+                </span>
+                <span className="text-[color:var(--fog)]">
+                  {card.shares != null
+                    ? `${new Intl.NumberFormat("en-US", {
+                        maximumFractionDigits: 2,
+                      }).format(card.shares)} shares`
+                    : "—"}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
+                {formatShortDate(card.transaction_date ?? card.filing_date)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-sm text-[color:var(--fog-dim)]">
+        <Link
+          href="/ceo-buys"
+          className="text-[color:var(--mint)] hover:opacity-80"
+        >
+          More CEO buys →
+        </Link>
+      </p>
+    </section>
   );
 }
 

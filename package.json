@@ -11,6 +11,7 @@
     "backfill-kadoa": "npm run backfill-kadoa --prefix backend",
     "backfill-ceo-buys": "npm run backfill-ceo-buys --prefix backend",
     "sync:prices": "node --env-file=.env.local scripts/sync-stock-prices.mjs",
+    "purge:pre2024-prices": "node --env-file=.env.local scripts/purge-pre2024-prices.mjs",
     "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs && node scripts/lib/compute-holdings.test.mjs"
   },
   "dependencies": {

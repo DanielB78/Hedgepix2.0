@@ -1,5 +1,6 @@
 import type {
   Chamber,
+  CeoStockPurchaseRow,
   CongressTrade,
   StockPriceBar,
   TrendingTicker,
@@ -11,6 +12,10 @@ import {
   applyListedEquityFallback,
   isMissingListedEquityColumn,
 } from "./stockFilter";
+import {
+  aggregateCeoActivity,
+  type CeoActivityCard,
+} from "./ceoAggregate";
 
 export type FeedView = "feed" | "trending" | "house" | "senate";
 
@@ -30,6 +35,10 @@ export type FeedPayload = {
   senateMembers: PopularMember[];
   recentHouse: CongressTrade[];
   recentSenate: CongressTrade[];
+  /** Purchase-only slices for the Feed digest. */
+  recentHouseBuys: CongressTrade[];
+  recentSenateBuys: CongressTrade[];
+  recentCeoBuys: CeoActivityCard[];
   configured: boolean;
   error: string | null;
 };
@@ -85,9 +94,10 @@ export function parseFeedView(
 async function fetchRecentByChamber(
   chamber: Chamber,
   limit = 12,
+  options?: { purchasesOnly?: boolean },
 ): Promise<{ rows: CongressTrade[]; error: string | null }> {
   const supabase = createBrowserSupabase();
-  let result = await supabase
+  let query = supabase
     .from("congress_trades")
     .select(PUBLIC_TRADE_COLUMNS)
     .eq("is_listed_equity", true)
@@ -96,14 +106,24 @@ async function fetchRecentByChamber(
     .order("transaction_date", { ascending: false, nullsFirst: false })
     .limit(limit);
 
+  if (options?.purchasesOnly) {
+    query = query.eq("transaction_type", "purchase");
+  }
+
+  let result = await query;
+
   if (isMissingListedEquityColumn(result.error)) {
-    result = await supabase
+    let fallback = supabase
       .from("congress_trades")
       .select(PUBLIC_TRADE_COLUMNS)
       .eq("chamber", chamber)
       .order("disclosure_date", { ascending: false, nullsFirst: false })
       .order("transaction_date", { ascending: false, nullsFirst: false })
       .limit(limit * 2);
+    if (options?.purchasesOnly) {
+      fallback = fallback.eq("transaction_type", "purchase");
+    }
+    result = await fallback;
     if (!result.error && result.data) {
       const filtered = applyListedEquityFallback(
         result.data as unknown as CongressTrade[],
@@ -117,6 +137,32 @@ async function fetchRecentByChamber(
     rows: (result.data as CongressTrade[] | null) ?? [],
     error: result.error?.message ?? null,
   };
+}
+
+const CEO_FEED_COLUMNS =
+  "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code";
+
+async function fetchRecentCeoBuys(
+  limit = 3,
+): Promise<{ rows: CeoActivityCard[]; error: string | null }> {
+  const supabase = createBrowserSupabase();
+  const { data, error } = await supabase
+    .from("ceo_stock_purchases")
+    .select(CEO_FEED_COLUMNS)
+    .or("transaction_code.is.null,transaction_code.eq.P,transaction_code.eq.p")
+    .order("filing_date", { ascending: false, nullsFirst: false })
+    .order("transaction_date", { ascending: false, nullsFirst: false })
+    .limit(Math.max(limit * 8, 24));
+
+  if (error) {
+    return { rows: [], error: error.message };
+  }
+
+  const cards = aggregateCeoActivity(
+    (data as CeoStockPurchaseRow[] | null) ?? [],
+  ).filter((card) => card.side === "purchase");
+
+  return { rows: cards.slice(0, limit), error: null };
 }
 
 async function fetchPopularMembers(
@@ -228,20 +274,34 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
       senateMembers: [],
       recentHouse: [],
       recentSenate: [],
+      recentHouseBuys: [],
+      recentSenateBuys: [],
+      recentCeoBuys: [],
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     };
   }
 
-  const [trending, houseMembers, senateMembers, recentHouse, recentSenate] =
-    await Promise.all([
-      fetchTrending({ mode: "all", periodDays: 30 }),
-      fetchPopularMembers("house", 40),
-      fetchPopularMembers("senate", 40),
-      fetchRecentByChamber("house", 80),
-      fetchRecentByChamber("senate", 80),
-    ]);
+  const [
+    trending,
+    houseMembers,
+    senateMembers,
+    recentHouse,
+    recentSenate,
+    recentHouseBuys,
+    recentSenateBuys,
+    recentCeoBuys,
+  ] = await Promise.all([
+    fetchTrending({ mode: "all", periodDays: 30 }),
+    fetchPopularMembers("house", 40),
+    fetchPopularMembers("senate", 40),
+    fetchRecentByChamber("house", 80),
+    fetchRecentByChamber("senate", 80),
+    fetchRecentByChamber("house", 3, { purchasesOnly: true }),
+    fetchRecentByChamber("senate", 3, { purchasesOnly: true }),
+    fetchRecentCeoBuys(3),
+  ]);
 
   const error =
     trending.error ||
@@ -249,6 +309,9 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     senateMembers.error ||
     recentHouse.error ||
     recentSenate.error ||
+    recentHouseBuys.error ||
+    recentSenateBuys.error ||
+    recentCeoBuys.error ||
     null;
 
   return {
@@ -257,6 +320,9 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     senateMembers: senateMembers.rows,
     recentHouse: recentHouse.rows,
     recentSenate: recentSenate.rows,
+    recentHouseBuys: recentHouseBuys.rows,
+    recentSenateBuys: recentSenateBuys.rows,
+    recentCeoBuys: recentCeoBuys.rows,
     configured: true,
     error,
   };

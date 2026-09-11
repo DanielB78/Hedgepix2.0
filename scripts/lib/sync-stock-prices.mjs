@@ -11,7 +11,10 @@ const BATCH_SIZE = 8;
 const PAGE_LIMIT = 10000;
 const SOURCE = "alpaca_iex";
 const TRADE_PAGE_SIZE = 1000;
-const MAX_HISTORY_DAYS = 365 * 5;
+/** Only store daily bars from this date forward (no pre-2024 history). */
+export const PRICE_HISTORY_START = "2024-01-01";
+/** Alpaca timeframe — day bars only (never minutes/hours/seconds). */
+export const PRICE_TIMEFRAME = "1Day";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,8 +37,8 @@ export async function fetchAlpacaDailyBars({
   do {
     const endpoint = new URL(ALPACA_BARS_URL);
     endpoint.searchParams.set("symbols", symbols.join(","));
-    endpoint.searchParams.set("timeframe", "1Day");
-    endpoint.searchParams.set("start", start);
+    endpoint.searchParams.set("timeframe", PRICE_TIMEFRAME);
+    endpoint.searchParams.set("start", start < PRICE_HISTORY_START ? PRICE_HISTORY_START : start);
     endpoint.searchParams.set("end", end);
     endpoint.searchParams.set("feed", "iex");
     endpoint.searchParams.set("adjustment", "split");
@@ -107,7 +110,7 @@ export function toBarRows(ticker, alpacaBars) {
   const rows = [];
   for (const bar of alpacaBars) {
     const date = barDate(bar.t);
-    if (!date || seen.has(date)) continue;
+    if (!date || date < PRICE_HISTORY_START || seen.has(date)) continue;
     seen.add(date);
     rows.push({
       ticker,
@@ -121,6 +124,16 @@ export function toBarRows(ticker, alpacaBars) {
     });
   }
   return rows;
+}
+
+/** Remove any stored bars before PRICE_HISTORY_START (idempotent). */
+export async function purgePre2024PriceBars(supabase) {
+  const { error, count } = await supabase
+    .from("stock_price_bars")
+    .delete({ count: "exact" })
+    .lt("bar_date", PRICE_HISTORY_START);
+  if (error) throw new Error(`purge pre-2024 bars: ${error.message}`);
+  return count ?? 0;
 }
 
 export async function collectEligibleTickers(supabase) {
@@ -259,6 +272,20 @@ export async function syncStockPrices(supabase, { apiKey, apiSecret, tickers } =
     return summary;
   }
 
+  try {
+    const purged = await purgePre2024PriceBars(supabase);
+    if (purged > 0) {
+      console.log(
+        `Purged ${purged} pre-${PRICE_HISTORY_START} daily bars from stock_price_bars`,
+      );
+    }
+  } catch (purgeErr) {
+    summary.errors += 1;
+    summary.errorMessages.push(
+      purgeErr instanceof Error ? purgeErr.message : String(purgeErr),
+    );
+  }
+
   const collected = await collectEligibleTickers(supabase);
   summary.skippedUnsupported = collected.skippedUnsupported.length;
   if (collected.skippedUnsupported.length) {
@@ -292,9 +319,8 @@ export async function syncStockPrices(supabase, { apiKey, apiSecret, tickers } =
     } else {
       const earliest = item.earliest || today;
       start = addDays(earliest, -CONTEXT_DAYS);
-      const floor = addDays(today, -MAX_HISTORY_DAYS);
-      if (start < floor) start = floor;
     }
+    if (start < PRICE_HISTORY_START) start = PRICE_HISTORY_START;
     if (start > today) continue;
     const job = { ticker: item.ticker, start };
     if (last) incremental.push(job);

@@ -37,6 +37,23 @@ export const DEFAULT_GDELT_QUERY =
 
 const DEFAULT_GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
 
+/** GDELT DOC 2.0 asks clients to send at most one request every 5 seconds. */
+export const GDELT_MIN_INTERVAL_MS = 5_000;
+
+let lastGdeltRequestAt = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForGdeltSlot(): Promise<void> {
+  const elapsed = Date.now() - lastGdeltRequestAt;
+  if (lastGdeltRequestAt > 0 && elapsed < GDELT_MIN_INTERVAL_MS) {
+    await sleep(GDELT_MIN_INTERVAL_MS - elapsed);
+  }
+  lastGdeltRequestAt = Date.now();
+}
+
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -147,11 +164,13 @@ export async function fetchGdeltArticles(options?: {
 
   const url = `${DEFAULT_GDELT_URL}?${params.toString()}`;
 
-  const maxAttempts = 3;
+  // GDELT asks for at most one request every 5 seconds.
+  const maxAttempts = 2;
   let lastError: string | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      await waitForGdeltSlot();
       const res = await fetch(url, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(45_000),
@@ -160,9 +179,10 @@ export async function fetchGdeltArticles(options?: {
       const rateLimited =
         res.status === 429 || /Please limit requests/i.test(text);
       if (rateLimited) {
-        lastError = "GDELT rate limit — try again in a few seconds";
+        lastError =
+          "GDELT rate limit — only one request every 5 seconds is allowed";
         if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, 6_000 * attempt));
+          await sleep(GDELT_MIN_INTERVAL_MS);
           continue;
         }
         return {
@@ -212,7 +232,7 @@ export async function fetchGdeltArticles(options?: {
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 3_000 * attempt));
+        await sleep(GDELT_MIN_INTERVAL_MS);
         continue;
       }
     }
