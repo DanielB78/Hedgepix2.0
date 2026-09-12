@@ -23,7 +23,7 @@ export default async function AppPage({ searchParams }: PageProps) {
   const housePage = parsePage(params.housePage);
   const senatePage = parsePage(params.senatePage);
   const performerPeriod = parsePerformerPeriod(params.perf);
-  const payload = await fetchFeedPayload(performerPeriod);
+  const payload = await fetchFeedPayload(performerPeriod, view);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">

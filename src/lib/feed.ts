@@ -275,8 +275,16 @@ async function fetchPopularMembers(
   return { rows, error: null };
 }
 
+type EmptySlice = { rows: never[]; error: string | null };
+const EMPTY_SLICE: EmptySlice = { rows: [], error: null };
+
+/**
+ * Load feed data scoped to the active view so House/Senate/Trending
+ * navigation is not blocked by the expensive top-performers scan.
+ */
 export async function fetchFeedPayload(
   performerPeriod: PerformerPeriod = "2026",
+  view: FeedView = "feed",
 ): Promise<FeedPayload> {
   if (!hasPublicSupabaseConfig()) {
     return {
@@ -296,6 +304,12 @@ export async function fetchFeedPayload(
     };
   }
 
+  const needFeedDigest = view === "feed";
+  const needTrending = view === "feed" || view === "trending";
+  const needHouse = view === "feed" || view === "house";
+  const needSenate = view === "feed" || view === "senate";
+  const needTopPerformers = view === "feed";
+
   const [
     trending,
     houseMembers,
@@ -307,15 +321,23 @@ export async function fetchFeedPayload(
     recentCeoBuys,
     topPerformers,
   ] = await Promise.all([
-    fetchTrending({ mode: "all", periodDays: 30 }),
-    fetchPopularMembers("house", 40),
-    fetchPopularMembers("senate", 40),
-    fetchRecentByChamber("house", 80),
-    fetchRecentByChamber("senate", 80),
-    fetchRecentByChamber("house", 3, { purchasesOnly: true }),
-    fetchRecentByChamber("senate", 3, { purchasesOnly: true }),
-    fetchRecentCeoBuys(3),
-    fetchTopPerformers(performerPeriod, 10),
+    needTrending
+      ? fetchTrending({ mode: "all", periodDays: 30 })
+      : EMPTY_SLICE,
+    needHouse ? fetchPopularMembers("house", 40) : EMPTY_SLICE,
+    needSenate ? fetchPopularMembers("senate", 40) : EMPTY_SLICE,
+    needHouse ? fetchRecentByChamber("house", 80) : EMPTY_SLICE,
+    needSenate ? fetchRecentByChamber("senate", 80) : EMPTY_SLICE,
+    needFeedDigest
+      ? fetchRecentByChamber("house", 3, { purchasesOnly: true })
+      : EMPTY_SLICE,
+    needFeedDigest
+      ? fetchRecentByChamber("senate", 3, { purchasesOnly: true })
+      : EMPTY_SLICE,
+    needFeedDigest ? fetchRecentCeoBuys(3) : EMPTY_SLICE,
+    needTopPerformers
+      ? fetchTopPerformers(performerPeriod, 10)
+      : EMPTY_SLICE,
   ]);
 
   const error =
