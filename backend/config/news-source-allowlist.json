@@ -1,0 +1,22 @@
+{
+  "description": "Approved news publisher domains for GDELT ingestion. Edit this list to add/remove sources. Matching is case-insensitive; www. is ignored; subdomains of an entry are allowed (e.g. uk.reuters.com matches reuters.com).",
+  "domains": [
+    "reuters.com",
+    "bloomberg.com",
+    "cnbc.com",
+    "ft.com",
+    "wsj.com",
+    "barrons.com",
+    "marketwatch.com",
+    "finance.yahoo.com",
+    "investing.com",
+    "techcrunch.com",
+    "theverge.com",
+    "arstechnica.com",
+    "wired.com",
+    "politico.com",
+    "apnews.com",
+    "bbc.com",
+    "economist.com"
+  ]
+}

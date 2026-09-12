@@ -4,6 +4,7 @@ import {
   normalizeGdeltArticle,
   parseGdeltSeenDate,
 } from "../news/gdelt.js";
+import { isAllowedNewsDomain } from "../news/newsSourceAllowlist.js";
 
 function testParseSeenDate() {
   assert.equal(parseGdeltSeenDate("20260910T150000Z"), "2026-09-10T15:00:00Z");
@@ -42,13 +43,16 @@ function testNormalize() {
   assert.equal(article!.published_at, "2026-09-10T12:00:00Z");
   assert.ok(article!.gdelt_id?.startsWith("gdelt:"));
   assert.equal(article!.source_hash.length, 64);
-  assert.equal(
-    normalizeGdeltArticle({ url: "", title: "x" }),
-    null,
-  );
+  assert.equal(normalizeGdeltArticle({ url: "", title: "x" }), null);
+}
+
+function testSourceAllowlistGate() {
+  assert.equal(isAllowedNewsDomain("reuters.com"), true);
+  assert.equal(isAllowedNewsDomain("espn.com"), false);
 }
 
 testParseSeenDate();
 testSourceHashStable();
 testNormalize();
+testSourceAllowlistGate();
 console.log("gdelt unit tests passed");
