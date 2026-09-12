@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isAllowedNewsDomain } from "./newsSourceAllowlist.js";
 
 export type GdeltArticleRaw = {
   url?: string;
@@ -33,7 +34,10 @@ export type NormalizedNewsArticle = {
 export type GdeltFetchResult = {
   status: "SUCCESS" | "FAILED";
   fetched: number;
+  /** Articles kept after domain allowlist + dedupe. */
   articles: NormalizedNewsArticle[];
+  /** Raw articles dropped because domain was not on the allowlist. */
+  filteredBySource: number;
   error: string | null;
 };
 
@@ -195,6 +199,7 @@ export async function fetchGdeltArticles(options?: {
           status: "FAILED",
           fetched: 0,
           articles: [],
+          filteredBySource: 0,
           error: lastError,
         };
       }
@@ -203,6 +208,7 @@ export async function fetchGdeltArticles(options?: {
           status: "FAILED",
           fetched: 0,
           articles: [],
+          filteredBySource: 0,
           error: `GDELT HTTP ${res.status}: ${text.slice(0, 200)}`,
         };
       }
@@ -215,15 +221,21 @@ export async function fetchGdeltArticles(options?: {
           status: "FAILED",
           fetched: 0,
           articles: [],
+          filteredBySource: 0,
           error: `GDELT returned non-JSON: ${text.slice(0, 120)}`,
         };
       }
 
       const rawList = Array.isArray(parsed.articles) ? parsed.articles : [];
       const byHash = new Map<string, NormalizedNewsArticle>();
+      let filteredBySource = 0;
       for (const raw of rawList) {
         const article = normalizeGdeltArticle(raw);
         if (!article) continue;
+        if (!isAllowedNewsDomain(article.domain)) {
+          filteredBySource += 1;
+          continue;
+        }
         if (!byHash.has(article.source_hash)) {
           byHash.set(article.source_hash, article);
         }
@@ -233,6 +245,7 @@ export async function fetchGdeltArticles(options?: {
         status: "SUCCESS",
         fetched: rawList.length,
         articles: [...byHash.values()],
+        filteredBySource,
         error: null,
       };
     } catch (err) {
@@ -248,6 +261,7 @@ export async function fetchGdeltArticles(options?: {
     status: "FAILED",
     fetched: 0,
     articles: [],
+    filteredBySource: 0,
     error: lastError,
   };
 }

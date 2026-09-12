@@ -39,6 +39,7 @@ type NewsSummary = {
   fetched: number;
   inserted: number;
   duplicatesSkipped: number;
+  filteredBySource: number;
   sectorsLabeled: number;
   sectorStatus: "SUCCESS" | "SKIPPED" | "FAILED";
   pruned: number;
@@ -49,13 +50,14 @@ async function syncGdeltNews(
   supabase: ReturnType<typeof createSupabase>,
 ): Promise<NewsSummary> {
   try {
-    const fetchResult = await fetchGdeltArticles({ maxRecords: 40 });
+    const fetchResult = await fetchGdeltArticles({ maxRecords: 100 });
     if (fetchResult.status === "FAILED") {
       return {
         status: "FAILED",
         fetched: 0,
         inserted: 0,
         duplicatesSkipped: 0,
+        filteredBySource: 0,
         sectorsLabeled: 0,
         sectorStatus: "SKIPPED",
         pruned: 0,
@@ -83,6 +85,7 @@ async function syncGdeltNews(
         fetched: fetchResult.fetched,
         inserted: upsert.inserted,
         duplicatesSkipped: upsert.duplicatesSkipped,
+        filteredBySource: fetchResult.filteredBySource,
         sectorsLabeled: sectorStats.labeled,
         sectorStatus: sectorStats.status,
         pruned: 0,
@@ -97,6 +100,7 @@ async function syncGdeltNews(
         fetched: fetchResult.fetched,
         inserted: upsert.inserted,
         duplicatesSkipped: upsert.duplicatesSkipped,
+        filteredBySource: fetchResult.filteredBySource,
         sectorsLabeled: sectorStats.labeled,
         sectorStatus: sectorStats.status,
         pruned: 0,
@@ -109,6 +113,7 @@ async function syncGdeltNews(
       fetched: fetchResult.fetched,
       inserted: upsert.inserted,
       duplicatesSkipped: upsert.duplicatesSkipped,
+      filteredBySource: fetchResult.filteredBySource,
       sectorsLabeled: sectorStats.labeled,
       sectorStatus: sectorStats.status,
       pruned: retention.deleted,
@@ -121,6 +126,7 @@ async function syncGdeltNews(
       fetched: 0,
       inserted: 0,
       duplicatesSkipped: 0,
+      filteredBySource: 0,
       sectorsLabeled: 0,
       sectorStatus: "SKIPPED",
       pruned: 0,
@@ -286,6 +292,7 @@ async function main(): Promise<void> {
     console.log("NEWS");
     if (news.status === "SUCCESS") {
       console.log(`GDELT articles fetched: ${news.fetched}`);
+      console.log(`Off-allowlist sources skipped: ${news.filteredBySource}`);
       console.log(`New articles stored: ${news.inserted}`);
       console.log(`Duplicates skipped: ${news.duplicatesSkipped}`);
       console.log(
