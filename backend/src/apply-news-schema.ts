@@ -31,8 +31,10 @@ async function main() {
   if (!cs) {
     console.error(
       "Missing DATABASE_URL (or SUPABASE_DB_URL / SUPABASE_DB_PASSWORD).\n" +
-        "Apply supabase/migrations/20260910180000_news_articles.sql and\n" +
-        "supabase/migrations/20260911120000_news_article_sectors.sql in the Supabase SQL Editor.",
+        "Apply supabase/migrations/20260910180000_news_articles.sql,\n" +
+        "supabase/migrations/20260911120000_news_article_sectors.sql, and\n" +
+        "supabase/migrations/20260912120000_news_article_naics_sectors.sql\n" +
+        "in the Supabase SQL Editor.",
     );
     process.exitCode = 1;
     return;
@@ -45,6 +47,10 @@ async function main() {
     resolve(
       __dirname,
       "../../supabase/migrations/20260911120000_news_article_sectors.sql",
+    ),
+    resolve(
+      __dirname,
+      "../../supabase/migrations/20260912120000_news_article_naics_sectors.sql",
     ),
   ];
   const client = new pg.Client({

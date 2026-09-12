@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Local BGE-small sector classification for GDELT news titles.
+"""Local BGE-small NAICS sector classification for GDELT news titles.
 
 Usage:
-  # Build / refresh prototype embedding cache
+  # Build NAICS templates JSON from Census workbook (downloads if needed)
+  python3 -m sector_classify.cli build-templates
+
+  # Build / refresh NAICS embedding cache
   python3 -m sector_classify.cli build-cache
 
   # Classify titles from JSON stdin:
   #   [{"id":"...", "title":"..."}, ...]
-  # writes JSON array to stdout:
-  #   [{"id":"...", "sector":"...", "sector_score":0.42}, ...]
+  # writes JSON array to stdout with top-3 NAICS matches
   python3 -m sector_classify.cli classify
 """
 
@@ -24,14 +26,33 @@ from .classify import (
   build_prototype_cache,
   classify_titles,
   load_prototype_cache,
+  load_templates,
 )
 
 ROOT = Path(__file__).resolve().parent
 
 
-def cmd_build_cache(_: argparse.Namespace) -> int:
-  path = build_prototype_cache()
-  print(json.dumps({"ok": True, "model": MODEL_NAME, "cache": str(path)}))
+def cmd_build_templates(_: argparse.Namespace) -> int:
+  from .build_naics_templates import main as build_main
+
+  return int(build_main([]))
+
+
+def cmd_build_cache(args: argparse.Namespace) -> int:
+  # Ensure templates exist before embedding.
+  load_templates()
+  path = build_prototype_cache(force=bool(args.force))
+  cache = load_prototype_cache()
+  print(
+    json.dumps(
+      {
+        "ok": True,
+        "model": MODEL_NAME,
+        "cache": str(path),
+        "templates": len(cache["codes"]),
+      }
+    )
+  )
   return 0
 
 
@@ -62,7 +83,7 @@ def cmd_classify(_: argparse.Namespace) -> int:
     print("[]")
     return 0
 
-  # Ensure cache exists (embeds prototypes once).
+  # Ensure cache exists (embeds NAICS templates once).
   load_prototype_cache()
   results = classify_titles(items)
   print(json.dumps(results))
@@ -73,7 +94,18 @@ def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   sub = parser.add_subparsers(dest="command", required=True)
 
-  p_build = sub.add_parser("build-cache", help="Embed sector prototypes once")
+  p_tpl = sub.add_parser(
+    "build-templates",
+    help="Build NAICS templates JSON from Census descriptions",
+  )
+  p_tpl.set_defaults(func=cmd_build_templates)
+
+  p_build = sub.add_parser("build-cache", help="Embed NAICS templates once")
+  p_build.add_argument(
+    "--force",
+    action="store_true",
+    help="Rebuild cache even if it already exists",
+  )
   p_build.set_defaults(func=cmd_build_cache)
 
   p_cls = sub.add_parser("classify", help="Classify titles from JSON stdin")

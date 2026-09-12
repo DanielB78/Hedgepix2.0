@@ -37,7 +37,8 @@ during updates, then read from Supabase by the website.
    - `supabase/migrations/20260908160000_ceo_stock_purchases.sql` (CEO activity)
    - `supabase/migrations/20260909120000_ceo_transaction_code.sql` (purchase vs sale)
    - `supabase/migrations/20260910180000_news_articles.sql` (offline GDELT news)
-   - `supabase/migrations/20260911120000_news_article_sectors.sql` (local sector labels)
+   - `supabase/migrations/20260911120000_news_article_sectors.sql` (legacy sector columns)
+   - `supabase/migrations/20260912120000_news_article_naics_sectors.sql` (top-3 NAICS matches)
 3. Configure the backend updater:
    ```bash
    cd backend
@@ -95,8 +96,9 @@ npm run update-data
 5. Upserts into Supabase
 6. Rebuilds holdings + missing Alpaca prices
 7. Fetches recent GDELT finance articles into `news_articles` (soft-fail if GDELT is down)
-8. Optionally labels each new title with a sector via local BGE-small (`BAAI/bge-small-en-v1.5`) using prototype cosine similarity (`sector`, `sector_score`)
-9. Advances `last_success_at` only on full Congress import success (news failure does not roll back trades/prices)
+8. Labels each new title with top-3 NAICS industry groups via local BGE-small (`BAAI/bge-small-en-v1.5`) cosine similarity against cached Census NAICS templates
+9. Deletes `news_articles` with `published_at` older than 3 days (news table only)
+10. Advances `last_success_at` only on full Congress import success (news failure does not roll back trades/prices)
 
 Useful env vars (backend `.env`):
 

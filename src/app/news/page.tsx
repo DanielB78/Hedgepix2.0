@@ -6,7 +6,7 @@ import { fetchRecentNewsArticles } from "@/lib/news";
 export const dynamic = "force-dynamic";
 
 export default async function NewsPage() {
-  const result = await fetchRecentNewsArticles(10);
+  const result = await fetchRecentNewsArticles(40);
   const missingTable = Boolean(
     result.error?.includes("news_articles") ||
       result.error?.includes("schema cache"),
@@ -43,13 +43,14 @@ export default async function NewsPage() {
             </div>
           ) : missingTable ? (
             <p className="rounded-[16px] bg-[color:var(--surface)] px-4 py-6 text-sm text-[color:var(--fog-dim)]">
-              News storage is not set up yet. Apply{" "}
-              <code className="text-[color:var(--fog)]">
-                supabase/migrations/20260910180000_news_articles.sql
-              </code>{" "}
-              in the Supabase SQL Editor, then run{" "}
-              <code className="text-[color:var(--fog)]">npm run update-data</code>{" "}
-              (or <code className="text-[color:var(--fog)]">update.bat</code>).
+                News storage is not set up yet. Apply{" "}
+                <code className="text-[color:var(--fog)]">
+                  supabase/migrations/20260910180000_news_articles.sql
+                </code>{" "}
+                (and the NAICS sector migrations) in the Supabase SQL Editor, then
+                run{" "}
+                <code className="text-[color:var(--fog)]">npm run update-data</code>{" "}
+                (or <code className="text-[color:var(--fog)]">update.bat</code>).
             </p>
           ) : result.error ? (
             <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--accent-sale)]">

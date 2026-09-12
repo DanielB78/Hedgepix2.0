@@ -1,4 +1,4 @@
-"""BGE-small sector classification helpers (local only)."""
+"""BGE-small NAICS sector classification helpers (local only)."""
 
 from __future__ import annotations
 
@@ -10,29 +10,48 @@ import numpy as np
 
 MODEL_NAME = "BAAI/bge-small-en-v1.5"
 EMBED_DIM = 384
-# Average the top-K prototype similarities within each sector.
-TOP_K = 3
+TOP_N = 3
 
 ROOT = Path(__file__).resolve().parent
-SECTORS_PATH = ROOT / "sectors.json"
+NAICS_DIR = ROOT / "naics"
+TEMPLATES_PATH = NAICS_DIR / "templates.json"
 CACHE_DIR = ROOT / "cache"
-CACHE_PATH = CACHE_DIR / "prototype_embeddings.npz"
+CACHE_PATH = CACHE_DIR / "naics_embeddings.npz"
 
 _model = None
 
 
-def load_sectors() -> dict[str, list[str]]:
-  with SECTORS_PATH.open(encoding="utf-8") as f:
+def load_templates() -> list[dict[str, str]]:
+  if not TEMPLATES_PATH.exists():
+    from .build_naics_templates import main as build_main
+
+    build_main([])
+  with TEMPLATES_PATH.open(encoding="utf-8") as f:
     data = json.load(f)
-  if not isinstance(data, dict) or not data:
-    raise ValueError(f"Invalid sectors file: {SECTORS_PATH}")
-  out: dict[str, list[str]] = {}
-  for sector, phrases in data.items():
-    cleaned = [str(p).strip() for p in phrases if str(p).strip()]
-    if cleaned:
-      out[str(sector)] = cleaned
+  templates = data.get("templates") if isinstance(data, dict) else None
+  if not isinstance(templates, list) or not templates:
+    raise ValueError(f"Invalid NAICS templates file: {TEMPLATES_PATH}")
+  out: list[dict[str, str]] = []
+  for row in templates:
+    if not isinstance(row, dict):
+      continue
+    code = str(row.get("code") or "").strip()
+    name = str(row.get("name") or "").strip()
+    description = str(row.get("description") or "").strip()
+    template_text = str(row.get("template_text") or "").strip()
+    if not template_text:
+      template_text = f"{code}\n{name}\n{description}".strip()
+    if code and name and template_text:
+      out.append(
+        {
+          "code": code,
+          "name": name,
+          "description": description,
+          "template_text": template_text,
+        }
+      )
   if not out:
-    raise ValueError("No sector prototypes found")
+    raise ValueError("No NAICS templates found")
   return out
 
 
@@ -54,7 +73,6 @@ def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
 
 def embed_texts(texts: list[str]) -> np.ndarray:
   model = get_model()
-  # normalize_embeddings=True yields unit vectors for cosine via dot product.
   vectors = model.encode(
     texts,
     normalize_embeddings=True,
@@ -69,24 +87,21 @@ def embed_texts(texts: list[str]) -> np.ndarray:
 
 
 def build_prototype_cache(force: bool = False) -> Path:
+  """Embed NAICS templates once and cache vectors on disk."""
   CACHE_DIR.mkdir(parents=True, exist_ok=True)
   if CACHE_PATH.exists() and not force:
     return CACHE_PATH
 
-  sectors = load_sectors()
-  sector_names: list[str] = []
-  phrases: list[str] = []
-  for sector, protos in sectors.items():
-    for phrase in protos:
-      sector_names.append(sector)
-      phrases.append(phrase)
-
-  vectors = embed_texts(phrases)
+  templates = load_templates()
+  texts = [t["template_text"] for t in templates]
+  codes = [t["code"] for t in templates]
+  names = [t["name"] for t in templates]
+  vectors = embed_texts(texts)
   np.savez_compressed(
     CACHE_PATH,
     vectors=vectors,
-    sectors=np.asarray(sector_names),
-    phrases=np.asarray(phrases),
+    codes=np.asarray(codes),
+    names=np.asarray(names),
     model=np.asarray(MODEL_NAME),
     dim=np.asarray(EMBED_DIM),
   )
@@ -98,47 +113,53 @@ def load_prototype_cache() -> dict[str, Any]:
     build_prototype_cache(force=True)
   data = np.load(CACHE_PATH, allow_pickle=False)
   vectors = np.asarray(data["vectors"], dtype=np.float32)
-  sectors = [str(s) for s in data["sectors"].tolist()]
-  phrases = [str(p) for p in data["phrases"].tolist()]
+  codes = [str(c) for c in data["codes"].tolist()]
+  names = [str(n) for n in data["names"].tolist()]
   if vectors.shape[1] != EMBED_DIM:
     raise RuntimeError(
       f"Cached embeddings dim {vectors.shape[1]} != {EMBED_DIM}; rebuild cache"
     )
+  if len(codes) != vectors.shape[0] or len(names) != vectors.shape[0]:
+    raise RuntimeError("NAICS cache length mismatch; rebuild cache")
   return {
     "vectors": _l2_normalize(vectors),
-    "sectors": sectors,
-    "phrases": phrases,
+    "codes": codes,
+    "names": names,
   }
 
 
-def score_title_against_prototypes(
+def top_matches_for_vector(
   title_vec: np.ndarray,
   cache: dict[str, Any],
-  top_k: int = TOP_K,
-) -> tuple[str, float]:
-  """Return (best_sector, score) using mean of top-K prototype cosines."""
+  top_n: int = TOP_N,
+) -> list[dict[str, Any]]:
   sims = cache["vectors"] @ title_vec.astype(np.float32)
-  by_sector: dict[str, list[float]] = {}
-  for sector, score in zip(cache["sectors"], sims.tolist()):
-    by_sector.setdefault(sector, []).append(float(score))
-
-  best_sector = ""
-  best_score = float("-inf")
-  for sector, scores in by_sector.items():
-    scores.sort(reverse=True)
-    k = max(1, min(top_k, len(scores)))
-    agg = float(sum(scores[:k]) / k)
-    if agg > best_score:
-      best_score = agg
-      best_sector = sector
-  return best_sector, best_score
+  order = np.argsort(-sims)[: max(1, top_n)]
+  matches: list[dict[str, Any]] = []
+  for idx in order.tolist():
+    matches.append(
+      {
+        "code": cache["codes"][idx],
+        "name": cache["names"][idx],
+        "score": round(float(sims[idx]), 6),
+      }
+    )
+  return matches
 
 
 def classify_titles(
   items: list[tuple[str, str]],
-  top_k: int = TOP_K,
+  top_n: int = TOP_N,
 ) -> list[dict[str, Any]]:
-  """Classify (id, title) pairs. Returns [{id, sector, sector_score}, ...]."""
+  """Classify (id, title) pairs.
+
+  Returns:
+    [{
+      id,
+      sector, sector_score, sector_code,   # best match (compat)
+      sectors: [{code, name, score}, ...]  # top N
+    }, ...]
+  """
   if not items:
     return []
   cache = load_prototype_cache()
@@ -146,12 +167,15 @@ def classify_titles(
   title_vecs = embed_texts(titles)
   out: list[dict[str, Any]] = []
   for (item_id, _title), vec in zip(items, title_vecs):
-    sector, score = score_title_against_prototypes(vec, cache, top_k=top_k)
+    matches = top_matches_for_vector(vec, cache, top_n=top_n)
+    best = matches[0] if matches else None
     out.append(
       {
         "id": item_id,
-        "sector": sector,
-        "sector_score": round(float(score), 6),
+        "sector": best["name"] if best else "",
+        "sector_code": best["code"] if best else "",
+        "sector_score": best["score"] if best else 0.0,
+        "sectors": matches,
       }
     )
   return out

@@ -16,7 +16,10 @@ import {
 } from "./store/supabaseStore.js";
 import { classifyNewsSectors } from "./news/classifySectors.js";
 import { fetchGdeltArticles } from "./news/gdelt.js";
-import { upsertNewsArticles } from "./store/newsStore.js";
+import {
+  deleteNewsOlderThan,
+  upsertNewsArticles,
+} from "./store/newsStore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +41,7 @@ type NewsSummary = {
   duplicatesSkipped: number;
   sectorsLabeled: number;
   sectorStatus: "SUCCESS" | "SKIPPED" | "FAILED";
+  pruned: number;
   error: string | null;
 };
 
@@ -54,6 +58,7 @@ async function syncGdeltNews(
         duplicatesSkipped: 0,
         sectorsLabeled: 0,
         sectorStatus: "SKIPPED",
+        pruned: 0,
         error: fetchResult.error,
       };
     }
@@ -66,7 +71,9 @@ async function syncGdeltNews(
       const label = byHash.get(article.source_hash);
       if (!label) continue;
       article.sector = label.sector;
+      article.sector_code = label.sector_code;
       article.sector_score = label.sector_score;
+      article.sectors = label.sectors;
     }
 
     const upsert = await upsertNewsArticles(supabase, articles);
@@ -78,9 +85,25 @@ async function syncGdeltNews(
         duplicatesSkipped: upsert.duplicatesSkipped,
         sectorsLabeled: sectorStats.labeled,
         sectorStatus: sectorStats.status,
+        pruned: 0,
         error: upsert.errorMessages[0] ?? "News upsert failed",
       };
     }
+
+    const retention = await deleteNewsOlderThan(supabase, 3);
+    if (retention.error) {
+      return {
+        status: "FAILED",
+        fetched: fetchResult.fetched,
+        inserted: upsert.inserted,
+        duplicatesSkipped: upsert.duplicatesSkipped,
+        sectorsLabeled: sectorStats.labeled,
+        sectorStatus: sectorStats.status,
+        pruned: 0,
+        error: retention.error,
+      };
+    }
+
     return {
       status: "SUCCESS",
       fetched: fetchResult.fetched,
@@ -88,6 +111,7 @@ async function syncGdeltNews(
       duplicatesSkipped: upsert.duplicatesSkipped,
       sectorsLabeled: sectorStats.labeled,
       sectorStatus: sectorStats.status,
+      pruned: retention.deleted,
       error:
         sectorStats.status === "FAILED" ? sectorStats.error : null,
     };
@@ -99,6 +123,7 @@ async function syncGdeltNews(
       duplicatesSkipped: 0,
       sectorsLabeled: 0,
       sectorStatus: "SKIPPED",
+      pruned: 0,
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -264,8 +289,9 @@ async function main(): Promise<void> {
       console.log(`New articles stored: ${news.inserted}`);
       console.log(`Duplicates skipped: ${news.duplicatesSkipped}`);
       console.log(
-        `Sector labels: ${news.sectorStatus} (${news.sectorsLabeled} titled)`,
+        `NAICS sector labels: ${news.sectorStatus} (${news.sectorsLabeled} titled)`,
       );
+      console.log(`News older than 3 days deleted: ${news.pruned}`);
       if (news.sectorStatus === "FAILED" && news.error) {
         console.log(`Sector note: ${news.error}`);
       }
