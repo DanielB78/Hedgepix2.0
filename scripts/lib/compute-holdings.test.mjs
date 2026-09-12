@@ -18,8 +18,8 @@ function trade(overrides) {
     transaction_type: "purchase",
     amount_low: 1000,
     amount_high: 15000,
-    transaction_date: "2020-06-01",
-    disclosure_date: "2020-07-01",
+    transaction_date: "2026-03-01",
+    disclosure_date: "2026-04-01",
     ...overrides,
   };
 }
@@ -38,30 +38,30 @@ assert.equal(acc.positionHigh, 14000);
 assert.equal(isCurrentHolding(acc.positionLow, acc.positionHigh), false);
 
 const open = computeMemberHoldings([
-  trade({ amount_low: 50000, amount_high: 100000, transaction_date: "2024-01-01" }),
+  trade({ amount_low: 50000, amount_high: 100000, transaction_date: "2026-01-01" }),
 ]);
 assert.equal(open.length, 1);
 assert.equal(open[0].positionLow, 50000);
 assert.equal(open[0].positionHigh, 100000);
 
 const soldOut = computeMemberHoldings([
-  trade({ amount_low: 1000, amount_high: 15000, transaction_date: "2024-01-01" }),
+  trade({ amount_low: 1000, amount_high: 15000, transaction_date: "2026-01-01" }),
   trade({
     transaction_type: "sale",
     amount_low: 1000,
     amount_high: 15000,
-    transaction_date: "2024-06-01",
+    transaction_date: "2026-06-01",
   }),
 ]);
 assert.equal(soldOut.length, 0, "fully sold positions should disappear");
 
 const partial = computeMemberHoldings([
-  trade({ amount_low: 50000, amount_high: 100000, transaction_date: "2024-01-01" }),
+  trade({ amount_low: 50000, amount_high: 100000, transaction_date: "2026-01-01" }),
   trade({
     transaction_type: "sale",
     amount_low: 1000,
     amount_high: 15000,
-    transaction_date: "2024-06-01",
+    transaction_date: "2026-06-01",
   }),
 ]);
 assert.equal(partial.length, 1);
@@ -77,9 +77,9 @@ assert.equal(
 );
 
 assert.equal(
-  isEligibleHoldingsTrade(trade({ transaction_date: "2011-12-31" })),
+  isEligibleHoldingsTrade(trade({ transaction_date: "2025-12-31" })),
   false,
-  "pre-2012 trades are excluded",
+  "pre-2026 trades are excluded",
 );
 
 const deduped = computeMemberHoldings([

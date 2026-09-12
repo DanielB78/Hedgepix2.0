@@ -22,6 +22,13 @@ import {
 import type { CeoActivityCard } from "@/lib/ceoAggregate";
 import type { Chamber, CongressTrade, TrendingTicker } from "@/lib/types";
 import { TickerLink } from "@/components/TickerLink";
+import {
+  PERFORMER_PERIODS,
+  performerPeriodHref,
+  performerPeriodLabel,
+  type PerformerPeriod,
+  type TopPerformer,
+} from "@/lib/topPerformers";
 
 type Props = {
   view: FeedView;
@@ -316,6 +323,17 @@ export function FeedBoard({
       }),
     [payload.recentCeoBuys, q],
   );
+  const topPerformers = useMemo(
+    () =>
+      (payload.topPerformers ?? []).filter((row) => {
+        if (!q) return true;
+        return (
+          row.name.toLowerCase().includes(q) ||
+          (row.bestTicker ?? "").toLowerCase().includes(q)
+        );
+      }),
+    [payload.topPerformers, q],
+  );
   const houseMembers = useMemo(
     () =>
       payload.houseMembers.filter((member) =>
@@ -400,6 +418,60 @@ export function FeedBoard({
 
       {showFeedDigest ? (
         <>
+          <section className="animate-rise space-y-4">
+            <SectionTitle
+              title="Top performers"
+              subtitle="Highest average return on stocks bought in the selected period"
+            />
+            <PerformerPeriodChips
+              period={payload.performerPeriod}
+              query={query}
+            />
+            <div className="space-y-3">
+              {topPerformers.length === 0 ? (
+                <Empty text="No priced purchases in this period yet." />
+              ) : (
+                topPerformers.map((row, i) => (
+                  <PerformerCard
+                    key={row.key}
+                    rank={i + 1}
+                    row={row}
+                    onOpenMember={(slug) => toggleMember(slug)}
+                    onOpenTicker={(ticker) => toggleStock(ticker)}
+                  />
+                ))
+              )}
+            </div>
+            {memberPanel ? (
+              <MemberPanel
+                state={memberPanel}
+                onClose={() => setMemberPanel(null)}
+                onOpenTicker={(ticker) =>
+                  void openMemberStock(memberPanel.slug, ticker)
+                }
+                onBackNested={() =>
+                  setMemberPanel((p) =>
+                    p
+                      ? {
+                          ...p,
+                          nestedTicker: null,
+                          nested: null,
+                          nestedLoading: false,
+                        }
+                      : p,
+                  )
+                }
+              />
+            ) : null}
+            {stockPanel ? (
+              <StockPanel
+                state={stockPanel}
+                onClose={() => setStockPanel(null)}
+                onChamber={(c) => void openStock(stockPanel.ticker, c)}
+              />
+            ) : null}
+          </section>
+
           <section className="animate-rise space-y-4">
             <SectionTitle
               title="Top trending"
@@ -602,6 +674,120 @@ function SectionTitle({
         {title}
       </h2>
       <p className="text-sm text-[color:var(--fog-dim)]">{subtitle}</p>
+    </div>
+  );
+}
+
+function performerChipClass(active: boolean) {
+  return active
+    ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
+    : "rounded-full px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
+}
+
+function PerformerPeriodChips({
+  period,
+  query,
+}: {
+  period: PerformerPeriod;
+  query?: string;
+}) {
+  return (
+    <div className="inline-flex flex-wrap gap-1 rounded-[16px] bg-[color:var(--surface)] p-1">
+      {PERFORMER_PERIODS.map((value) => (
+        <Link
+          key={value}
+          href={performerPeriodHref(value, { q: query })}
+          className={performerChipClass(period === value)}
+          aria-current={period === value ? "page" : undefined}
+        >
+          {performerPeriodLabel(value)}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function performerKindLabel(kind: TopPerformer["kind"]): string {
+  if (kind === "ceo") return "CEO";
+  if (kind === "house") return "House";
+  return "Senate";
+}
+
+function formatReturnPct(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  const sign = rounded > 0 ? "+": "";
+  return `${sign}${rounded.toFixed(1)}%`;
+}
+
+function PerformerCard({
+  rank,
+  row,
+  onOpenMember,
+  onOpenTicker,
+}: {
+  rank: number;
+  row: TopPerformer;
+  onOpenMember: (slug: string) => void;
+  onOpenTicker: (ticker: string) => void;
+}) {
+  const positive = row.avgReturnPct >= 0;
+  const clickableMember = !!row.memberSlug;
+  const clickableTicker = !!row.bestTicker;
+
+  return (
+    <div className="flex items-center gap-3 rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-3">
+      <span className="w-6 shrink-0 text-sm font-semibold text-[color:var(--fog-dim)]">
+        {rank}
+      </span>
+      <div className="min-w-0 flex-1">
+        {clickableMember ? (
+          <button
+            type="button"
+            onClick={() => onOpenMember(row.memberSlug!)}
+            className="truncate text-left font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+          >
+            {row.name}
+          </button>
+        ) : (
+          <Link
+            href={`/ceo-buys?q=${encodeURIComponent(row.name)}`}
+            className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+          >
+            {row.name}
+          </Link>
+        )}
+        <p className="text-xs text-[color:var(--fog-dim)]">
+          {performerKindLabel(row.kind)} · {row.pricedBuyCount} priced buy
+          {row.pricedBuyCount === 1 ? "" : "s"}
+          {row.bestTicker ? (
+            <>
+              {" "}
+              · best{" "}
+              {clickableTicker ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTicker(row.bestTicker!)}
+                  className="font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  {row.bestTicker}
+                </button>
+              ) : (
+                row.bestTicker
+              )}
+              {row.bestReturnPct != null
+                ? ` (${formatReturnPct(row.bestReturnPct)})`
+                : null}
+            </>
+          ) : null}
+        </p>
+      </div>
+      <span
+        className={`shrink-0 font-[family-name:var(--font-display)] text-xl font-bold tracking-tight ${
+          positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
+        }`}
+      >
+        {formatReturnPct(row.avgReturnPct)}
+      </span>
     </div>
   );
 }

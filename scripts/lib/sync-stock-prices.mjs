@@ -11,8 +11,8 @@ const BATCH_SIZE = 8;
 const PAGE_LIMIT = 10000;
 const SOURCE = "alpaca_iex";
 const TRADE_PAGE_SIZE = 1000;
-/** Only store daily bars from this date forward (no pre-2024 history). */
-export const PRICE_HISTORY_START = "2024-01-01";
+/** Only store daily bars from this date forward (no pre-2026 history). */
+export const PRICE_HISTORY_START = "2026-01-01";
 /** Alpaca timeframe — day bars only (never minutes/hours/seconds). */
 export const PRICE_TIMEFRAME = "1Day";
 
@@ -126,14 +126,61 @@ export function toBarRows(ticker, alpacaBars) {
   return rows;
 }
 
-/** Remove any stored bars before PRICE_HISTORY_START (idempotent). */
+/**
+ * Remove any stored bars before PRICE_HISTORY_START (idempotent).
+ * Deletes in monthly chunks so large histories do not time out.
+ */
 export async function purgePre2024PriceBars(supabase) {
-  const { error, count } = await supabase
+  return purgePriceBarsBefore(supabase, PRICE_HISTORY_START);
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} cutoffDate YYYY-MM-DD (exclusive upper bound)
+ */
+export async function purgePriceBarsBefore(supabase, cutoffDate) {
+  // Fast path when few/no rows remain.
+  const bulk = await supabase
     .from("stock_price_bars")
     .delete({ count: "exact" })
-    .lt("bar_date", PRICE_HISTORY_START);
-  if (error) throw new Error(`purge pre-2024 bars: ${error.message}`);
-  return count ?? 0;
+    .lt("bar_date", cutoffDate);
+  if (!bulk.error) return bulk.count ?? 0;
+
+  // Fall back to monthly chunks starting at the earliest remaining bar.
+  const { data: earliest } = await supabase
+    .from("stock_price_bars")
+    .select("bar_date")
+    .lt("bar_date", cutoffDate)
+    .order("bar_date", { ascending: true })
+    .limit(1);
+
+  const start = earliest?.[0]?.bar_date?.slice(0, 10);
+  if (!start) return 0;
+
+  let total = 0;
+  let cursor = `${start.slice(0, 8)}01`;
+  while (cursor < cutoffDate) {
+    const next = addMonths(cursor, 1);
+    const end = next < cutoffDate ? next : cutoffDate;
+    const { error, count } = await supabase
+      .from("stock_price_bars")
+      .delete({ count: "exact" })
+      .gte("bar_date", cursor)
+      .lt("bar_date", end);
+    if (error) {
+      throw new Error(`purge bars ${cursor}..${end}: ${error.message}`);
+    }
+    total += count ?? 0;
+    cursor = end;
+  }
+  return total;
+}
+
+/** @param {string} ymd @param {number} months */
+function addMonths(ymd, months) {
+  const [y, m] = ymd.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + months, 1));
+  return d.toISOString().slice(0, 10);
 }
 
 export async function collectEligibleTickers(supabase) {
