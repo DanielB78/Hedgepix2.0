@@ -13,12 +13,12 @@ assert.equal(rows[0].close, 1.5);
 assert.equal(rows[1].bar_date, "2026-08-21");
 assert.equal(rows[0].source, "alpaca_iex");
 
-const pre2024 = toBarRows("OLD", [
-  { t: "2023-12-29T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 10 },
-  { t: "2024-01-02T04:00:00Z", o: 2, h: 3, l: 1, c: 2.5, v: 20 },
+const pre2026 = toBarRows("OLD", [
+  { t: "2025-12-29T04:00:00Z", o: 1, h: 2, l: 0.5, c: 1.5, v: 10 },
+  { t: "2026-01-02T04:00:00Z", o: 2, h: 3, l: 1, c: 2.5, v: 20 },
 ]);
-assert.equal(pre2024.length, 1);
-assert.equal(pre2024[0].bar_date, "2024-01-02");
+assert.equal(pre2026.length, 1);
+assert.equal(pre2026[0].bar_date, "2026-01-02");
 
 const text = formatUpdateSummary({
   trades: {

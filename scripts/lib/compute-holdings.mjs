@@ -1,11 +1,11 @@
 /**
- * Estimate current stock holdings per member from disclosed transactions since 2012.
+ * Estimate current stock holdings per member from disclosed transactions since 2026.
  * Purchases add amount ranges; sales subtract (widening the range when uncertain).
  */
 
 import { isLikelyListedEquity } from "./equity-tickers.mjs";
 
-export const HOLDINGS_START_DATE = "2012-01-01";
+export const HOLDINGS_START_DATE = "2026-01-01";
 
 /**
  * @typedef {object} TradeRow
@@ -184,7 +184,7 @@ export function computeMemberHoldings(trades) {
 const HOLDINGS_PAGE = 1000;
 
 /**
- * Load all eligible trades since 2012 and refresh member_stock_holdings.
+ * Load all eligible trades since HOLDINGS_START_DATE and refresh member_stock_holdings.
  *
  * @param {import("@supabase/supabase-js").SupabaseClient} supabase
  */

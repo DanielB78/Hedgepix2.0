@@ -16,6 +16,13 @@ import {
   aggregateCeoActivity,
   type CeoActivityCard,
 } from "./ceoAggregate";
+import {
+  fetchTopPerformers,
+  type PerformerPeriod,
+  type TopPerformer,
+} from "./topPerformers";
+
+export type { PerformerPeriod, TopPerformer };
 
 export type FeedView = "feed" | "trending" | "house" | "senate";
 
@@ -39,6 +46,8 @@ export type FeedPayload = {
   recentHouseBuys: CongressTrade[];
   recentSenateBuys: CongressTrade[];
   recentCeoBuys: CeoActivityCard[];
+  topPerformers: TopPerformer[];
+  performerPeriod: PerformerPeriod;
   configured: boolean;
   error: string | null;
 };
@@ -266,7 +275,9 @@ async function fetchPopularMembers(
   return { rows, error: null };
 }
 
-export async function fetchFeedPayload(): Promise<FeedPayload> {
+export async function fetchFeedPayload(
+  performerPeriod: PerformerPeriod = "2026",
+): Promise<FeedPayload> {
   if (!hasPublicSupabaseConfig()) {
     return {
       trending: [],
@@ -277,6 +288,8 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
       recentHouseBuys: [],
       recentSenateBuys: [],
       recentCeoBuys: [],
+      topPerformers: [],
+      performerPeriod,
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
@@ -292,6 +305,7 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     recentHouseBuys,
     recentSenateBuys,
     recentCeoBuys,
+    topPerformers,
   ] = await Promise.all([
     fetchTrending({ mode: "all", periodDays: 30 }),
     fetchPopularMembers("house", 40),
@@ -301,6 +315,7 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     fetchRecentByChamber("house", 3, { purchasesOnly: true }),
     fetchRecentByChamber("senate", 3, { purchasesOnly: true }),
     fetchRecentCeoBuys(3),
+    fetchTopPerformers(performerPeriod, 10),
   ]);
 
   const error =
@@ -312,6 +327,7 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     recentHouseBuys.error ||
     recentSenateBuys.error ||
     recentCeoBuys.error ||
+    topPerformers.error ||
     null;
 
   return {
@@ -323,6 +339,8 @@ export async function fetchFeedPayload(): Promise<FeedPayload> {
     recentHouseBuys: recentHouseBuys.rows,
     recentSenateBuys: recentSenateBuys.rows,
     recentCeoBuys: recentCeoBuys.rows,
+    topPerformers: topPerformers.rows,
+    performerPeriod,
     configured: true,
     error,
   };

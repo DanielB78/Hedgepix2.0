@@ -3,6 +3,7 @@ import { AuthControls } from "@/components/AuthControls";
 import { FeedBoard } from "@/components/FeedBoard";
 import { FeedSearch } from "@/components/FeedSearch";
 import { fetchFeedPayload, parseFeedView } from "@/lib/feed";
+import { parsePerformerPeriod } from "@/lib/topPerformers";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ export default async function AppPage({ searchParams }: PageProps) {
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const housePage = parsePage(params.housePage);
   const senatePage = parsePage(params.senatePage);
-  const payload = await fetchFeedPayload();
+  const performerPeriod = parsePerformerPeriod(params.perf);
+  const payload = await fetchFeedPayload(performerPeriod);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">
