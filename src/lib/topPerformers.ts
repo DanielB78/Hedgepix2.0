@@ -29,6 +29,9 @@ export const PERFORMER_PERIODS: PerformerPeriod[] = ["2026", "6m", "3m", "1m"];
 const PAGE = 1000;
 const TICKER_CHUNK = 40;
 const BAR_PAGE = 1000;
+/** Cap buys scanned so ranking stays fast enough for feed navigation. */
+const MAX_CONGRESS_BUYS = 400;
+const MAX_CEO_BUYS = 400;
 
 export function parsePerformerPeriod(
   value: string | string[] | undefined,
@@ -169,12 +172,13 @@ export function rankBuyPerformers(
     .slice(0, limit);
 }
 
-async function fetchAllCongressBuys(cutoff: string): Promise<BuyRow[]> {
+async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
   let from = 0;
 
-  while (true) {
+  while (buys.length < MAX_CONGRESS_BUYS) {
+    const end = Math.min(from + PAGE - 1, MAX_CONGRESS_BUYS - 1);
     const { data, error } = await supabase
       .from("congress_trades")
       .select(
@@ -184,14 +188,15 @@ async function fetchAllCongressBuys(cutoff: string): Promise<BuyRow[]> {
       .eq("is_listed_equity", true)
       .gte("transaction_date", cutoff)
       .not("ticker", "is", null)
-      .order("transaction_date", { ascending: true })
-      .range(from, from + PAGE - 1);
+      .order("transaction_date", { ascending: false })
+      .range(from, end);
 
     if (error) throw new Error(error.message);
     const rows = data ?? [];
     if (rows.length === 0) break;
 
     for (const row of rows) {
+      if (buys.length >= MAX_CONGRESS_BUYS) break;
       const ticker = normalizeTicker(row.ticker as string | null);
       const name = String(row.member ?? "").trim();
       const slug = (row.member_slug as string | null)?.trim() || null;
@@ -215,19 +220,20 @@ async function fetchAllCongressBuys(cutoff: string): Promise<BuyRow[]> {
       });
     }
 
-    if (rows.length < PAGE) break;
+    if (rows.length < end - from + 1) break;
     from += PAGE;
   }
 
   return buys;
 }
 
-async function fetchAllCeoBuys(cutoff: string): Promise<BuyRow[]> {
+async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
   let from = 0;
 
-  while (true) {
+  while (buys.length < MAX_CEO_BUYS) {
+    const end = Math.min(from + PAGE - 1, MAX_CEO_BUYS - 1);
     const { data, error } = await supabase
       .from("ceo_stock_purchases")
       .select("ceo_name, ticker, transaction_date, transaction_code")
@@ -236,14 +242,15 @@ async function fetchAllCeoBuys(cutoff: string): Promise<BuyRow[]> {
       .or(
         "transaction_code.is.null,transaction_code.eq.P,transaction_code.eq.p",
       )
-      .order("transaction_date", { ascending: true })
-      .range(from, from + PAGE - 1);
+      .order("transaction_date", { ascending: false })
+      .range(from, end);
 
     if (error) throw new Error(error.message);
     const rows = data ?? [];
     if (rows.length === 0) break;
 
     for (const row of rows) {
+      if (buys.length >= MAX_CEO_BUYS) break;
       const ticker = normalizeTicker(row.ticker as string | null);
       const name = String(row.ceo_name ?? "").trim();
       const tx = (row.transaction_date as string | null)?.slice(0, 10);
@@ -258,7 +265,7 @@ async function fetchAllCeoBuys(cutoff: string): Promise<BuyRow[]> {
       });
     }
 
-    if (rows.length < PAGE) break;
+    if (rows.length < end - from + 1) break;
     from += PAGE;
   }
 
@@ -362,8 +369,8 @@ export async function fetchTopPerformers(
   try {
     const cutoff = performerCutoffDate(period);
     const [congress, ceos] = await Promise.all([
-      fetchAllCongressBuys(cutoff),
-      fetchAllCeoBuys(cutoff),
+      fetchRecentCongressBuys(cutoff),
+      fetchRecentCeoBuys(cutoff),
     ]);
     const buys = [...congress, ...ceos];
     if (buys.length === 0) return { rows: [], error: null };
