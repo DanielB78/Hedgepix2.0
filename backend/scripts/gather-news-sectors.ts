@@ -37,7 +37,9 @@ async function main() {
     const label = byHash.get(article.source_hash);
     if (!label) continue;
     article.sector = label.sector;
+    article.sector_code = label.sector_code;
     article.sector_score = label.sector_score;
+    article.sectors = label.sectors;
   }
 
   let upsertNote: unknown = "skipped";
@@ -58,10 +60,16 @@ async function main() {
     domain: a.domain,
     published_at: a.published_at,
     sector: a.sector ?? null,
+    sector_code: a.sector_code ?? null,
     sector_score:
       typeof a.sector_score === "number"
         ? Number(a.sector_score.toFixed(4))
         : null,
+    sectors: (a.sectors ?? []).map((s) => ({
+      code: s.code,
+      name: s.name,
+      score: Number(s.score.toFixed(4)),
+    })),
     url: a.url,
   }));
 
@@ -84,12 +92,14 @@ async function main() {
   );
   console.log("Wrote", outPath);
 
-  console.log("\n| # | Sector | Score | Domain | Title |");
-  console.log("|---|--------|------:|--------|-------|");
+  console.log("\n| # | Top NAICS | Score | #2 | #3 | Domain | Title |");
+  console.log("|---|-----------|------:|----|----|--------|-------|");
   for (const row of rows) {
-    const title = row.title.replace(/\|/g, "\\|").slice(0, 100);
+    const title = row.title.replace(/\|/g, "\\|").slice(0, 80);
+    const s2 = row.sectors[1]?.code ?? "—";
+    const s3 = row.sectors[2]?.code ?? "—";
     console.log(
-      `| ${row.n} | ${row.sector ?? "—"} | ${row.sector_score ?? "—"} | ${row.domain ?? "—"} | ${title} |`,
+      `| ${row.n} | ${row.sector_code ?? "—"} ${row.sector ?? ""} | ${row.sector_score ?? "—"} | ${s2} | ${s3} | ${row.domain ?? "—"} | ${title} |`,
     );
   }
 }

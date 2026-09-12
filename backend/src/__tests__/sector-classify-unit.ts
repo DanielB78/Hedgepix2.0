@@ -1,27 +1,76 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const mlRoot = resolve(__dirname, "../../ml");
-const sectorsPath = resolve(mlRoot, "sector_classify/sectors.json");
+const templatesPath = resolve(mlRoot, "sector_classify/naics/templates.json");
+const xlsxPath = resolve(
+  mlRoot,
+  "sector_classify/naics/2022_NAICS_Descriptions.xlsx",
+);
+const venvPython = resolve(mlRoot, ".venv/bin/python");
 
-function testSectorsFilePresent() {
-  assert.equal(existsSync(sectorsPath), true);
-  // Dynamic import avoided — read via spawn python for schema sanity.
-  const py = spawnSync(
-    "python3",
-    [
-      "-c",
-      "import json,sys; d=json.load(open(sys.argv[1])); assert isinstance(d,dict) and len(d)>=8; assert all(len(v)>=5 for v in d.values())",
-      sectorsPath,
-    ],
-    { encoding: "utf8" },
-  );
-  assert.equal(py.status, 0, py.stderr || py.stdout);
+function pythonBin(): string {
+  return existsSync(venvPython) ? venvPython : "python3";
 }
 
-testSectorsFilePresent();
+function testNaicsWorkbookPresent() {
+  assert.equal(existsSync(xlsxPath), true, "NAICS workbook should be vendored");
+}
+
+function testTemplatesFile() {
+  if (!existsSync(templatesPath)) {
+    const built = spawnSync(
+      pythonBin(),
+      ["-m", "sector_classify.cli", "build-templates"],
+      {
+        cwd: mlRoot,
+        env: {
+          ...process.env,
+          PYTHONPATH: [mlRoot, process.env.PYTHONPATH ?? ""]
+            .filter(Boolean)
+            .join(":"),
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(built.status, 0, built.stderr || built.stdout);
+  }
+  assert.equal(existsSync(templatesPath), true);
+  const data = JSON.parse(readFileSync(templatesPath, "utf8")) as {
+    count?: number;
+    code_length?: number;
+    templates?: Array<{ code?: string; name?: string; template_text?: string }>;
+  };
+  assert.equal(data.code_length, 4);
+  assert.ok((data.count ?? 0) >= 200);
+  assert.ok(Array.isArray(data.templates));
+  assert.ok((data.templates?.length ?? 0) >= 200);
+  const sample = data.templates?.find((t) => t.code === "3344");
+  assert.ok(sample?.name?.toLowerCase().includes("semiconductor"));
+  assert.ok((sample?.template_text ?? "").includes("3344"));
+}
+
+function testFilterHelperLogic() {
+  // Mirror frontend matching: sector in any of top 3.
+  const article = {
+    sector_1_code: "5221",
+    sector_2_code: "3344",
+    sector_3_code: "5112",
+  };
+  const needle = "3344";
+  const hit =
+    article.sector_1_code === needle ||
+    article.sector_2_code === needle ||
+    article.sector_3_code === needle;
+  assert.equal(hit, true);
+  assert.equal(article.sector_1_code === needle, false);
+}
+
+testNaicsWorkbookPresent();
+testTemplatesFile();
+testFilterHelperLogic();
 console.log("sector-classify unit tests passed");

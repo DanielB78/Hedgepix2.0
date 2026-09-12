@@ -1,11 +1,11 @@
-"""Local BGE-small sector classifier for GDELT news titles."""
+"""Local BGE-small NAICS sector classifier for GDELT news titles."""
 
 from .classify import (
   MODEL_NAME,
   build_prototype_cache,
   classify_titles,
   load_prototype_cache,
-  load_sectors,
+  load_templates,
 )
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
   "build_prototype_cache",
   "classify_titles",
   "load_prototype_cache",
-  "load_sectors",
+  "load_templates",
 ]

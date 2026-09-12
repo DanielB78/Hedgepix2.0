@@ -22,9 +22,12 @@ export type NormalizedNewsArticle = {
   gdelt_id: string | null;
   source_hash: string;
   raw_source: GdeltArticleRaw;
-  /** Local BGE-small sector label (optional). */
+  /** Best NAICS match (optional; mirrors sectors[0]). */
   sector?: string | null;
+  sector_code?: string | null;
   sector_score?: number | null;
+  /** Top-3 NAICS matches from local BGE-small (optional). */
+  sectors?: Array<{ code: string; name: string; score: number }> | null;
 };
 
 export type GdeltFetchResult = {

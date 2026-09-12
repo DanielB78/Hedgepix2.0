@@ -10,9 +10,19 @@ export function sectorClassifyMlRoot(): string {
   return resolve(__dirname, "../../ml");
 }
 
+export type NaicsSectorMatch = {
+  code: string;
+  name: string;
+  score: number;
+};
+
 export type SectorLabel = {
+  /** Best match (rank 1) — kept for compatibility. */
   sector: string;
   sector_score: number;
+  sector_code: string;
+  /** Top 3 NAICS matches, best first. */
+  sectors: NaicsSectorMatch[];
 };
 
 export type SectorClassifyStats = {
@@ -29,8 +39,21 @@ function resolvePythonBin(mlRoot: string): string {
   return process.env.SECTOR_CLASSIFY_PYTHON?.trim() || "python3";
 }
 
+function parseMatch(raw: unknown): NaicsSectorMatch | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const code = typeof row.code === "string" ? row.code.trim() : "";
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  const score =
+    typeof row.score === "number" && Number.isFinite(row.score)
+      ? row.score
+      : null;
+  if (!code || !name || score == null) return null;
+  return { code, name, score };
+}
+
 /**
- * Soft-fail local BGE-small sector labeling.
+ * Soft-fail local BGE-small NAICS labeling (top 3).
  * Expects `backend/ml` on PYTHONPATH with sector_classify installed.
  */
 export async function classifyNewsSectors(
@@ -70,7 +93,9 @@ export async function classifyNewsSectors(
     const parsed = JSON.parse(raw) as Array<{
       id?: string;
       sector?: string;
+      sector_code?: string;
       sector_score?: number;
+      sectors?: unknown[];
     }>;
     if (!Array.isArray(parsed)) {
       return {
@@ -84,13 +109,35 @@ export async function classifyNewsSectors(
     }
     for (const row of parsed) {
       const id = typeof row.id === "string" ? row.id : "";
-      const sector = typeof row.sector === "string" ? row.sector.trim() : "";
-      const score =
+      const matches = Array.isArray(row.sectors)
+        ? row.sectors
+            .map(parseMatch)
+            .filter((m): m is NaicsSectorMatch => m != null)
+            .slice(0, 3)
+        : [];
+
+      let sector =
+        typeof row.sector === "string" ? row.sector.trim() : "";
+      let sectorCode =
+        typeof row.sector_code === "string" ? row.sector_code.trim() : "";
+      let score =
         typeof row.sector_score === "number" && Number.isFinite(row.sector_score)
           ? row.sector_score
           : null;
-      if (!id || !sector || score == null) continue;
-      byHash.set(id, { sector, sector_score: score });
+
+      if (matches.length > 0) {
+        sector = matches[0].name;
+        sectorCode = matches[0].code;
+        score = matches[0].score;
+      }
+
+      if (!id || !sector || score == null || matches.length === 0) continue;
+      byHash.set(id, {
+        sector,
+        sector_code: sectorCode,
+        sector_score: score,
+        sectors: matches,
+      });
     }
     return {
       byHash,
