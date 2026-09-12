@@ -103,6 +103,42 @@ export function collectSectorOptions(
     .sort((a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code));
 }
 
+function asNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : value == null ? null : String(value);
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Normalize a Supabase row (NAICS or legacy select) into NewsArticle. */
+function normalizeNewsArticle(row: Record<string, unknown>): NewsArticle {
+  return {
+    id: String(row.id ?? ""),
+    source: String(row.source ?? "gdelt"),
+    title: String(row.title ?? ""),
+    url: String(row.url ?? ""),
+    published_at: asNullableString(row.published_at),
+    domain: asNullableString(row.domain),
+    image_url: asNullableString(row.image_url),
+    language: asNullableString(row.language),
+    gdelt_id: asNullableString(row.gdelt_id),
+    source_hash: String(row.source_hash ?? ""),
+    created_at: String(row.created_at ?? ""),
+    sector: asNullableString(row.sector),
+    sector_score: asNullableNumber(row.sector_score),
+    sector_1: asNullableString(row.sector_1),
+    sector_1_code: asNullableString(row.sector_1_code),
+    sector_1_score: asNullableNumber(row.sector_1_score),
+    sector_2: asNullableString(row.sector_2),
+    sector_2_code: asNullableString(row.sector_2_code),
+    sector_2_score: asNullableNumber(row.sector_2_score),
+    sector_3: asNullableString(row.sector_3),
+    sector_3_code: asNullableString(row.sector_3_code),
+    sector_3_score: asNullableNumber(row.sector_3_score),
+  };
+}
+
 export async function fetchRecentNewsArticles(
   limit = NEWS_LIMIT,
 ): Promise<NewsFeedResult> {
@@ -116,50 +152,48 @@ export async function fetchRecentNewsArticles(
 
   try {
     const supabase = createBrowserSupabase();
-    let { data, error } = await supabase
+    const primary = await supabase
       .from("news_articles")
       .select(SELECT_COLUMNS_NAICS)
       .order("published_at", { ascending: false, nullsFirst: false })
       .limit(limit);
 
-    // Before the NAICS migration is applied, fall back to legacy columns.
-    if (
-      error &&
-      (error.message.includes("sector_1") ||
-        error.message.includes("schema cache"))
+    let rows: Record<string, unknown>[] | null = null;
+    let errorMessage: string | null = null;
+
+    if (!primary.error) {
+      rows = (primary.data ?? []) as Record<string, unknown>[];
+    } else if (
+      primary.error.message.includes("sector_1") ||
+      primary.error.message.includes("schema cache")
     ) {
-      ({ data, error } = await supabase
+      // Before the NAICS migration is applied, fall back to legacy columns.
+      const legacy = await supabase
         .from("news_articles")
         .select(SELECT_COLUMNS_LEGACY)
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(limit));
+        .limit(limit);
+      if (legacy.error) {
+        errorMessage = legacy.error.message;
+      } else {
+        rows = (legacy.data ?? []) as Record<string, unknown>[];
+      }
+    } else {
+      errorMessage = primary.error.message;
     }
 
-    if (error) {
+    if (errorMessage) {
       return {
         configured: true,
-        error: error.message,
+        error: errorMessage,
         articles: [],
       };
     }
 
-    const articles = (data ?? []).map((row) => ({
-      sector_1: null,
-      sector_1_code: null,
-      sector_1_score: null,
-      sector_2: null,
-      sector_2_code: null,
-      sector_2_score: null,
-      sector_3: null,
-      sector_3_code: null,
-      sector_3_score: null,
-      ...row,
-    })) as NewsArticle[];
-
     return {
       configured: true,
       error: null,
-      articles,
+      articles: (rows ?? []).map(normalizeNewsArticle),
     };
   } catch (err) {
     return {
