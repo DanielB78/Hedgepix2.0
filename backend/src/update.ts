@@ -20,6 +20,7 @@ import {
   deleteNewsOlderThan,
   upsertNewsArticles,
 } from "./store/newsStore.js";
+import { checkNewsTickerAbnormalMoves } from "./store/tickerMoveStore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,10 @@ type NewsSummary = {
   sectorsLabeled: number;
   sectorStatus: "SUCCESS" | "SKIPPED" | "FAILED";
   pruned: number;
+  tickerMovesStatus: "SUCCESS" | "SKIPPED" | "FAILED";
+  tickerMovesChecked: number;
+  tickerMovesUpserted: number;
+  tickerMovesAbnormal: number;
   error: string | null;
 };
 
@@ -61,6 +66,10 @@ async function syncGdeltNews(
         sectorsLabeled: 0,
         sectorStatus: "SKIPPED",
         pruned: 0,
+        tickerMovesStatus: "SKIPPED",
+        tickerMovesChecked: 0,
+        tickerMovesUpserted: 0,
+        tickerMovesAbnormal: 0,
         error: fetchResult.error,
       };
     }
@@ -89,6 +98,10 @@ async function syncGdeltNews(
         sectorsLabeled: sectorStats.labeled,
         sectorStatus: sectorStats.status,
         pruned: 0,
+        tickerMovesStatus: "SKIPPED",
+        tickerMovesChecked: 0,
+        tickerMovesUpserted: 0,
+        tickerMovesAbnormal: 0,
         error: upsert.errorMessages[0] ?? "News upsert failed",
       };
     }
@@ -104,9 +117,16 @@ async function syncGdeltNews(
         sectorsLabeled: sectorStats.labeled,
         sectorStatus: sectorStats.status,
         pruned: 0,
+        tickerMovesStatus: "SKIPPED",
+        tickerMovesChecked: 0,
+        tickerMovesUpserted: 0,
+        tickerMovesAbnormal: 0,
         error: retention.error,
       };
     }
+
+    // News → NAICS → S&P 500 tickers → abnormal move check (≤24h window).
+    const moves = await checkNewsTickerAbnormalMoves(supabase);
 
     return {
       status: "SUCCESS",
@@ -117,8 +137,16 @@ async function syncGdeltNews(
       sectorsLabeled: sectorStats.labeled,
       sectorStatus: sectorStats.status,
       pruned: retention.deleted,
+      tickerMovesStatus: moves.status,
+      tickerMovesChecked: moves.tickerChecks,
+      tickerMovesUpserted: moves.upserted,
+      tickerMovesAbnormal: moves.abnormalFlags,
       error:
-        sectorStats.status === "FAILED" ? sectorStats.error : null,
+        sectorStats.status === "FAILED"
+          ? sectorStats.error
+          : moves.status === "FAILED"
+            ? moves.error
+            : null,
     };
   } catch (err) {
     return {
@@ -130,6 +158,10 @@ async function syncGdeltNews(
       sectorsLabeled: 0,
       sectorStatus: "SKIPPED",
       pruned: 0,
+      tickerMovesStatus: "SKIPPED",
+      tickerMovesChecked: 0,
+      tickerMovesUpserted: 0,
+      tickerMovesAbnormal: 0,
       error: err instanceof Error ? err.message : String(err),
     };
   }
@@ -299,8 +331,14 @@ async function main(): Promise<void> {
         `NAICS sector labels: ${news.sectorStatus} (${news.sectorsLabeled} titled)`,
       );
       console.log(`News older than 3 days deleted: ${news.pruned}`);
+      console.log(
+        `Ticker move checks: ${news.tickerMovesStatus} (checked=${news.tickerMovesChecked}, upserted=${news.tickerMovesUpserted}, abnormal=${news.tickerMovesAbnormal})`,
+      );
       if (news.sectorStatus === "FAILED" && news.error) {
         console.log(`Sector note: ${news.error}`);
+      }
+      if (news.tickerMovesStatus === "FAILED" && news.error) {
+        console.log(`Ticker move note: ${news.error}`);
       }
     } else {
       console.log("Status: FAILED");

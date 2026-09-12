@@ -2,11 +2,15 @@ import { BrandMark, SideNav, TopTabs } from "@/components/AppChrome";
 import { AuthControls } from "@/components/AuthControls";
 import { NewsList } from "@/components/NewsList";
 import { fetchRecentNewsArticles } from "@/lib/news";
+import { fetchNewsTickerMovesForArticles } from "@/lib/newsTickerMoves";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewsPage() {
   const result = await fetchRecentNewsArticles(100);
+  const tickerMoves = result.articles.length
+    ? await fetchNewsTickerMovesForArticles(result.articles.map((a) => a.id))
+    : [];
   const missingTable = Boolean(
     result.error?.includes("news_articles") ||
       result.error?.includes("schema cache"),
@@ -33,7 +37,8 @@ export default async function NewsPage() {
               News
             </h2>
             <p className="text-sm text-[color:var(--fog-dim)]">
-              Latest finance headlines from the last manual database update.
+              Trending sectors from abnormal S&amp;P 500 moves after related
+              headlines — or build a custom multi-sector feed.
             </p>
           </div>
 
@@ -57,7 +62,7 @@ export default async function NewsPage() {
               {result.error}
             </div>
           ) : (
-            <NewsList articles={result.articles} />
+            <NewsList articles={result.articles} tickerMoves={tickerMoves} />
           )}
         </section>
       </main>

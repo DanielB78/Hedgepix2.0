@@ -19,6 +19,7 @@ import {
   deleteNewsOlderThan,
   upsertNewsArticles,
 } from "../src/store/newsStore.js";
+import { checkNewsTickerAbnormalMoves } from "../src/store/tickerMoveStore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: resolve(__dirname, "../.env") });
@@ -149,6 +150,10 @@ async function main() {
 
   const retention = await deleteNewsOlderThan(supabase, 3);
   console.log("Retention:", retention);
+
+  console.log("Checking S&P 500 ticker abnormal moves…");
+  const moves = await checkNewsTickerAbnormalMoves(supabase);
+  console.log("Ticker moves:", moves);
 
   const after = await supabase
     .from("news_articles")
