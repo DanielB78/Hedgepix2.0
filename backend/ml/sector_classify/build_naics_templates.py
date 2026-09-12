@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Build NAICS industry embedding templates from Census 2022 descriptions.
 
-Uses 4-digit NAICS industry groups (~300 labels): detailed enough for news
-classification, small enough for a practical UI filter.
+Uses 5-digit NAICS industries (~690 labels): the official industry level,
+detailed enough for news classification. The News UI dropdown only lists
+industries that currently appear on stored articles.
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ CENSUS_URL = (
   "https://www.census.gov/naics/2022NAICS/2022_NAICS_Descriptions.xlsx"
 )
 
-# Prefer industry-group detail over broad 2/3-digit sectors.
-TARGET_CODE_LEN = 4
+# Official NAICS "Industry" level (5-digit).
+TARGET_CODE_LEN = 5
 
 
 def ensure_xlsx(path: Path, download: bool = True) -> Path:

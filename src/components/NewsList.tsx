@@ -84,6 +84,7 @@ function NewsArticleRow({ article }: { article: NewsArticle }) {
 
 export function NewsList({ articles }: Props) {
   const [sectorCode, setSectorCode] = useState("");
+  // Options are derived only from sectors present on the loaded articles.
   const options = useMemo(() => collectSectorOptions(articles), [articles]);
   const filtered = useMemo(
     () =>
