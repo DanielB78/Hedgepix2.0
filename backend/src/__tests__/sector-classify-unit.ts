@@ -45,23 +45,23 @@ function testTemplatesFile() {
     code_length?: number;
     templates?: Array<{ code?: string; name?: string; template_text?: string }>;
   };
-  assert.equal(data.code_length, 4);
-  assert.ok((data.count ?? 0) >= 200);
+  assert.equal(data.code_length, 5);
+  assert.ok((data.count ?? 0) >= 600);
   assert.ok(Array.isArray(data.templates));
-  assert.ok((data.templates?.length ?? 0) >= 200);
-  const sample = data.templates?.find((t) => t.code === "3344");
+  assert.ok((data.templates?.length ?? 0) >= 600);
+  const sample = data.templates?.find((t) => t.code === "33441");
   assert.ok(sample?.name?.toLowerCase().includes("semiconductor"));
-  assert.ok((sample?.template_text ?? "").includes("3344"));
+  assert.ok((sample?.template_text ?? "").includes("33441"));
 }
 
 function testFilterHelperLogic() {
   // Mirror frontend matching: sector in any of top 3.
   const article = {
-    sector_1_code: "5221",
-    sector_2_code: "3344",
-    sector_3_code: "5112",
+    sector_1_code: "52211",
+    sector_2_code: "33441",
+    sector_3_code: "51121",
   };
-  const needle = "3344";
+  const needle = "33441";
   const hit =
     article.sector_1_code === needle ||
     article.sector_2_code === needle ||

@@ -2,8 +2,8 @@
 
 Uses `BAAI/bge-small-en-v1.5` via `sentence-transformers` (384-d embeddings).
 
-Official US Census **2022 NAICS** industry-group templates (4-digit codes) live
-under `naics/`. Each template embeds:
+Official US Census **2022 NAICS** industry templates (5-digit codes, ~690
+labels) live under `naics/`. Each template embeds:
 
 ```
 <code>

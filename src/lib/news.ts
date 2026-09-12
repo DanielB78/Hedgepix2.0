@@ -37,7 +37,7 @@ export type NewsFeedResult = {
   articles: NewsArticle[];
 };
 
-const NEWS_LIMIT = 40;
+const NEWS_LIMIT = 100;
 
 const SELECT_COLUMNS_NAICS =
   "id, source, title, url, published_at, domain, image_url, language, gdelt_id, source_hash, created_at, sector, sector_score, sector_1, sector_1_code, sector_1_score, sector_2, sector_2_code, sector_2_score, sector_3, sector_3_code, sector_3_score";

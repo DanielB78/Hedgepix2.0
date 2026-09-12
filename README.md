@@ -96,7 +96,7 @@ npm run update-data
 5. Upserts into Supabase
 6. Rebuilds holdings + missing Alpaca prices
 7. Fetches recent GDELT finance articles into `news_articles`, keeping only allowlisted publishers (`backend/config/news-source-allowlist.json`; soft-fail if GDELT is down)
-8. Labels each new title with top-3 NAICS industry groups via local BGE-small (`BAAI/bge-small-en-v1.5`) cosine similarity against cached Census NAICS templates
+8. Labels each new title with top-3 NAICS industries (5-digit) via local BGE-small (`BAAI/bge-small-en-v1.5`) cosine similarity against cached Census NAICS templates
 9. Deletes `news_articles` with `published_at` older than 3 days (news table only)
 10. Advances `last_success_at` only on full Congress import success (news failure does not roll back trades/prices)
 

@@ -6,7 +6,7 @@ import { fetchRecentNewsArticles } from "@/lib/news";
 export const dynamic = "force-dynamic";
 
 export default async function NewsPage() {
-  const result = await fetchRecentNewsArticles(40);
+  const result = await fetchRecentNewsArticles(100);
   const missingTable = Boolean(
     result.error?.includes("news_articles") ||
       result.error?.includes("schema cache"),

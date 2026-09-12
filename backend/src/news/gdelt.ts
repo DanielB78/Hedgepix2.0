@@ -48,7 +48,7 @@ export const DEFAULT_GDELT_QUERY =
 const DEFAULT_GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc";
 
 /** GDELT DOC 2.0 asks clients to send at most one request every 5 seconds. */
-export const GDELT_MIN_INTERVAL_MS = 5_000;
+export const GDELT_MIN_INTERVAL_MS = 7_000;
 
 let lastGdeltRequestAt = 0;
 
