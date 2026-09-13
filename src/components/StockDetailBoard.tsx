@@ -174,7 +174,7 @@ export function StockDetailBoard({
       <div className="grid min-h-[70vh] lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
         <aside className="flex max-h-[50vh] flex-col border-b border-[color:var(--line)] lg:max-h-[calc(100vh-10rem)] lg:border-b-0 lg:border-r">
           <div className="shrink-0 space-y-3 px-5 py-4">
-            <div className="flex flex-wrap gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-[16px] bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
               {(
                 [
                   ["congress", "Congress"],
@@ -188,7 +188,7 @@ export function StockDetailBoard({
                   key={value}
                   type="button"
                   onClick={() => setTradeSource(value)}
-                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`rounded-full px-2 py-2 text-xs font-semibold transition-colors ${
                     tradeSource === value
                       ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
                       : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"

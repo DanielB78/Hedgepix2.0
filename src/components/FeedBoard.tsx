@@ -1095,7 +1095,7 @@ function StockPanel({
       <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
         <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
           <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="flex flex-wrap gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-[16px] bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
               {(
                 [
                   ["congress", "Congress"],
@@ -1112,7 +1112,7 @@ function StockPanel({
                     event.stopPropagation();
                     onTradeSource(value);
                   }}
-                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`rounded-full px-2 py-2 text-xs font-semibold transition-colors ${
                     state.tradeSource === value
                       ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
                       : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
