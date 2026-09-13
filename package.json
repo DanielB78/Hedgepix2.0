@@ -14,7 +14,8 @@
     "purge:pre2024-prices": "node --env-file=.env.local scripts/purge-pre2024-prices.mjs",
     "purge:pre2026-data": "node --env-file=.env.local scripts/purge-pre2026-data.mjs",
     "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs && node scripts/lib/compute-holdings.test.mjs",
-    "test:performers": "npx --yes tsx scripts/lib/top-performers.test.mjs"
+    "test:performers": "npx --yes tsx scripts/lib/top-performers.test.mjs",
+    "repair:ceo-codes": "node --env-file=.env.local scripts/repair-ceo-transaction-codes.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

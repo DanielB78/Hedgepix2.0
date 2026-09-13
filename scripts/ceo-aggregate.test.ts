@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   aggregateCeoActivity,
   filterCeoActivity,
+  resolveCeoTransactionCode,
 } from "../src/lib/ceoAggregate";
 import type { CeoStockPurchaseRow } from "../src/lib/types";
 
@@ -72,5 +73,31 @@ assert.equal(sale.shares, 15);
 
 assert.equal(filterCeoActivity(combined, "coe").length, 2);
 assert.equal(filterCeoActivity(combined, "nobody").length, 0);
+
+
+
+assert.equal(
+  resolveCeoTransactionCode({ transaction_code: "P", raw_source: { trans_code: "S" } }),
+  "S",
+);
+assert.equal(
+  resolveCeoTransactionCode({ transaction_code: "S", raw_source: { trans_code: "P" } }),
+  "P",
+);
+assert.equal(resolveCeoTransactionCode({ transaction_code: "P", raw_source: null }), "P");
+
+const mislabeled = aggregateCeoActivity([
+  row({
+    id: "sale-mislabeled",
+    source_id: "x",
+    ceo_name: "Sale Person",
+    ticker: "SALE",
+    transaction_code: "P",
+    raw_source: { trans_code: "S" },
+    shares_purchased: 5,
+  }),
+]);
+assert.equal(mislabeled.length, 1);
+assert.equal(mislabeled[0].side, "sale");
 
 console.log("ceo aggregate unit tests passed");

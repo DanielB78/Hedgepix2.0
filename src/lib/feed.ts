@@ -14,15 +14,28 @@ import {
 } from "./stockFilter";
 import {
   aggregateCeoActivity,
+  resolveCeoTransactionCode,
   type CeoActivityCard,
 } from "./ceoAggregate";
 import {
   fetchTopPerformers,
   type PerformerPeriod,
+  type PortfolioGrowth,
   type TopPerformer,
 } from "./topPerformers";
+import {
+  asCongressChartTrade,
+  ceoRowToChartTrade,
+  chamberFromTradeSource,
+  includeCeoTrades,
+  includeCongressTrades,
+  parseChartTradeSource,
+  type ChartTrade,
+  type ChartTradeSource,
+} from "./chartTrades";
 
-export type { PerformerPeriod, TopPerformer };
+export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
+export type { ChartTrade, ChartTradeSource };
 
 export type FeedView = "feed" | "trending" | "house" | "senate";
 
@@ -47,6 +60,7 @@ export type FeedPayload = {
   recentSenateBuys: CongressTrade[];
   recentCeoBuys: CeoActivityCard[];
   topPerformers: TopPerformer[];
+  portfolioGrowth: PortfolioGrowth | null;
   performerPeriod: PerformerPeriod;
   configured: boolean;
   error: string | null;
@@ -56,8 +70,8 @@ export type StockPreviewPayload = {
   ticker: string;
   asset: string | null;
   bars: StockPriceBar[];
-  topTrades: CongressTrade[];
-  chamber: "all" | Chamber;
+  topTrades: ChartTrade[];
+  tradeSource: ChartTradeSource;
 };
 
 export type MemberPreviewPayload = {
@@ -155,21 +169,24 @@ async function fetchRecentCeoBuys(
   limit = 3,
 ): Promise<{ rows: CeoActivityCard[]; error: string | null }> {
   const supabase = createBrowserSupabase();
+  // Over-fetch: transaction_code may be wrong; resolve via raw_source.trans_code.
   const { data, error } = await supabase
     .from("ceo_stock_purchases")
     .select(CEO_FEED_COLUMNS)
-    .or("transaction_code.is.null,transaction_code.eq.P,transaction_code.eq.p")
     .order("filing_date", { ascending: false, nullsFirst: false })
     .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(Math.max(limit * 8, 24));
+    .limit(Math.max(limit * 24, 72));
 
   if (error) {
     return { rows: [], error: error.message };
   }
 
-  const cards = aggregateCeoActivity(
-    (data as CeoStockPurchaseRow[] | null) ?? [],
-  ).filter((card) => card.side === "purchase");
+  const purchases = ((data as CeoStockPurchaseRow[] | null) ?? []).filter(
+    (row) => resolveCeoTransactionCode(row) === "P",
+  );
+  const cards = aggregateCeoActivity(purchases).filter(
+    (card) => card.side === "purchase",
+  );
 
   return { rows: cards.slice(0, limit), error: null };
 }
@@ -277,6 +294,11 @@ async function fetchPopularMembers(
 
 type EmptySlice = { rows: never[]; error: string | null };
 const EMPTY_SLICE: EmptySlice = { rows: [], error: null };
+const EMPTY_PERFORMERS = {
+  rows: [] as TopPerformer[],
+  portfolio: null as PortfolioGrowth | null,
+  error: null as string | null,
+};
 
 /**
  * Load feed data scoped to the active view so House/Senate/Trending
@@ -297,6 +319,7 @@ export async function fetchFeedPayload(
       recentSenateBuys: [],
       recentCeoBuys: [],
       topPerformers: [],
+      portfolioGrowth: null,
       performerPeriod,
       configured: false,
       error:
@@ -337,7 +360,7 @@ export async function fetchFeedPayload(
     needFeedDigest ? fetchRecentCeoBuys(3) : EMPTY_SLICE,
     needTopPerformers
       ? fetchTopPerformers(performerPeriod, 10)
-      : EMPTY_SLICE,
+      : EMPTY_PERFORMERS,
   ]);
 
   const error =
@@ -362,6 +385,7 @@ export async function fetchFeedPayload(
     recentSenateBuys: recentSenateBuys.rows,
     recentCeoBuys: recentCeoBuys.rows,
     topPerformers: topPerformers.rows,
+    portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
     configured: true,
     error,
@@ -370,7 +394,7 @@ export async function fetchFeedPayload(
 
 export async function fetchStockPreview(
   ticker: string,
-  chamber: "all" | Chamber = "all",
+  tradeSource: ChartTradeSource = "congress",
 ): Promise<StockPreviewPayload | null> {
   if (!hasPublicSupabaseConfig()) return null;
   const symbol = ticker.trim().toUpperCase();
@@ -380,58 +404,100 @@ export async function fetchStockPreview(
   const cutoff = new Date();
   cutoff.setUTCDate(cutoff.getUTCDate() - 365);
   const cutoffDate = cutoff.toISOString().slice(0, 10);
+  const chamber = chamberFromTradeSource(tradeSource);
+  const wantCongress = includeCongressTrades(tradeSource);
+  const wantCeo = includeCeoTrades(tradeSource);
 
-  let tradesQuery = supabase
-    .from("congress_trades")
-    .select(PUBLIC_TRADE_COLUMNS)
-    .eq("is_listed_equity", true)
+  const barsPromise = supabase
+    .from("stock_price_bars")
+    .select(BAR_COLUMNS)
     .eq("ticker", symbol)
-    .order("disclosure_date", { ascending: false, nullsFirst: false })
-    .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(400);
+    .gte("bar_date", cutoffDate)
+    .order("bar_date", { ascending: true });
 
-  if (chamber !== "all") {
-    tradesQuery = tradesQuery.eq("chamber", chamber);
-  }
+  let congressTrades: CongressTrade[] = [];
+  let barsResult: Awaited<typeof barsPromise>;
 
-  const [barsResult, tradesResultRaw] = await Promise.all([
-    supabase
-      .from("stock_price_bars")
-      .select(BAR_COLUMNS)
-      .eq("ticker", symbol)
-      .gte("bar_date", cutoffDate)
-      .order("bar_date", { ascending: true }),
-    tradesQuery,
-  ]);
-
-  let trades = (tradesResultRaw.data as CongressTrade[] | null) ?? [];
-  if (isMissingListedEquityColumn(tradesResultRaw.error)) {
-    let fallback = supabase
+  if (wantCongress) {
+    let tradesQuery = supabase
       .from("congress_trades")
       .select(PUBLIC_TRADE_COLUMNS)
+      .eq("is_listed_equity", true)
       .eq("ticker", symbol)
       .order("disclosure_date", { ascending: false, nullsFirst: false })
       .order("transaction_date", { ascending: false, nullsFirst: false })
       .limit(400);
-    if (chamber !== "all") fallback = fallback.eq("chamber", chamber);
-    const fb = await fallback;
-    trades = applyListedEquityFallback(
-      (fb.data as CongressTrade[] | null) ?? [],
-      null,
-    ).rows;
+
+    if (chamber !== "all") {
+      tradesQuery = tradesQuery.eq("chamber", chamber);
+    }
+
+    const [bars, tradesResultRaw] = await Promise.all([
+      barsPromise,
+      tradesQuery,
+    ]);
+    barsResult = bars;
+
+    congressTrades = (tradesResultRaw.data as CongressTrade[] | null) ?? [];
+    if (isMissingListedEquityColumn(tradesResultRaw.error)) {
+      let fallback = supabase
+        .from("congress_trades")
+        .select(PUBLIC_TRADE_COLUMNS)
+        .eq("ticker", symbol)
+        .order("disclosure_date", { ascending: false, nullsFirst: false })
+        .order("transaction_date", { ascending: false, nullsFirst: false })
+        .limit(400);
+      if (chamber !== "all") fallback = fallback.eq("chamber", chamber);
+      const fb = await fallback;
+      congressTrades = applyListedEquityFallback(
+        (fb.data as CongressTrade[] | null) ?? [],
+        null,
+      ).rows;
+    }
+  } else {
+    barsResult = await barsPromise;
   }
 
-  const topTrades = trades.filter(
-    (t) =>
-      t.transaction_type === "purchase" || t.transaction_type === "sale",
-  );
+  const ceoTrades: ChartTrade[] = [];
+  if (wantCeo) {
+    const { data: ceoData } = await supabase
+      .from("ceo_stock_purchases")
+      .select(CEO_FEED_COLUMNS)
+      .eq("ticker", symbol)
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .limit(400);
+    for (const row of (ceoData as CeoStockPurchaseRow[] | null) ?? []) {
+      const trade = ceoRowToChartTrade(row);
+      if (trade) ceoTrades.push(trade);
+    }
+  }
+
+  const topTrades: ChartTrade[] = [
+    ...(wantCongress
+      ? congressTrades
+          .filter(
+            (t) =>
+              t.transaction_type === "purchase" ||
+              t.transaction_type === "sale",
+          )
+          .map(asCongressChartTrade)
+      : []),
+    ...ceoTrades.filter(
+      (t) =>
+        t.transaction_type === "purchase" || t.transaction_type === "sale",
+    ),
+  ].sort((a, b) => {
+    const da = a.disclosure_date ?? a.transaction_date ?? "";
+    const db = b.disclosure_date ?? b.transaction_date ?? "";
+    return db.localeCompare(da);
+  });
 
   return {
     ticker: symbol,
-    asset: trades[0]?.asset ?? null,
+    asset: congressTrades[0]?.asset ?? ceoTrades[0]?.asset ?? null,
     bars: (barsResult.data as StockPriceBar[] | null) ?? [],
     topTrades,
-    chamber,
+    tradeSource,
   };
 }
 

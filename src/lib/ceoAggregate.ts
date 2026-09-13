@@ -23,9 +23,31 @@ function normalizeName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+/**
+ * Prefer raw_source.trans_code over transaction_code.
+ * Older upserts defaulted the column to P while raw still stored the true Form 4 code.
+ */
+export function resolveCeoTransactionCode(
+  row: Pick<CeoStockPurchaseRow, "transaction_code" | "raw_source">,
+): "P" | "S" {
+  const raw =
+    row.raw_source && typeof row.raw_source === "object"
+      ? String(
+          (row.raw_source as { trans_code?: unknown }).trans_code ?? "",
+        )
+          .trim()
+          .toUpperCase()
+      : "";
+  if (raw === "S" || raw === "P") return raw;
+  const col = String(row.transaction_code ?? "")
+    .trim()
+    .toUpperCase();
+  if (col === "S") return "S";
+  return "P";
+}
+
 function rowSide(row: CeoStockPurchaseRow): CeoActivitySide {
-  const code = (row.transaction_code ?? "P").toUpperCase();
-  return code === "S" ? "sale" : "purchase";
+  return resolveCeoTransactionCode(row) === "S" ? "sale" : "purchase";
 }
 
 /** Combine same CEO + ticker + side into one card, summing shares. */

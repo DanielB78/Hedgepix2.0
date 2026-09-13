@@ -1,4 +1,10 @@
 import type { CongressTrade, ChartRange, StockPriceBar } from "./types";
+import type { CeoStockPurchaseRow } from "./types";
+import {
+  asCongressChartTrade,
+  ceoRowToChartTrade,
+  type ChartTrade,
+} from "./chartTrades";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
 import { PUBLIC_TRADE_COLUMNS } from "./trades";
 import {
@@ -33,7 +39,9 @@ export type StockPageData = {
   ticker: string;
   asset: string | null;
   bars: StockPriceBar[];
-  trades: CongressTrade[];
+  /** Congress + CEO markers for the chart. */
+  trades: ChartTrade[];
+  congressTrades: CongressTrade[];
   configured: boolean;
   error: string | null;
 };
@@ -50,6 +58,7 @@ export async function fetchStockPage(
       asset: null,
       bars: [],
       trades: [],
+      congressTrades: [],
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
@@ -106,7 +115,8 @@ export async function fetchStockPage(
       ticker: symbol,
       asset: (tradesResult.data?.[0] as CongressTrade | undefined)?.asset ?? null,
       bars: [],
-      trades: (tradesResult.data ?? []) as unknown as CongressTrade[],
+      trades: ((tradesResult.data ?? []) as unknown as CongressTrade[]).map(asCongressChartTrade),
+      congressTrades: (tradesResult.data ?? []) as unknown as CongressTrade[],
       configured: true,
       error: null,
     };
@@ -118,6 +128,7 @@ export async function fetchStockPage(
       asset: null,
       bars: [],
       trades: [],
+      congressTrades: [],
       configured: true,
       error: barsResult.error.message,
     };
@@ -129,17 +140,48 @@ export async function fetchStockPage(
       asset: null,
       bars: (barsResult.data ?? []) as StockPriceBar[],
       trades: [],
+      congressTrades: [],
       configured: true,
       error: tradesResult.error.message,
     };
   }
 
-  const trades = (tradesResult.data ?? []) as unknown as CongressTrade[];
+  const congressTrades = (tradesResult.data ?? []) as unknown as CongressTrade[];
+
+  const { data: ceoData } = await supabase
+    .from("ceo_stock_purchases")
+    .select(
+      "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code",
+    )
+    .eq("ticker", symbol)
+    .order("transaction_date", { ascending: false, nullsFirst: false })
+    .limit(400);
+
+  const ceoTrades: ChartTrade[] = [];
+  for (const row of (ceoData as CeoStockPurchaseRow[] | null) ?? []) {
+    const trade = ceoRowToChartTrade(row);
+    if (trade) ceoTrades.push(trade);
+  }
+
+  const trades: ChartTrade[] = [
+    ...congressTrades
+      .filter(
+        (t) =>
+          t.transaction_type === "purchase" || t.transaction_type === "sale",
+      )
+      .map(asCongressChartTrade),
+    ...ceoTrades.filter(
+      (t) =>
+        t.transaction_type === "purchase" || t.transaction_type === "sale",
+    ),
+  ];
+
   return {
     ticker: symbol,
-    asset: trades[0]?.asset ?? null,
+    asset: congressTrades[0]?.asset ?? ceoTrades[0]?.asset ?? null,
     bars: (barsResult.data ?? []) as StockPriceBar[],
     trades,
+    congressTrades,
     configured: true,
     error: null,
   };

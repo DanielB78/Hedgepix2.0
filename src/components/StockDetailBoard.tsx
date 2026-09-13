@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { FollowButton } from "@/components/FollowButton";
 import { PriceChart } from "@/components/PriceChart";
-import type { ChartRange, CongressTrade, StockPriceBar } from "@/lib/types";
+import type { ChartRange, StockPriceBar } from "@/lib/types";
+import {
+  type ChartTrade,
+  type ChartTradeSource,
+} from "@/lib/chartTrades";
 import {
   chamberLabel,
   formatAmountRange,
@@ -16,7 +20,7 @@ type Props = {
   ticker: string;
   asset: string | null;
   bars: StockPriceBar[];
-  trades: CongressTrade[];
+  trades: ChartTrade[];
   range: ChartRange;
   latest: number | null;
   changePct: number | null;
@@ -44,7 +48,7 @@ function formatPct(value: number) {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-function MemberTradeRow({ trade }: { trade: CongressTrade }) {
+function MemberTradeRow({ trade }: { trade: ChartTrade }) {
   const buy = trade.transaction_type === "purchase";
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] py-3 last:border-0">
@@ -53,7 +57,7 @@ function MemberTradeRow({ trade }: { trade: CongressTrade }) {
           {trade.member ?? "Unknown"}
         </p>
         <p className="text-xs text-[color:var(--fog-dim)]">
-          {chamberLabel(trade.chamber)} ·{" "}
+          {trade.source === "ceo" ? "CEO" : chamberLabel(trade.chamber)} ·{" "}
           {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
         </p>
       </div>
@@ -77,6 +81,20 @@ function MemberTradeRow({ trade }: { trade: CongressTrade }) {
   );
 }
 
+function filterChartTrades(
+  trades: ChartTrade[],
+  source: ChartTradeSource,
+): ChartTrade[] {
+  return trades.filter((t) => {
+    const isCeo = t.source === "ceo";
+    if (source === "ceo") return isCeo;
+    if (source === "both") return true;
+    if (source === "house") return !isCeo && t.chamber === "house";
+    if (source === "senate") return !isCeo && t.chamber === "senate";
+    return !isCeo; // congress
+  });
+}
+
 export function StockDetailBoard({
   ticker,
   asset,
@@ -87,14 +105,15 @@ export function StockDetailBoard({
   changePct,
   error,
 }: Props) {
-  const activity = useMemo(
-    () =>
-      trades.filter(
-        (t) =>
-          t.transaction_type === "purchase" || t.transaction_type === "sale",
-      ),
-    [trades],
-  );
+  const [tradeSource, setTradeSource] = useState<ChartTradeSource>("both");
+
+  const activity = useMemo(() => {
+    const base = trades.filter(
+      (t) =>
+        t.transaction_type === "purchase" || t.transaction_type === "sale",
+    );
+    return filterChartTrades(base, tradeSource);
+  }, [trades, tradeSource]);
 
   const uniqueMembers = useMemo(() => {
     const set = new Set(
@@ -154,9 +173,33 @@ export function StockDetailBoard({
 
       <div className="grid min-h-[70vh] lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
         <aside className="flex max-h-[50vh] flex-col border-b border-[color:var(--line)] lg:max-h-[calc(100vh-10rem)] lg:border-b-0 lg:border-r">
-          <div className="shrink-0 px-5 py-4">
+          <div className="shrink-0 space-y-3 px-5 py-4">
+            <div className="flex flex-wrap gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+              {(
+                [
+                  ["congress", "Congress"],
+                  ["house", "House"],
+                  ["senate", "Senate"],
+                  ["ceo", "CEO"],
+                  ["both", "Both"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTradeSource(value)}
+                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
+                    tradeSource === value
+                      ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
+                      : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-              Members · {activity.length} trades
+              Trades · {activity.length}
             </p>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
