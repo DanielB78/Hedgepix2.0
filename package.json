@@ -15,6 +15,7 @@
     "backfill-form144": "npm run backfill-form144 --prefix backend",
     "backfill-company-filings": "npm run backfill-company-filings --prefix backend",
     "backfill-nport": "npm run backfill-nport --prefix backend",
+    "apply-sec-schema": "npm run apply-sec-schema --prefix backend",
     "sync:prices": "node --env-file=.env.local scripts/sync-stock-prices.mjs",
     "purge:pre2024-prices": "node --env-file=.env.local scripts/purge-pre2024-prices.mjs",
     "purge:pre2026-data": "node --env-file=.env.local scripts/purge-pre2026-data.mjs",

@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppChrome";
 import { StockDetailBoard } from "@/components/StockDetailBoard";
+import { StockSecSections } from "@/components/StockSecSections";
 import { fetchStockPage, parseChartRange } from "@/lib/prices";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -73,6 +74,7 @@ export default async function StockPage({ params, searchParams }: PageProps) {
         changePct={changePct}
         error={stock.error}
       />
+      <StockSecSections ticker={ticker} />
     </AppShell>
   );
 }

@@ -14,6 +14,7 @@
     "backfill-nport": "tsx src/backfill-nport.ts --from-year 2026",
     "apply-ceo-buys-schema": "tsx src/apply-ceo-buys-schema.ts",
     "apply-news-schema": "tsx src/apply-news-schema.ts",
+    "apply-sec-schema": "tsx src/apply-sec-schema.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx src/__tests__/unit.ts && tsx src/__tests__/integration-mock.ts && tsx src/__tests__/kadoa-load.test.ts && tsx src/__tests__/ceo-buys-unit.ts && tsx src/__tests__/gdelt-unit.ts && tsx src/__tests__/news-source-allowlist-unit.ts && tsx src/__tests__/sector-classify-unit.ts && tsx src/__tests__/news-sector-filter-unit.ts && tsx src/__tests__/abnormal-moves-unit.ts && tsx src/__tests__/sec-identifiers-unit.ts && tsx src/__tests__/sec-13f-changes-unit.ts",
     "check-news-ticker-moves": "tsx scripts/check-news-ticker-moves.ts",
