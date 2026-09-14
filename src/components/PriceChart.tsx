@@ -455,7 +455,7 @@ export function PriceChart({
       >
         {tooltip}
         {interactive ? (
-          <p className="absolute right-4 bottom-3 z-10 text-[10px] uppercase tracking-[0.14em] text-[color:var(--fog-dim)]">
+          <p className="pointer-events-none absolute right-3 top-3 z-10 rounded-md border border-[color:var(--line)] bg-[color:var(--panel)]/90 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[color:var(--fog-dim)]">
             Scroll to zoom · drag to pan
           </p>
         ) : null}

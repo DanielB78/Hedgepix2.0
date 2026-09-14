@@ -1208,7 +1208,7 @@ function TradeActivityBlock({
   onCloseStock: () => void;
   onTradeSource: (ticker: string, source: ChartTradeSource) => void;
 }) {
-  const pageSize = 2;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const slice = trades.slice(
@@ -1222,71 +1222,75 @@ function TradeActivityBlock({
       : null;
 
   return (
-    <section className="animate-rise space-y-4">
+    <section className="animate-rise space-y-3">
       <SectionTitle title={title} subtitle={subtitle} />
       {trades.length === 0 ? (
         <Empty text={`No ${title.toLowerCase()} buys or sales match.`} />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {slice.map((trade) => {
-              const ticker = (trade.ticker ?? "").toUpperCase();
-              const buy = trade.transaction_type === "purchase";
-              const expanded = activeTicker?.ticker === ticker;
-              return (
-                <button
-                  key={trade.id}
-                  type="button"
-                  onClick={() => {
-                    if (!ticker) return;
-                    onOpenTicker(ticker);
-                  }}
-                  className={`rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
-                    expanded
-                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
-                      : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
-                        {trade.member ?? "Unknown"}
-                      </p>
-                      <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
-                        {chamberLabel(trade.chamber)}
-                        {trade.state ? ` · ${trade.state}` : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)]">
-                      {ticker || "—"}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                    <span
-                      className={`font-semibold uppercase tracking-wide ${
-                        buy
-                          ? "text-[color:var(--mint)]"
-                          : "text-[color:var(--coral)]"
-                      }`}
+          <div className="hx-table-wrap">
+            <table className="hx-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Ticker</th>
+                  <th>Type</th>
+                  <th className="num">Amount</th>
+                  <th>Filed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((trade) => {
+                  const ticker = (trade.ticker ?? "").toUpperCase();
+                  const buy = trade.transaction_type === "purchase";
+                  const expanded = activeTicker?.ticker === ticker;
+                  return (
+                    <tr
+                      key={trade.id}
+                      className={
+                        expanded
+                          ? "bg-[color:var(--accent-soft)] cursor-pointer"
+                          : "cursor-pointer"
+                      }
+                      onClick={() => {
+                        if (!ticker) return;
+                        onOpenTicker(ticker);
+                      }}
                     >
-                      {tradeVerb(trade.transaction_type)}
-                    </span>
-                    <span className="text-[color:var(--fog-dim)]">
-                      {formatAmountRange(
-                        trade.amount_low,
-                        trade.amount_high,
-                        trade.amount_range,
-                      )}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
-                    {formatShortDate(
-                      trade.disclosure_date ?? trade.transaction_date,
-                    )}
-                  </p>
-                </button>
-              );
-            })}
+                      <td>
+                        <p className="font-medium text-[color:var(--fog)]">
+                          {trade.member ?? "Unknown"}
+                        </p>
+                        <p className="hx-meta">
+                          {chamberLabel(trade.chamber)}
+                          {trade.state ? ` · ${trade.state}` : ""}
+                        </p>
+                      </td>
+                      <td className="font-medium tracking-tight">
+                        {ticker || "—"}
+                      </td>
+                      <td>
+                        <span className={buy ? "hx-buy" : "hx-sell"}>
+                          {tradeVerb(trade.transaction_type)}
+                        </span>
+                      </td>
+                      <td className="num text-[color:var(--fog-dim)]">
+                        {formatAmountRange(
+                          trade.amount_low,
+                          trade.amount_high,
+                          trade.amount_range,
+                        )}
+                      </td>
+                      <td className="hx-meta whitespace-nowrap">
+                        {formatShortDate(
+                          trade.disclosure_date ?? trade.transaction_date,
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {activeTicker ? (
@@ -1311,14 +1315,12 @@ function TradeActivityBlock({
                     query,
                     view,
                   })}
-                  className="rounded-md bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                  className="hx-btn hx-btn-ghost"
                 >
                   Previous
                 </Link>
               ) : (
-                <span className="rounded-md px-3 py-1.5 opacity-40">
-                  Previous
-                </span>
+                <span className="hx-btn hx-btn-ghost opacity-40">Previous</span>
               )}
               <span>
                 {safePage} / {totalPages}
@@ -1331,12 +1333,12 @@ function TradeActivityBlock({
                     query,
                     view,
                   })}
-                  className="rounded-md bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                  className="hx-btn hx-btn-ghost"
                 >
                   Next
                 </Link>
               ) : (
-                <span className="rounded-md px-3 py-1.5 opacity-40">Next</span>
+                <span className="hx-btn hx-btn-ghost opacity-40">Next</span>
               )}
             </div>
           </div>
@@ -1365,7 +1367,7 @@ function MemberBlock({
   onClose: () => void;
   onBackNested: () => void;
 }) {
-  const pageSize = 2;
+  const pageSize = 10;
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -1381,40 +1383,50 @@ function MemberBlock({
   }, [members.length, members[0]?.slug]);
 
   return (
-    <section className="animate-rise space-y-4">
+    <section className="animate-rise space-y-3">
       <SectionTitle title={title} subtitle={subtitle} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {members.length === 0 ? (
-          <Empty text={`No active ${title.toLowerCase()} members yet.`} />
-        ) : (
-          pageMembers.map((member) => {
-            const expanded = panel?.slug === member.slug;
-            return (
-              <button
-                key={member.slug}
-                type="button"
-                onClick={() => onToggle(member.slug)}
-                className={`rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
-                  expanded
-                    ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
-                    : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-                }`}
-              >
-                <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
-                  {member.name}
-                </p>
-                <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
-                  {chamberLabel(member.chamber)}
-                  {member.state ? ` · ${member.state}` : ""}
-                </p>
-                <p className="mt-3 text-xs text-[color:var(--mint)]">
-                  {member.tradeCount} trades · {member.uniqueTickers} tickers
-                </p>
-              </button>
-            );
-          })
-        )}
-      </div>
+      {members.length === 0 ? (
+        <Empty text={`No active ${title.toLowerCase()} members yet.`} />
+      ) : (
+        <div className="hx-table-wrap">
+          <table className="hx-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Chamber</th>
+                <th className="num">Trades</th>
+                <th className="num">Tickers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageMembers.map((member) => {
+                const expanded = panel?.slug === member.slug;
+                return (
+                  <tr
+                    key={member.slug}
+                    className={
+                      expanded
+                        ? "bg-[color:var(--accent-soft)] cursor-pointer"
+                        : "cursor-pointer"
+                    }
+                    onClick={() => onToggle(member.slug)}
+                  >
+                    <td className="font-medium text-[color:var(--fog)]">
+                      {member.name}
+                    </td>
+                    <td className="hx-meta">
+                      {chamberLabel(member.chamber)}
+                      {member.state ? ` · ${member.state}` : ""}
+                    </td>
+                    <td className="num">{member.tradeCount}</td>
+                    <td className="num">{member.uniqueTickers}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {members.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
@@ -1428,7 +1440,7 @@ function MemberBlock({
               type="button"
               disabled={safePage <= 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-md bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+              className="hx-btn hx-btn-ghost disabled:opacity-40"
             >
               Previous
             </button>
@@ -1439,7 +1451,7 @@ function MemberBlock({
               type="button"
               disabled={safePage >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="rounded-md bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+              className="hx-btn hx-btn-ghost disabled:opacity-40"
             >
               Next
             </button>
