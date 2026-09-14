@@ -20,7 +20,7 @@ export function TradeTable({ trades }: Props) {
   const groups = groupTradesByDisclosure(trades);
 
   return (
-    <ul className="hx-row-list divide-y-0">
+    <ul className="hx-row-list">
       {groups.map((group) => (
         <li key={group.key} className="border-b border-[color:var(--line)] last:border-0">
           <TradeDisclosureGroupCard

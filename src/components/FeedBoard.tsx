@@ -691,8 +691,8 @@ function SectionTitle({
 
 function performerChipClass(active: boolean) {
   return active
-    ? "rounded-md bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
-    : "rounded-md px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
+    ? "hx-chip hx-chip-accent"
+    : "hx-chip";
 }
 
 
@@ -737,7 +737,7 @@ function PerformerPeriodChips({
   query?: string;
 }) {
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-md bg-[color:var(--surface)] p-1">
+    <div className="hx-toolbar">
       {PERFORMER_PERIODS.map((value) => (
         <Link
           key={value}
@@ -1095,7 +1095,7 @@ function StockPanel({
       <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
         <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
           <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="grid grid-cols-3 gap-1 rounded-md bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
+            <div className="hx-toolbar gap-3">
               {(
                 [
                   ["congress", "Congress"],
@@ -1112,11 +1112,8 @@ function StockPanel({
                     event.stopPropagation();
                     onTradeSource(value);
                   }}
-                  className={`rounded-md px-2 py-2 text-xs font-semibold transition-colors ${
-                    state.tradeSource === value
-                      ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                      : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-                  }`}
+                  className="hx-tab"
+                  data-active={state.tradeSource === value ? "true" : "false"}
                 >
                   {label}
                 </button>
