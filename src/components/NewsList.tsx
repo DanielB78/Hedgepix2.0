@@ -24,9 +24,7 @@ type Props = {
 type FeedMode = "trending" | "custom";
 
 function chipClass(active: boolean) {
-  return active
-    ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
-    : "rounded-full border border-[color:var(--line)] bg-[color:var(--panel)] px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
+  return active ? "hx-chip hx-chip-accent" : "hx-chip";
 }
 
 function AbnormalBadge({ move }: { move: NewsTickerMove | null }) {
@@ -40,10 +38,12 @@ function AbnormalBadge({ move }: { move: NewsTickerMove | null }) {
     <span
       className={`inline-flex flex-wrap items-center gap-x-1.5 text-xs ${tone}`}
     >
-      <span className="font-medium tracking-wide">{move.ticker}</span>
+      <span className="hx-chip hx-chip-accent font-medium tracking-wide">
+        {move.ticker}
+      </span>
       <span>{ret}</span>
       {move.is_abnormal ? (
-        <span className="rounded-full bg-[color:var(--accent-sale)]/15 px-1.5 py-0.5 font-medium">
+        <span className="hx-chip text-[color:var(--accent-sale)]">
           {ratio} typical
         </span>
       ) : null}
@@ -65,76 +65,72 @@ function NewsArticleRow({
   const source = article.domain?.trim() || article.source || "source";
 
   return (
-    <li>
-      <div className="px-4 py-4 transition-colors duration-200 hover:bg-[color:var(--panel-elevated)]">
-        <a
-          href={article.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block"
-        >
-          <p className="font-[family-name:var(--font-display)] text-base font-semibold leading-snug text-[color:var(--fog)] sm:text-lg">
-            {article.title}
-          </p>
-        </a>
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[color:var(--fog-dim)]">
-          <span className="text-[color:var(--mint)]">{source}</span>
-          <span aria-hidden="true">·</span>
-          <time dateTime={article.published_at ?? undefined}>
-            {formatNewsPublishedAt(article.published_at)}
-          </time>
-          {best ? (
+    <li className="hx-row">
+      <p className="hx-meta flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <time dateTime={article.published_at ?? undefined}>
+          {formatNewsPublishedAt(article.published_at)}
+        </time>
+        <span aria-hidden="true">·</span>
+        <span>{source}</span>
+      </p>
+      <a
+        href={article.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-1 block"
+      >
+        <p className="text-sm font-semibold leading-snug text-[color:var(--fog)]">
+          {article.title}
+        </p>
+      </a>
+      {highlight ? (
+        <p className="mt-1.5">
+          <AbnormalBadge move={highlight} />
+        </p>
+      ) : null}
+      {best ? (
+        <p className="hx-meta mt-1.5">
+          {best.name}
+          {extras.length > 0 ? (
             <>
-              <span aria-hidden="true">·</span>
-              <span className="text-[color:var(--fog-dim)]/90">{best.name}</span>
+              {" · "}
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="underline-offset-2 hover:underline"
+                aria-expanded={open}
+              >
+                {open ? "Hide sectors" : `+${extras.length} more`}
+              </button>
             </>
           ) : null}
         </p>
-        {highlight ? (
-          <p className="mt-2">
-            <AbnormalBadge move={highlight} />
-          </p>
-        ) : null}
-        {extras.length > 0 ? (
-          <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              className="text-xs text-[color:var(--fog-dim)] underline-offset-2 hover:underline"
-              aria-expanded={open}
-            >
-              {open ? "Hide sector matches" : "More sector matches"}
-            </button>
-            {open ? (
-              <ul className="mt-2 space-y-1 text-xs text-[color:var(--fog-dim)]">
-                {matches.map((m, i) => (
-                  <li key={`${m.code}-${i}`}>
-                    <span className="text-[color:var(--fog)]/80">
-                      #{i + 1} {m.name}
-                    </span>
-                    {m.code ? (
-                      <span className="ml-1 opacity-70">({m.code})</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+      {open && extras.length > 0 ? (
+        <ul className="hx-meta mt-1.5 space-y-0.5">
+          {matches.map((m, i) => (
+            <li key={`${m.code}-${i}`}>
+              <span>
+                #{i + 1} {m.name}
+              </span>
+              {m.code ? <span className="ml-1 opacity-70">({m.code})</span> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
 
 function TrendingSectorSection({ block }: { block: TrendingSectorBlock }) {
   return (
-    <section className="overflow-hidden rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)]">
-      <header className="space-y-2 border-b border-[color:var(--line)] px-4 py-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[color:var(--fog)]">
+    <section className="hx-section">
+      <header className="hx-section-head flex-col !items-start sm:flex-row sm:items-baseline">
+        <div className="min-w-0">
+          <h3 className="hx-section-title normal-case tracking-normal text-[color:var(--fog)]">
             {block.name}
           </h3>
-          <p className="text-xs text-[color:var(--fog-dim)]">
+          <p className="hx-meta mt-0.5">
             {block.abnormalCount} abnormal move
             {block.abnormalCount === 1 ? "" : "s"}
             {block.score > 0 ? (
@@ -145,13 +141,11 @@ function TrendingSectorSection({ block }: { block: TrendingSectorBlock }) {
           </p>
         </div>
         {block.topTickers.length > 0 ? (
-          <p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[color:var(--fog-dim)]">
+          <p className="flex flex-wrap gap-1.5">
             {block.topTickers.map((t) => (
-              <span key={t.ticker}>
-                <span className="font-medium text-[color:var(--fog)]">
-                  {t.ticker}
-                </span>{" "}
-                {formatReturnPct(t.eventReturnPct)}
+              <span key={t.ticker} className="hx-chip">
+                <span className="text-[color:var(--fog)]">{t.ticker}</span>
+                <span className="ml-1">{formatReturnPct(t.eventReturnPct)}</span>
                 {t.abnormalityRatio != null ? (
                   <span className="ml-1 text-[color:var(--accent-sale)]">
                     {formatAbnormalityRatio(t.abnormalityRatio)}
@@ -162,7 +156,7 @@ function TrendingSectorSection({ block }: { block: TrendingSectorBlock }) {
           </p>
         ) : null}
       </header>
-      <ul className="divide-y divide-[color:var(--line)]">
+      <ul>
         {block.articles.map(({ article, highlight }) => (
           <NewsArticleRow
             key={`${block.code}-${article.id}`}
@@ -217,7 +211,7 @@ export function NewsList({ articles, tickerMoves }: Props) {
 
   if (articles.length === 0) {
     return (
-      <p className="rounded-[16px] bg-[color:var(--surface)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
+      <p className="hx-section px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
         No stored articles yet. Run{" "}
         <code className="text-[color:var(--fog)]">npm run update-data</code> (or{" "}
         <code className="text-[color:var(--fog)]">update.bat</code>) to fetch
@@ -227,44 +221,40 @@ export function NewsList({ articles, tickerMoves }: Props) {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-3">
-        <p className="text-center text-xs uppercase tracking-[0.14em] text-[color:var(--fog-dim)] sm:text-left">
-          Filter
-        </p>
+    <div className="space-y-4">
+      <div className="space-y-2">
         <div
-          className="max-h-40 overflow-y-auto rounded-[14px] border border-[color:var(--line)] bg-[color:var(--surface)] p-2 sm:max-h-48"
+          className="hx-toolbar max-h-32 overflow-y-auto border border-[color:var(--line)] bg-[color:var(--panel)] p-2"
+          style={{ borderRadius: "var(--radius-card)" }}
           role="group"
           aria-label="News feed filter"
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={chipClass(mode === "trending")}
-              aria-pressed={mode === "trending"}
-              onClick={selectTrending}
-            >
-              Trending
-            </button>
-            {options.map((opt) => {
-              const active =
-                mode === "custom" && selectedSectors.includes(opt.code);
-              return (
-                <button
-                  key={opt.code}
-                  type="button"
-                  className={chipClass(active)}
-                  aria-pressed={active}
-                  onClick={() => toggleSector(opt.code)}
-                  title={opt.code}
-                >
-                  {opt.name}
-                </button>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            className={chipClass(mode === "trending")}
+            aria-pressed={mode === "trending"}
+            onClick={selectTrending}
+          >
+            Trending
+          </button>
+          {options.map((opt) => {
+            const active =
+              mode === "custom" && selectedSectors.includes(opt.code);
+            return (
+              <button
+                key={opt.code}
+                type="button"
+                className={chipClass(active)}
+                aria-pressed={active}
+                onClick={() => toggleSector(opt.code)}
+                title={opt.code}
+              >
+                {opt.name}
+              </button>
+            );
+          })}
         </div>
-        <p className="text-center text-sm text-[color:var(--fog-dim)] sm:text-left">
+        <p className="hx-meta">
           {mode === "trending"
             ? "Sectors ranked by abnormal S&P 500 price moves after related headlines."
             : `Custom feed · ${selectedSectors.length} sector${selectedSectors.length === 1 ? "" : "s"} selected`}
@@ -273,24 +263,24 @@ export function NewsList({ articles, tickerMoves }: Props) {
 
       {mode === "trending" ? (
         trendingBlocks.length === 0 ? (
-          <p className="rounded-[16px] bg-[color:var(--surface)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
+          <p className="hx-section px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
             No abnormal ticker moves in the current news window yet. Tick one or
             more sectors above to browse by topic, or run the updater again after
             market hours.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {trendingBlocks.map((block) => (
               <TrendingSectorSection key={block.code} block={block} />
             ))}
           </div>
         )
       ) : customArticles.length === 0 ? (
-        <p className="rounded-[16px] bg-[color:var(--surface)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
+        <p className="hx-section px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
           No articles match the selected sectors in the current feed.
         </p>
       ) : (
-        <ul className="divide-y divide-[color:var(--line)] overflow-hidden rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)]">
+        <ul className="hx-row-list">
           {customArticles.map((article) => {
             const moves = movesByArticle.get(article.id) ?? [];
             const highlight =

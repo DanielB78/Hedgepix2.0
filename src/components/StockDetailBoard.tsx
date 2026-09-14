@@ -51,25 +51,21 @@ function formatPct(value: number) {
 function MemberTradeRow({ trade }: { trade: ChartTrade }) {
   const buy = trade.transaction_type === "purchase";
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] py-3 last:border-0">
+    <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] px-3 py-2.5 last:border-0">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[color:var(--fog)]">
+        <p className="truncate text-sm font-medium text-[color:var(--fog)]">
           {trade.member ?? "Unknown"}
         </p>
-        <p className="text-xs text-[color:var(--fog-dim)]">
+        <p className="hx-meta">
           {trade.source === "ceo" ? "CEO" : chamberLabel(trade.chamber)} ·{" "}
           {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
         </p>
       </div>
       <div className="shrink-0 text-right">
-        <p
-          className={`text-xs font-semibold uppercase tracking-wide ${
-            buy ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
-          }`}
-        >
+        <p className={`text-xs uppercase tracking-wide ${buy ? "hx-buy" : "hx-sell"}`}>
           {tradeVerb(trade.transaction_type)}
         </p>
-        <p className="text-xs text-[color:var(--fog-dim)]">
+        <p className="hx-meta">
           {formatAmountRange(
             trade.amount_low,
             trade.amount_high,
@@ -123,23 +119,21 @@ export function StockDetailBoard({
   }, [activity]);
 
   return (
-    <section className="animate-expand overflow-hidden rounded-[24px] border border-[color:var(--aqua)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[color:var(--line)] px-5 py-5 sm:px-6">
+    <section className="hx-section animate-expand overflow-hidden">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--line)] px-4 py-3 sm:px-5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-[color:var(--fog)] sm:text-4xl">
-            {ticker}
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
+          <p className="hx-page-title tracking-tight">{ticker}</p>
+          <p className="hx-page-desc">
             {cleanAssetName(asset) ?? "Listed security"}
             {uniqueMembers
               ? ` · ${uniqueMembers} member${uniqueMembers === 1 ? "" : "s"}`
               : ""}
           </p>
         </div>
-        <div className="flex items-end gap-4">
+        <div className="flex items-end gap-3">
           {latest != null ? (
             <div className="text-right">
-              <div className="text-2xl font-semibold tracking-tight text-[color:var(--fog)]">
+              <div className="text-lg font-semibold tabular-nums tracking-tight text-[color:var(--fog)]">
                 {formatMoney(latest)}
               </div>
               {changePct != null ? (
@@ -156,66 +150,20 @@ export function StockDetailBoard({
             </div>
           ) : null}
           <FollowButton type="ticker" targetKey={ticker} label={ticker} />
-          <Link
-            href="/app?view=feed"
-            className="rounded-full px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
-          >
+          <Link href="/app?view=feed" className="hx-btn hx-btn-ghost">
             ← Feed
           </Link>
         </div>
       </div>
 
       {error ? (
-        <div className="border-b border-[color:var(--line)] px-5 py-3 text-sm text-[color:var(--coral)] sm:px-6">
+        <div className="border-b border-[color:var(--line)] px-4 py-2.5 text-sm text-[color:var(--coral)] sm:px-5">
           {error}
         </div>
       ) : null}
 
-      <div className="grid min-h-[70vh] lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
-        <aside className="flex max-h-[50vh] flex-col border-b border-[color:var(--line)] lg:max-h-[calc(100vh-10rem)] lg:border-b-0 lg:border-r">
-          <div className="shrink-0 space-y-3 px-5 py-4">
-            <div className="grid grid-cols-3 gap-1 rounded-[16px] bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
-              {(
-                [
-                  ["congress", "Congress"],
-                  ["house", "House"],
-                  ["senate", "Senate"],
-                  ["ceo", "CEO"],
-                  ["both", "Both"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTradeSource(value)}
-                  className={`rounded-full px-2 py-2 text-xs font-semibold transition-colors ${
-                    tradeSource === value
-                      ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                      : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-              Trades · {activity.length}
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            {activity.length ? (
-              activity.map((trade) => (
-                <MemberTradeRow key={trade.id} trade={trade} />
-              ))
-            ) : (
-              <p className="text-sm text-[color:var(--fog-dim)]">
-                No buys or sales for this ticker.
-              </p>
-            )}
-          </div>
-        </aside>
-
-        <div className="flex min-h-[420px] flex-col p-4 sm:p-6">
+      <div className="grid min-h-[70vh] lg:grid-cols-[minmax(0,1fr)_minmax(240px,300px)]">
+        <div className="order-1 flex min-h-[420px] flex-col border-b border-[color:var(--line)] p-3 sm:p-4 lg:order-0 lg:border-b-0 lg:border-r">
           {bars.length ? (
             <PriceChart
               bars={bars}
@@ -230,6 +178,44 @@ export function StockDetailBoard({
             </div>
           )}
         </div>
+
+        <aside className="order-2 flex max-h-[50vh] flex-col lg:order-0 lg:max-h-[calc(100vh-10rem)]">
+          <div className="hx-section-head shrink-0 !flex-col !items-stretch gap-2">
+            <div className="hx-toolbar gap-3">
+              {(
+                [
+                  ["congress", "Congress"],
+                  ["house", "House"],
+                  ["senate", "Senate"],
+                  ["ceo", "CEO"],
+                  ["both", "Both"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTradeSource(value)}
+                  className="hx-tab"
+                  data-active={tradeSource === value ? "true" : "false"}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="hx-section-title">Trades · {activity.length}</p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {activity.length ? (
+              activity.map((trade) => (
+                <MemberTradeRow key={trade.id} trade={trade} />
+              ))
+            ) : (
+              <p className="px-3 py-4 text-sm text-[color:var(--fog-dim)]">
+                No buys or sales for this ticker.
+              </p>
+            )}
+          </div>
+        </aside>
       </div>
     </section>
   );

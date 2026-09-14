@@ -382,7 +382,7 @@ export function PriceChart({
             onRemoveWho={removeWhoFilter}
           />
         ) : null}
-        <p className="rounded-[20px] bg-[color:var(--surface)] px-5 py-12 text-center text-[color:var(--muted)]">
+        <p className="rounded-md bg-[color:var(--surface)] px-4 py-8 text-center text-sm text-[color:var(--muted)]">
           No price data yet.
         </p>
       </div>
@@ -393,7 +393,7 @@ export function PriceChart({
     hoverIndex != null && !activeMarker ? chart.points[hoverIndex] : null;
 
   const tooltip = activeMarker ? (
-    <div className="pointer-events-none absolute top-4 left-4 z-10 max-w-sm rounded-[16px] border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--fog)] shadow-[var(--shadow-soft)]">
+    <div className="pointer-events-none absolute top-3 left-3 z-10 max-w-sm rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-3 py-2.5 text-sm text-[color:var(--fog)] shadow-[var(--shadow-soft)]">
       <div className="font-semibold text-[color:var(--fog)]">
         {activeMarker.trades.length > 1
           ? `${activeMarker.trades.length} transactions`
@@ -423,9 +423,9 @@ export function PriceChart({
       </div>
     </div>
   ) : hoverPoint ? (
-    <div className="pointer-events-none absolute top-4 left-4 z-10 rounded-[16px] border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--fog)] shadow-[var(--shadow-soft)]">
-      <div className="text-[color:var(--fog-dim)]">{formatDate(hoverPoint.date)}</div>
-      <div className="mt-1 text-lg font-semibold tracking-tight text-[color:var(--fog)]">
+    <div className="pointer-events-none absolute top-3 left-3 z-10 rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-3 py-2.5 text-sm text-[color:var(--fog)] shadow-[var(--shadow-soft)]">
+      <div className="hx-meta">{formatDate(hoverPoint.date)}</div>
+      <div className="mt-0.5 text-base font-semibold tabular-nums tracking-tight text-[color:var(--fog)]">
         {formatMoney(hoverPoint.close)}
       </div>
     </div>
@@ -449,7 +449,7 @@ export function PriceChart({
       ) : null}
 
       <div
-        className={`relative overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] ${
+        className={`relative overflow-hidden rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] ${
           interactive ? "cursor-grab active:cursor-grabbing" : ""
         }`}
       >
@@ -633,8 +633,8 @@ function ChartFilters({
   onRemoveWho: (name: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="inline-flex gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+    <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="hx-toolbar gap-3">
         {RANGES.map((item) => {
           const active = range === item.value;
           return (
@@ -642,11 +642,8 @@ function ChartFilters({
               key={item.value}
               type="button"
               onClick={() => onRange(item.value)}
-              className={
-                active
-                  ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-semibold text-[color:var(--ink)]"
-                  : "rounded-full px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-              }
+              className="hx-tab"
+              data-active={active ? "true" : "false"}
             >
               {item.label}
             </button>
@@ -664,23 +661,20 @@ function ChartFilters({
             value={whoInput}
             onChange={(event) => onWhoInput(event.target.value)}
             placeholder="Filter by member name…"
-            className="min-w-0 flex-1 rounded-full border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-2 text-sm text-[color:var(--fog)] outline-none placeholder:text-[color:var(--fog-dim)] focus:border-[color:var(--mint)]/50"
+            className="hx-input min-w-0 flex-1"
           />
-          <button
-            type="submit"
-            className="shrink-0 rounded-full bg-[color:var(--aqua)]/20 px-4 py-2 text-sm font-semibold text-[color:var(--aqua)] hover:bg-[color:var(--aqua)]/30"
-          >
+          <button type="submit" className="hx-btn shrink-0">
             Add
           </button>
         </div>
         {whoFilters.length ? (
-          <div className="flex flex-wrap gap-2 sm:justify-end">
+          <div className="flex flex-wrap gap-1.5 sm:justify-end">
             {whoFilters.map((name) => (
               <button
                 key={name}
                 type="button"
                 onClick={() => onRemoveWho(name)}
-                className="rounded-full border border-[color:var(--mint)]/35 bg-[color:var(--panel-elevated)] px-3 py-1 text-xs font-medium text-[color:var(--mint)] hover:border-[color:var(--coral)]/50 hover:text-[color:var(--coral)]"
+                className="hx-chip hx-chip-accent"
                 title="Remove filter"
               >
                 {name} ×
@@ -688,7 +682,7 @@ function ChartFilters({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-[color:var(--fog-dim)] sm:text-right">
+          <p className="hx-meta sm:text-right">
             Add one or more names to show their buys &amp; sales together.
           </p>
         )}

@@ -23,40 +23,36 @@ export function LandingPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 sm:px-6 lg:gap-8">
-      <div className="hidden flex-col items-center gap-4 pt-8 lg:flex">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 gap-4 px-3 sm:px-6 lg:gap-6">
+      <div className="hidden flex-col items-center gap-3 pt-6 lg:flex">
         <SideNav active="landing" />
         <AuthControls />
       </div>
 
       <div className="min-w-0 flex-1">
-        <section className="relative flex min-h-[100svh] flex-col items-center justify-center pb-24 pt-10 text-center">
-          <div className="absolute top-6 right-0 flex lg:hidden">
+        <section className="relative flex min-h-[70svh] flex-col items-center justify-center pb-16 pt-10 text-center">
+          <div className="absolute top-4 right-0 flex lg:hidden">
             <AuthControls compact />
           </div>
 
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.4em] text-[color:var(--mint)] animate-rise">
-            congressional markets
+          <h1 className="hx-page-title text-2xl sm:text-3xl">Hedgepix</h1>
+          <p className="hx-page-desc mx-auto mt-2 max-w-md text-sm leading-relaxed">
+            Institutional research on congressional stock disclosures, CEO Form 4
+            activity, and related market context.
           </p>
-          <h1 className="animate-brand font-[family-name:var(--font-display)] text-7xl font-extrabold lowercase leading-none tracking-tight text-[color:var(--fog)] sm:text-8xl md:text-9xl">
-            hedgpix
-          </h1>
 
-          <Link
-            href="/app?view=trending"
-            className="mt-10 inline-flex rounded-full bg-[color:var(--mint)] px-10 py-3.5 text-base font-semibold tracking-wide text-[color:var(--ink)] shadow-[0_0_32px_var(--glow)] transition hover:opacity-90"
-          >
+          <Link href="/app?view=trending" className="hx-btn hx-btn-primary mt-6">
             Enter
           </Link>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 lg:hidden">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2 lg:hidden">
             <SideNav active="landing" horizontal />
           </div>
 
           <button
             type="button"
             onClick={scrollToInfo}
-            className={`absolute bottom-8 left-1/2 -translate-x-1/2 rounded-full border border-[color:var(--line)] px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--fog-dim)] transition hover:border-[color:var(--mint)]/40 hover:text-[color:var(--mint)] ${
+            className={`hx-btn hx-btn-ghost absolute bottom-6 left-1/2 -translate-x-1/2 text-xs ${
               showHint ? "opacity-100" : "opacity-40"
             }`}
           >
@@ -67,32 +63,32 @@ export function LandingPage() {
         <section
           ref={infoRef}
           id="more-info"
-          className="mx-auto max-w-2xl space-y-10 pb-24 pt-6"
+          className="mx-auto max-w-2xl space-y-8 pb-20 pt-4"
         >
-          <div className="space-y-3 animate-rise">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">
-              What is hedgpix?
+          <div className="space-y-2 animate-rise">
+            <h2 className="text-base font-semibold text-[color:var(--fog)]">
+              What is Hedgepix?
             </h2>
-            <p className="text-base leading-relaxed text-[color:var(--fog-dim)]">
-              hedgpix tracks publicly disclosed congressional stock trades and
+            <p className="text-sm leading-relaxed text-[color:var(--fog-dim)]">
+              Hedgepix tracks publicly disclosed congressional stock trades and
               related market context. Browse trending tickers, House and Senate
               activity, member profiles, and price charts with buy and sale
               markers — then follow the names and symbols you care about.
             </p>
           </div>
 
-          <div className="space-y-3">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold text-[color:var(--fog)]">
               Important legal notices
             </h2>
-            <div className="space-y-4 rounded-[20px] border border-[color:var(--line)] bg-[color:var(--panel)] px-5 py-6 text-sm leading-relaxed text-[color:var(--fog-dim)]">
+            <div className="hx-section space-y-3 px-4 py-4 text-sm leading-relaxed text-[color:var(--fog-dim)]">
               <p>
                 <strong className="text-[color:var(--fog)]">
                   Not financial advice.
                 </strong>{" "}
                 Nothing on this site is an offer, solicitation, or
                 recommendation to buy, sell, or hold any security or other
-                financial instrument. hedgpix does not provide investment,
+                financial instrument. Hedgepix does not provide investment,
                 legal, tax, or accounting advice.
               </p>
               <p>
@@ -121,23 +117,17 @@ export function LandingPage() {
               </p>
               <p>
                 By entering the app you acknowledge these limitations and agree
-                that hedgpix and its operators are not liable for decisions made
+                that Hedgepix and its operators are not liable for decisions made
                 based on information presented here.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Link
-              href="/app?view=trending"
-              className="rounded-full bg-[color:var(--mint)] px-6 py-2.5 text-sm font-semibold text-[color:var(--ink)]"
-            >
+          <div className="hx-toolbar justify-center pt-1">
+            <Link href="/app?view=trending" className="hx-btn hx-btn-primary">
               Enter trending
             </Link>
-            <Link
-              href="/signup"
-              className="rounded-full border border-[color:var(--line)] px-6 py-2.5 text-sm font-semibold text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-            >
+            <Link href="/signup" className="hx-btn">
               Create account
             </Link>
           </div>
