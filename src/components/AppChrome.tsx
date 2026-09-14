@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import {
+  Briefcase,
   Building2,
+  FileText,
   Landmark,
   LineChart,
   Menu,
   Newspaper,
+  PieChart,
   TrendingUp,
   Users,
   X,
@@ -21,6 +24,9 @@ export type ChromeNavKey =
   | "house"
   | "senate"
   | "ceo-buys"
+  | "investors"
+  | "filings"
+  | "funds"
   | "news"
   | "stocks"
   | "members"
@@ -39,6 +45,9 @@ const NAV_ITEMS: NavItem[] = [
   { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
   { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
   { key: "ceo-buys", href: "/ceo-buys", label: "Insiders", icon: Users },
+  { key: "investors", href: "/investors", label: "Investors", icon: Briefcase },
+  { key: "filings", href: "/filings", label: "Filings", icon: FileText },
+  { key: "funds", href: "/funds", label: "Funds", icon: PieChart },
   {
     key: "trending",
     href: "/app?view=trending",
@@ -54,6 +63,9 @@ function resolveActive(
 ): ChromeNavKey {
   if (pathname.startsWith("/news")) return "news";
   if (pathname.startsWith("/ceo-buys")) return "ceo-buys";
+  if (pathname.startsWith("/investors")) return "investors";
+  if (pathname.startsWith("/filings")) return "filings";
+  if (pathname.startsWith("/funds")) return "funds";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
   if (pathname === "/app" || pathname.startsWith("/app")) {
