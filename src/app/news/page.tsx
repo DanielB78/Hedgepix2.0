@@ -1,5 +1,4 @@
-import { BrandMark, SideNav, TopTabs } from "@/components/AppChrome";
-import { AuthControls } from "@/components/AuthControls";
+import { AppShell } from "@/components/AppChrome";
 import { NewsList } from "@/components/NewsList";
 import { fetchRecentNewsArticles } from "@/lib/news";
 import { fetchNewsTickerMovesForArticles } from "@/lib/newsTickerMoves";
@@ -17,55 +16,31 @@ export default async function NewsPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-1 gap-4 px-3 py-6 sm:px-6 lg:gap-8 lg:py-10">
-      <SideNav active="news" showAuth />
-      <main className="min-w-0 flex-1 space-y-8 pb-16">
-        <div className="flex items-start justify-between gap-3 lg:hidden">
-          <div className="flex-1">
-            <BrandMark />
-          </div>
-          <AuthControls compact />
+    <AppShell
+      active="news"
+      title="News"
+      description="Market headlines linked to sectors and tickers, ranked by abnormal moves where available."
+    >
+      {!result.configured ? (
+        <div className="hx-section px-4 py-3 text-sm text-[var(--accent-sale)]">
+          {result.error ?? "Configuration incomplete."}
         </div>
-        <div className="hidden lg:block">
-          <BrandMark />
+      ) : missingTable ? (
+        <p className="hx-section px-4 py-6 text-sm text-[var(--fog-dim)]">
+          News storage is not set up yet. Apply{" "}
+          <code className="text-[var(--fog)]">
+            supabase/migrations/20260910180000_news_articles.sql
+          </code>{" "}
+          (and the NAICS sector migrations) in the Supabase SQL Editor, then run{" "}
+          <code className="text-[var(--fog)]">npm run update-data</code>.
+        </p>
+      ) : result.error ? (
+        <div className="hx-section px-4 py-3 text-sm text-[var(--accent-sale)]">
+          {result.error}
         </div>
-        <TopTabs active="news" />
-
-        <section className="space-y-5">
-          <div className="space-y-1 text-center sm:text-left">
-            <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-[color:var(--fog)]">
-              News
-            </h2>
-            <p className="text-sm text-[color:var(--fog-dim)]">
-              Trending sectors from abnormal S&amp;P 500 moves after related
-              headlines — or build a custom multi-sector feed.
-            </p>
-          </div>
-
-          {!result.configured ? (
-            <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--accent-sale)]">
-              {result.error ?? "Configuration incomplete."}
-            </div>
-          ) : missingTable ? (
-            <p className="rounded-[16px] bg-[color:var(--surface)] px-4 py-6 text-sm text-[color:var(--fog-dim)]">
-                News storage is not set up yet. Apply{" "}
-                <code className="text-[color:var(--fog)]">
-                  supabase/migrations/20260910180000_news_articles.sql
-                </code>{" "}
-                (and the NAICS sector migrations) in the Supabase SQL Editor, then
-                run{" "}
-                <code className="text-[color:var(--fog)]">npm run update-data</code>{" "}
-                (or <code className="text-[color:var(--fog)]">update.bat</code>).
-            </p>
-          ) : result.error ? (
-            <div className="rounded-[16px] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--accent-sale)]">
-              {result.error}
-            </div>
-          ) : (
-            <NewsList articles={result.articles} tickerMoves={tickerMoves} />
-          )}
-        </section>
-      </main>
-    </div>
+      ) : (
+        <NewsList articles={result.articles} tickerMoves={tickerMoves} />
+      )}
+    </AppShell>
   );
 }

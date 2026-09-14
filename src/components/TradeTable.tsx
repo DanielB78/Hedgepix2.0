@@ -11,7 +11,7 @@ type Props = {
 export function TradeTable({ trades }: Props) {
   if (trades.length === 0) {
     return (
-      <p className="rounded-[20px] bg-[color:var(--surface)] px-5 py-10 text-center text-[color:var(--muted)]">
+      <p className="hx-section px-4 py-8 text-center text-sm text-[color:var(--fog-dim)]">
         No disclosures match.
       </p>
     );
@@ -20,9 +20,9 @@ export function TradeTable({ trades }: Props) {
   const groups = groupTradesByDisclosure(trades);
 
   return (
-    <ul className="space-y-2.5">
+    <ul className="hx-row-list">
       {groups.map((group) => (
-        <li key={group.key}>
+        <li key={group.key} className="border-b border-[color:var(--line)] last:border-0">
           <TradeDisclosureGroupCard
             group={group}
             defaultOpen={false}

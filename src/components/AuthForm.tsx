@@ -42,9 +42,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mx-auto w-full max-w-md space-y-4">
+    <form onSubmit={onSubmit} className="mx-auto w-full max-w-sm space-y-3">
       <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--fog-dim)]">
+        <label className="mb-1 block text-xs font-medium text-[color:var(--fog-dim)]">
           Email
         </label>
         <input
@@ -53,11 +53,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-full border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--fog)] outline-none focus:border-[color:var(--mint)]/50"
+          className="hx-input w-full"
         />
       </div>
       <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--fog-dim)]">
+        <label className="mb-1 block text-xs font-medium text-[color:var(--fog-dim)]">
           Password
         </label>
         <input
@@ -67,7 +67,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-full border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--fog)] outline-none focus:border-[color:var(--mint)]/50"
+          className="hx-input w-full"
         />
       </div>
       {error ? (
@@ -76,7 +76,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <button
         type="submit"
         disabled={busy || loading}
-        className="w-full rounded-full bg-[color:var(--mint)] px-4 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:opacity-90 disabled:opacity-60"
+        className="hx-btn hx-btn-primary w-full disabled:opacity-60"
       >
         {busy
           ? "Please wait…"

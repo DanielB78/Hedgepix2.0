@@ -1,9 +1,6 @@
 type Props = {
-  /** Current query string value. */
   q?: string;
-  /** Base path for search results (home feed or CEO page). */
   basePath?: string;
-  /** Preserve view= on the feed. */
   view?: string;
   placeholder?: string;
 };
@@ -19,7 +16,7 @@ export function FeedSearch({
     <form
       method="get"
       action={basePath}
-      className="mx-auto flex w-full max-w-xl items-center gap-2"
+      className="hx-toolbar mb-4"
       role="search"
     >
       {view ? <input type="hidden" name="view" value={view} /> : null}
@@ -31,18 +28,15 @@ export function FeedSearch({
         name="q"
         defaultValue={q}
         placeholder={placeholder}
-        className="min-w-0 flex-1 rounded-full border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-2.5 text-sm text-[color:var(--fog)] outline-none placeholder:text-[color:var(--fog-dim)] focus:border-[color:var(--mint)]/50"
+        className="hx-input min-w-0 flex-1 sm:max-w-sm"
       />
-      <button
-        type="submit"
-        className="rounded-full bg-[color:var(--mint)] px-4 py-2.5 text-sm font-semibold text-[color:var(--ink)] transition-opacity hover:opacity-90"
-      >
+      <button type="submit" className="hx-btn hx-btn-primary">
         Search
       </button>
       {q ? (
         <a
           href={view ? `${basePath}?view=${encodeURIComponent(view)}` : basePath}
-          className="rounded-full px-3 py-2.5 text-sm text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
+          className="hx-btn hx-btn-ghost"
         >
           Clear
         </a>

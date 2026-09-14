@@ -1,194 +1,317 @@
+"use client";
+
 import Link from "next/link";
-import type { FeedView } from "@/lib/feed";
-import { viewHref as hrefForView } from "@/lib/format";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useState, type ReactNode } from "react";
+import {
+  Building2,
+  Landmark,
+  LineChart,
+  Menu,
+  Newspaper,
+  TrendingUp,
+  Users,
+  X,
+} from "lucide-react";
 import { AuthControls } from "@/components/AuthControls";
 
-export type ChromeNavKey = FeedView | "ceo-buys" | "news" | "landing";
+export type ChromeNavKey =
+  | "feed"
+  | "trending"
+  | "house"
+  | "senate"
+  | "ceo-buys"
+  | "news"
+  | "stocks"
+  | "members"
+  | "landing";
 
-function navHref(key: ChromeNavKey) {
-  if (key === "landing") return "/";
-  if (key === "ceo-buys") return "/ceo-buys";
-  if (key === "news") return "/news";
-  return hrefForView(key);
-}
-
-const NAV: Array<{
-  key: Exclude<ChromeNavKey, "landing">;
+type NavItem = {
+  key: ChromeNavKey;
+  href: string;
   label: string;
-  icon: "home" | "trend" | "house" | "senate" | "ceo" | "news";
-}> = [
-  { key: "feed", label: "Feed", icon: "home" },
-  { key: "trending", label: "Trending", icon: "trend" },
-  { key: "house", label: "House", icon: "house" },
-  { key: "senate", label: "Senate", icon: "senate" },
-  { key: "ceo-buys", label: "CEO", icon: "ceo" },
-  { key: "news", label: "News", icon: "news" },
+  icon: typeof LineChart;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { key: "feed", href: "/app", label: "Overview", icon: LineChart },
+  { key: "news", href: "/news", label: "News", icon: Newspaper },
+  { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
+  { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
+  { key: "ceo-buys", href: "/ceo-buys", label: "Insiders", icon: Users },
+  {
+    key: "trending",
+    href: "/app?view=trending",
+    label: "Trending",
+    icon: TrendingUp,
+  },
 ];
 
-function NavIcon({ icon }: { icon: (typeof NAV)[number]["icon"] }) {
-  const common = {
-    width: 20,
-    height: 20,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
+function resolveActive(
+  pathname: string,
+  view: string | null,
+  fallback?: ChromeNavKey,
+): ChromeNavKey {
+  if (pathname.startsWith("/news")) return "news";
+  if (pathname.startsWith("/ceo-buys")) return "ceo-buys";
+  if (pathname.startsWith("/stocks")) return "stocks";
+  if (pathname.startsWith("/members")) return "members";
+  if (pathname === "/app" || pathname.startsWith("/app")) {
+    if (view === "trending") return "trending";
+    if (view === "house") return "house";
+    if (view === "senate") return "senate";
+    return "feed";
+  }
+  return fallback ?? "feed";
+}
 
-  if (icon === "home") {
-    return (
-      <svg {...common}>
-        <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />
-      </svg>
-    );
-  }
-  if (icon === "trend") {
-    return (
-      <svg {...common}>
-        <path d="M4 17 10 11l4 4 6-8" />
-        <path d="M15 7h5v5" />
-      </svg>
-    );
-  }
-  if (icon === "house") {
-    return (
-      <svg {...common}>
-        <path d="M4 20V9l8-5 8 5v11" />
-        <path d="M9 20v-6h6v6" />
-      </svg>
-    );
-  }
-  if (icon === "ceo") {
-    return (
-      <svg {...common}>
-        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" />
-        <path d="M4 20c1.5-3.5 4.2-5 8-5s6.5 1.5 8 5" />
-      </svg>
-    );
-  }
-  if (icon === "news") {
-    return (
-      <svg {...common}>
-        <path d="M4 5h12a2 2 0 0 1 2 2v12H6a2 2 0 0 1-2-2V5Z" />
-        <path d="M18 7h2a2 2 0 0 1 2 2v8a3 3 0 0 1-3 3h-1" />
-        <path d="M8 9h6" />
-        <path d="M8 13h6" />
-        <path d="M8 17h4" />
-      </svg>
-    );
-  }
+function SidebarBrand() {
   return (
-    <svg {...common}>
-      <path d="M5 20V8" />
-      <path d="M5 8c4-4 10-4 14 0" />
-      <path d="M12 8v12" />
-      <path d="M19 8v12" />
-    </svg>
+    <Link href="/app" className="flex items-center gap-2.5 px-3 py-1 no-underline">
+      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[11px] font-semibold tracking-wide text-white">
+        HX
+      </span>
+      <span className="font-[family-name:var(--font-display)] text-[15px] font-semibold tracking-tight text-[var(--ink)]">
+        Hedgepix
+      </span>
+    </Link>
   );
 }
 
-type Props = {
+function SidebarNav({
+  active,
+  onNavigate,
+}: {
   active: ChromeNavKey;
-  horizontal?: boolean;
-  showAuth?: boolean;
-};
-
-export function SideNav({ active, horizontal = false, showAuth = false }: Props) {
-  if (horizontal) {
-    return (
-      <nav aria-label="Primary" className="flex flex-wrap justify-center gap-2">
-        {NAV.map((item) => {
-          const isActive = item.key === active;
-          return (
-            <Link
-              key={item.key}
-              href={navHref(item.key)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                isActive
-                  ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                  : "bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)]"
-              }`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    );
-  }
-
+  onNavigate?: () => void;
+}) {
   return (
-    <nav
-      aria-label="Primary"
-      className="hidden w-[88px] shrink-0 flex-col items-center gap-2 pt-4 lg:flex"
-    >
-      {NAV.map((item) => {
-        const isActive = item.key === active;
+    <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3" aria-label="Primary">
+      {NAV_ITEMS.map((item) => {
+        const Icon = item.icon;
+        const activeNow = active === item.key;
         return (
           <Link
             key={item.key}
-            href={navHref(item.key)}
-            className={`group flex w-full flex-col items-center gap-1 rounded-2xl px-2 py-3 text-[11px] font-medium tracking-wide transition-all duration-300 ${
-              isActive
-                ? "bg-[color:var(--mint)] text-[color:var(--ink)] shadow-[0_0_24px_var(--glow)]"
-                : "text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
-            }`}
-            aria-current={isActive ? "page" : undefined}
+            href={item.href}
+            onClick={onNavigate}
+            className={[
+              "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] no-underline transition-colors",
+              activeNow
+                ? "bg-[var(--accent-soft)] font-medium text-[var(--accent)]"
+                : "text-[var(--fog-dim)] hover:bg-[var(--panel-muted)] hover:text-[var(--ink)]",
+            ].join(" ")}
           >
-            <NavIcon icon={item.icon} />
+            <Icon className="h-4 w-4 shrink-0 opacity-80" strokeWidth={1.75} />
             <span>{item.label}</span>
           </Link>
         );
       })}
-      {showAuth ? (
-        <div className="mt-4">
-          <AuthControls />
-        </div>
-      ) : null}
     </nav>
   );
 }
 
-export function TopTabs({ active }: Props) {
+function AppShellFrame({
+  active,
+  title,
+  description,
+  actions,
+  children,
+}: {
+  active: ChromeNavKey;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      {NAV.map((item) => {
-        const isActive = item.key === active;
-        return (
-          <Link
-            key={item.key}
-            href={navHref(item.key)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all duration-300 ${
-              isActive
-                ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                : "bg-[color:var(--panel-elevated)] text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-            }`}
-            aria-current={isActive ? "page" : undefined}
+    <div className="flex min-h-screen bg-[var(--bg)] text-[var(--ink)]">
+      <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col border-r border-[var(--line)] bg-[var(--panel)] md:flex">
+        <div className="flex h-12 items-center border-b border-[var(--line)] px-2">
+          <SidebarBrand />
+        </div>
+        <SidebarNav active={active} />
+        <div className="mt-auto border-t border-[var(--line)] px-3 py-3">
+          <p className="text-[10px] leading-relaxed text-[var(--fog-mute)]">
+            Research workspace
+          </p>
+        </div>
+      </aside>
+
+      {mobileOpen ? (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            aria-label="Close menu"
+            onClick={() => setMobileOpen(false)}
+          />
+          <aside className="relative flex h-full w-[240px] flex-col bg-[var(--panel)] shadow-lg">
+            <div className="flex h-12 items-center justify-between border-b border-[var(--line)] px-2">
+              <SidebarBrand />
+              <button
+                type="button"
+                className="hx-icon-btn"
+                aria-label="Close"
+                onClick={() => setMobileOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <SidebarNav
+              active={active}
+              onNavigate={() => setMobileOpen(false)}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-[var(--line)] bg-[var(--panel)]/95 px-3 backdrop-blur-sm sm:px-5">
+          <button
+            type="button"
+            className="hx-icon-btn md:hidden"
+            aria-label="Open menu"
+            onClick={() => setMobileOpen(true)}
           >
-            {item.label}
-          </Link>
-        );
-      })}
+            <Menu className="h-4 w-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-[var(--ink)]">
+              {title}
+            </h1>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {actions}
+            <AuthControls compact />
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-3 py-4 sm:px-5 sm:py-5">
+          {description ? (
+            <p className="mb-4 max-w-3xl text-[13px] leading-relaxed text-[var(--fog-dim)]">
+              {description}
+            </p>
+          ) : null}
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
 
+function AppShellInner({
+  active,
+  title,
+  description,
+  actions,
+  children,
+}: {
+  active?: ChromeNavKey;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const pathname = usePathname() || "";
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view");
+  const resolved = resolveActive(pathname, view, active);
+
+  return (
+    <AppShellFrame
+      active={resolved}
+      title={title}
+      description={description}
+      actions={actions}
+    >
+      {children}
+    </AppShellFrame>
+  );
+}
+
+export function AppShell({
+  active,
+  title,
+  description,
+  actions,
+  children,
+}: {
+  active?: ChromeNavKey;
+  title: string;
+  description?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <AppShellFrame
+          active={active ?? "feed"}
+          title={title}
+          description={description}
+          actions={actions}
+        >
+          {children}
+        </AppShellFrame>
+      }
+    >
+      <AppShellInner
+        active={active}
+        title={title}
+        description={description}
+        actions={actions}
+      >
+        {children}
+      </AppShellInner>
+    </Suspense>
+  );
+}
+
+/** @deprecated Prefer AppShell */
 export function BrandMark() {
   return (
-    <div className="animate-rise text-center">
-      <Link href="/" className="inline-block">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.35em] text-[color:var(--mint)]">
-          congressional markets
-        </p>
-        <h1 className="animate-brand font-[family-name:var(--font-display)] text-5xl font-extrabold lowercase leading-none tracking-tight text-[color:var(--fog)] sm:text-6xl">
-          hedgpix
-        </h1>
-      </Link>
-      <p className="mx-auto mt-4 max-w-md text-sm text-[color:var(--fog-dim)] sm:text-base">
-        Watch what Congress is buying and selling — then dig into the chart.
-      </p>
+    <div className="mb-4">
+      <SidebarBrand />
+    </div>
+  );
+}
+
+/** @deprecated Prefer AppShell */
+export function SideNav({
+  active,
+}: {
+  active: ChromeNavKey;
+  showAuth?: boolean;
+  horizontal?: boolean;
+}) {
+  return (
+    <div className="mb-4 md:hidden">
+      <SidebarNav active={active === "landing" ? "feed" : active} />
+    </div>
+  );
+}
+
+/** @deprecated Prefer AppShell */
+export function TopTabs({ active }: { active: ChromeNavKey }) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-1 border-b border-[var(--line)] pb-2 md:hidden">
+      {NAV_ITEMS.map((item) => (
+        <Link
+          key={item.key}
+          href={item.href}
+          className={[
+            "rounded-md px-2.5 py-1.5 text-[12px] no-underline",
+            active === item.key
+              ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+              : "text-[var(--fog-dim)]",
+          ].join(" ")}
+        >
+          {item.label}
+        </Link>
+      ))}
     </div>
   );
 }

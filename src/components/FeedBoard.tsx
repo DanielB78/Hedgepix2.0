@@ -357,7 +357,7 @@ export function FeedBoard({
   return (
     <div className="space-y-10">
       {payload.error ? (
-        <div className="rounded-2xl border border-[color:var(--coral)]/40 bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--coral)]">
+        <div className="rounded-md border border-[color:var(--coral)]/40 bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--coral)]">
           {payload.error}
         </div>
       ) : null}
@@ -681,7 +681,7 @@ function SectionTitle({
 }) {
   return (
     <div>
-      <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-[color:var(--fog)]">
+      <h2 className="font-[family-name:var(--font-display)] text-base font-semibold tracking-tight text-[color:var(--fog)]">
         {title}
       </h2>
       <p className="text-sm text-[color:var(--fog-dim)]">{subtitle}</p>
@@ -691,8 +691,8 @@ function SectionTitle({
 
 function performerChipClass(active: boolean) {
   return active
-    ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
-    : "rounded-full px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
+    ? "hx-chip hx-chip-accent"
+    : "hx-chip";
 }
 
 
@@ -705,13 +705,13 @@ function PortfolioGrowthBanner({
 }) {
   const positive = portfolio.avgReturnPct >= 0;
   return (
-    <div className="rounded-[18px] border border-[color:var(--mint)]/30 bg-[color:var(--panel)] px-5 py-4">
+    <div className="rounded-md border border-[color:var(--mint)]/30 bg-[color:var(--panel)] px-4 py-2.5">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
         Portfolio growth · {performerPeriodLabel(period)}
       </p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
         <p
-          className={`font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight ${
+          className={`font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight ${
             positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
           }`}
         >
@@ -737,7 +737,7 @@ function PerformerPeriodChips({
   query?: string;
 }) {
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-[16px] bg-[color:var(--surface)] p-1">
+    <div className="hx-toolbar">
       {PERFORMER_PERIODS.map((value) => (
         <Link
           key={value}
@@ -780,7 +780,7 @@ function PerformerCard({
   const clickableTicker = !!row.bestTicker;
 
   return (
-    <div className="flex items-center gap-3 rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-3">
+    <div className="flex items-center gap-3 rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-3">
       <span className="w-6 shrink-0 text-sm font-semibold text-[color:var(--fog-dim)]">
         {rank}
       </span>
@@ -789,14 +789,14 @@ function PerformerCard({
           <button
             type="button"
             onClick={() => onOpenMember(row.memberSlug!)}
-            className="truncate text-left font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+            className="truncate text-left font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
           >
             {row.name}
           </button>
         ) : (
           <Link
             href={`/ceo-buys?q=${encodeURIComponent(row.name)}`}
-            className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+            className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
           >
             {row.name}
           </Link>
@@ -827,7 +827,7 @@ function PerformerCard({
         </p>
       </div>
       <span
-        className={`shrink-0 font-[family-name:var(--font-display)] text-xl font-bold tracking-tight ${
+        className={`shrink-0 font-[family-name:var(--font-display)] text-base font-semibold tracking-tight ${
           positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
         }`}
       >
@@ -879,15 +879,15 @@ function DigestBuysBlock({
                     if (!ticker) return;
                     onOpenTicker(ticker);
                   }}
-                  className={`w-full rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
+                  className={`w-full rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
                     expanded
-                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
+                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
                       : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+                      <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
                         {trade.member ?? "Unknown"}
                       </p>
                       <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
@@ -955,11 +955,11 @@ function CeoDigestBlock({ cards }: { cards: CeoActivityCard[] }) {
           {cards.map((card) => (
             <div
               key={card.id}
-              className="rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4"
+              className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-2.5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
+                  <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
                     {card.ceo_name}
                   </p>
                   <p className="mt-1 truncate text-sm text-[color:var(--fog-dim)]">
@@ -1008,7 +1008,7 @@ function CeoDigestBlock({ cards }: { cards: CeoActivityCard[] }) {
 
 function Empty({ text }: { text: string }) {
   return (
-    <div className="rounded-[18px] border border-[color:var(--line)] bg-[color:var(--panel)] px-5 py-8 text-center text-sm text-[color:var(--fog-dim)]">
+    <div className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
       {text}
     </div>
   );
@@ -1029,9 +1029,9 @@ function TickerCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`flex w-full items-center gap-4 rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
+      className={`flex w-full items-center gap-4 rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
         active
-          ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
+          ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
           : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
       }`}
     >
@@ -1039,7 +1039,7 @@ function TickerCard({
         {String(rank).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight text-[color:var(--fog)]">
+        <p className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[color:var(--fog)]">
           {row.ticker}
         </p>
         {row.asset ? (
@@ -1072,11 +1072,11 @@ function StockPanel({
   return (
     <div
       ref={ref}
-      className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
+      className="animate-expand overflow-hidden rounded-md border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
+      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-4 py-2.5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">
+          <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
             {state.ticker}
           </p>
           <p className="text-sm text-[color:var(--fog-dim)]">
@@ -1086,7 +1086,7 @@ function StockPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
+          className="rounded-md px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
         >
           Close
         </button>
@@ -1095,7 +1095,7 @@ function StockPanel({
       <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
         <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
           <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="grid grid-cols-3 gap-1 rounded-[16px] bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
+            <div className="hx-toolbar gap-3">
               {(
                 [
                   ["congress", "Congress"],
@@ -1112,11 +1112,8 @@ function StockPanel({
                     event.stopPropagation();
                     onTradeSource(value);
                   }}
-                  className={`rounded-full px-2 py-2 text-xs font-semibold transition-colors ${
-                    state.tradeSource === value
-                      ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
-                      : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
-                  }`}
+                  className="hx-tab"
+                  data-active={state.tradeSource === value ? "true" : "false"}
                 >
                   {label}
                 </button>
@@ -1147,7 +1144,7 @@ function StockPanel({
           <div className="shrink-0 p-5 pt-3">
             <Link
               href={`/stocks/${encodeURIComponent(state.ticker)}`}
-              className="inline-flex w-full items-center justify-center rounded-full border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
+              className="inline-flex w-full items-center justify-center rounded-md border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
             >
               Open full view
             </Link>
@@ -1211,7 +1208,7 @@ function TradeActivityBlock({
   onCloseStock: () => void;
   onTradeSource: (ticker: string, source: ChartTradeSource) => void;
 }) {
-  const pageSize = 2;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const slice = trades.slice(
@@ -1225,71 +1222,75 @@ function TradeActivityBlock({
       : null;
 
   return (
-    <section className="animate-rise space-y-4">
+    <section className="animate-rise space-y-3">
       <SectionTitle title={title} subtitle={subtitle} />
       {trades.length === 0 ? (
         <Empty text={`No ${title.toLowerCase()} buys or sales match.`} />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {slice.map((trade) => {
-              const ticker = (trade.ticker ?? "").toUpperCase();
-              const buy = trade.transaction_type === "purchase";
-              const expanded = activeTicker?.ticker === ticker;
-              return (
-                <button
-                  key={trade.id}
-                  type="button"
-                  onClick={() => {
-                    if (!ticker) return;
-                    onOpenTicker(ticker);
-                  }}
-                  className={`rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
-                    expanded
-                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
-                      : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
-                        {trade.member ?? "Unknown"}
-                      </p>
-                      <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
-                        {chamberLabel(trade.chamber)}
-                        {trade.state ? ` · ${trade.state}` : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)]">
-                      {ticker || "—"}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                    <span
-                      className={`font-semibold uppercase tracking-wide ${
-                        buy
-                          ? "text-[color:var(--mint)]"
-                          : "text-[color:var(--coral)]"
-                      }`}
+          <div className="hx-table-wrap">
+            <table className="hx-table">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Ticker</th>
+                  <th>Type</th>
+                  <th className="num">Amount</th>
+                  <th>Filed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {slice.map((trade) => {
+                  const ticker = (trade.ticker ?? "").toUpperCase();
+                  const buy = trade.transaction_type === "purchase";
+                  const expanded = activeTicker?.ticker === ticker;
+                  return (
+                    <tr
+                      key={trade.id}
+                      className={
+                        expanded
+                          ? "bg-[color:var(--accent-soft)] cursor-pointer"
+                          : "cursor-pointer"
+                      }
+                      onClick={() => {
+                        if (!ticker) return;
+                        onOpenTicker(ticker);
+                      }}
                     >
-                      {tradeVerb(trade.transaction_type)}
-                    </span>
-                    <span className="text-[color:var(--fog-dim)]">
-                      {formatAmountRange(
-                        trade.amount_low,
-                        trade.amount_high,
-                        trade.amount_range,
-                      )}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
-                    {formatShortDate(
-                      trade.disclosure_date ?? trade.transaction_date,
-                    )}
-                  </p>
-                </button>
-              );
-            })}
+                      <td>
+                        <p className="font-medium text-[color:var(--fog)]">
+                          {trade.member ?? "Unknown"}
+                        </p>
+                        <p className="hx-meta">
+                          {chamberLabel(trade.chamber)}
+                          {trade.state ? ` · ${trade.state}` : ""}
+                        </p>
+                      </td>
+                      <td className="font-medium tracking-tight">
+                        {ticker || "—"}
+                      </td>
+                      <td>
+                        <span className={buy ? "hx-buy" : "hx-sell"}>
+                          {tradeVerb(trade.transaction_type)}
+                        </span>
+                      </td>
+                      <td className="num text-[color:var(--fog-dim)]">
+                        {formatAmountRange(
+                          trade.amount_low,
+                          trade.amount_high,
+                          trade.amount_range,
+                        )}
+                      </td>
+                      <td className="hx-meta whitespace-nowrap">
+                        {formatShortDate(
+                          trade.disclosure_date ?? trade.transaction_date,
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {activeTicker ? (
@@ -1314,14 +1315,12 @@ function TradeActivityBlock({
                     query,
                     view,
                   })}
-                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                  className="hx-btn hx-btn-ghost"
                 >
                   Previous
                 </Link>
               ) : (
-                <span className="rounded-full px-3 py-1.5 opacity-40">
-                  Previous
-                </span>
+                <span className="hx-btn hx-btn-ghost opacity-40">Previous</span>
               )}
               <span>
                 {safePage} / {totalPages}
@@ -1334,12 +1333,12 @@ function TradeActivityBlock({
                     query,
                     view,
                   })}
-                  className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                  className="hx-btn hx-btn-ghost"
                 >
                   Next
                 </Link>
               ) : (
-                <span className="rounded-full px-3 py-1.5 opacity-40">Next</span>
+                <span className="hx-btn hx-btn-ghost opacity-40">Next</span>
               )}
             </div>
           </div>
@@ -1368,7 +1367,7 @@ function MemberBlock({
   onClose: () => void;
   onBackNested: () => void;
 }) {
-  const pageSize = 2;
+  const pageSize = 10;
   const [page, setPage] = useState(0);
   const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -1384,40 +1383,50 @@ function MemberBlock({
   }, [members.length, members[0]?.slug]);
 
   return (
-    <section className="animate-rise space-y-4">
+    <section className="animate-rise space-y-3">
       <SectionTitle title={title} subtitle={subtitle} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        {members.length === 0 ? (
-          <Empty text={`No active ${title.toLowerCase()} members yet.`} />
-        ) : (
-          pageMembers.map((member) => {
-            const expanded = panel?.slug === member.slug;
-            return (
-              <button
-                key={member.slug}
-                type="button"
-                onClick={() => onToggle(member.slug)}
-                className={`rounded-[18px] border px-4 py-4 text-left transition-all duration-300 ${
-                  expanded
-                    ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)] shadow-[0_0_28px_var(--glow)]"
-                    : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-                }`}
-              >
-                <p className="font-[family-name:var(--font-display)] text-lg font-bold text-[color:var(--fog)]">
-                  {member.name}
-                </p>
-                <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
-                  {chamberLabel(member.chamber)}
-                  {member.state ? ` · ${member.state}` : ""}
-                </p>
-                <p className="mt-3 text-xs text-[color:var(--mint)]">
-                  {member.tradeCount} trades · {member.uniqueTickers} tickers
-                </p>
-              </button>
-            );
-          })
-        )}
-      </div>
+      {members.length === 0 ? (
+        <Empty text={`No active ${title.toLowerCase()} members yet.`} />
+      ) : (
+        <div className="hx-table-wrap">
+          <table className="hx-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Chamber</th>
+                <th className="num">Trades</th>
+                <th className="num">Tickers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageMembers.map((member) => {
+                const expanded = panel?.slug === member.slug;
+                return (
+                  <tr
+                    key={member.slug}
+                    className={
+                      expanded
+                        ? "bg-[color:var(--accent-soft)] cursor-pointer"
+                        : "cursor-pointer"
+                    }
+                    onClick={() => onToggle(member.slug)}
+                  >
+                    <td className="font-medium text-[color:var(--fog)]">
+                      {member.name}
+                    </td>
+                    <td className="hx-meta">
+                      {chamberLabel(member.chamber)}
+                      {member.state ? ` · ${member.state}` : ""}
+                    </td>
+                    <td className="num">{member.tradeCount}</td>
+                    <td className="num">{member.uniqueTickers}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {members.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
@@ -1431,7 +1440,7 @@ function MemberBlock({
               type="button"
               disabled={safePage <= 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+              className="hx-btn hx-btn-ghost disabled:opacity-40"
             >
               Previous
             </button>
@@ -1442,7 +1451,7 @@ function MemberBlock({
               type="button"
               disabled={safePage >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] enabled:hover:text-[color:var(--mint)] disabled:opacity-40"
+              className="hx-btn hx-btn-ghost disabled:opacity-40"
             >
               Next
             </button>
@@ -1478,11 +1487,11 @@ function MemberPanel({
   return (
     <div
       ref={ref}
-      className="animate-expand overflow-hidden rounded-[22px] border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
+      className="animate-expand overflow-hidden rounded-md border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
+      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-4 py-2.5">
         <div>
-          <p className="font-[family-name:var(--font-display)] text-2xl font-bold text-[color:var(--fog)]">
+          <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
             {state.data?.name ?? state.slug}
           </p>
           <p className="text-sm text-[color:var(--fog-dim)]">
@@ -1493,7 +1502,7 @@ function MemberPanel({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
+          className="rounded-md px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
         >
           Close
         </button>
@@ -1508,7 +1517,7 @@ function MemberPanel({
           >
             ← Back to top tickers
           </button>
-          <p className="mb-3 font-[family-name:var(--font-display)] text-xl font-bold text-[color:var(--fog)]">
+          <p className="mb-3 font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
             {state.nestedTicker}
             <span className="ml-2 text-sm font-medium text-[color:var(--fog-dim)]">
               trades by {state.data?.name ?? "member"}
@@ -1531,13 +1540,13 @@ function MemberPanel({
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href={`/stocks/${encodeURIComponent(state.nestedTicker)}`}
-              className="inline-flex rounded-full border border-[color:var(--mint)]/40 px-4 py-2 text-sm font-semibold text-[color:var(--mint)] hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
+              className="inline-flex rounded-md border border-[color:var(--mint)]/40 px-4 py-2 text-sm font-semibold text-[color:var(--mint)] hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
             >
               More on {state.nestedTicker}
             </Link>
             <Link
               href={`/members/${encodeURIComponent(state.slug)}`}
-              className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--fog-dim)] hover:border-[color:var(--mint)]/40 hover:text-[color:var(--fog)]"
+              className="inline-flex rounded-md border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--fog-dim)] hover:border-[color:var(--mint)]/40 hover:text-[color:var(--fog)]"
             >
               More on member
             </Link>
@@ -1559,7 +1568,7 @@ function MemberPanel({
                   key={row.ticker}
                   type="button"
                   onClick={() => onOpenTicker(row.ticker)}
-                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-left transition-colors hover:border-[color:var(--mint)]/40"
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-left transition-colors hover:border-[color:var(--mint)]/40"
                 >
                   <div>
                     <p className="font-semibold text-[color:var(--fog)]">
@@ -1585,7 +1594,7 @@ function MemberPanel({
           )}
           <Link
             href={`/members/${encodeURIComponent(state.slug)}`}
-            className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-md border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
           >
             More
           </Link>

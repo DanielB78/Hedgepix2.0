@@ -23,10 +23,7 @@ export function FollowButton({ type, targetKey, label, className }: Props) {
     return (
       <a
         href="/login"
-        className={
-          className ??
-          "inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--fog-dim)] hover:border-[color:var(--mint)]/40 hover:text-[color:var(--mint)]"
-        }
+        className={className ?? "hx-btn hx-btn-ghost text-sm"}
       >
         Log in to follow
       </a>
@@ -47,11 +44,9 @@ export function FollowButton({ type, targetKey, label, className }: Props) {
         }}
         className={
           className ??
-          `inline-flex rounded-full px-4 py-2 text-sm font-semibold transition ${
-            isOn
-              ? "border border-[color:var(--mint)]/40 bg-[color:var(--mint)]/15 text-[color:var(--mint)]"
-              : "bg-[color:var(--mint)] text-[color:var(--ink)] hover:opacity-90"
-          } disabled:opacity-60`
+          (isOn
+            ? "hx-btn border-[color:var(--mint)] text-[color:var(--mint)] disabled:opacity-60"
+            : "hx-btn hx-btn-primary disabled:opacity-60")
         }
       >
         {busy ? "…" : isOn ? "Following" : "Follow"}

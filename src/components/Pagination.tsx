@@ -48,20 +48,20 @@ export function Pagination({
   const to = Math.min(page * pageSize, totalCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-[color:var(--fog-dim)]">
       <p>
         {from}–{to} of {totalCount}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="hx-toolbar">
         {page > 1 ? (
           <Link
             href={pageHref(filters, page - 1, basePath, extraParams)}
-            className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+            className="hx-btn"
           >
             Previous
           </Link>
         ) : (
-          <span className="rounded-full px-3 py-1.5 opacity-40">Previous</span>
+          <span className="hx-btn opacity-40">Previous</span>
         )}
         <span>
           {page} / {totalPages}
@@ -69,12 +69,12 @@ export function Pagination({
         {page < totalPages ? (
           <Link
             href={pageHref(filters, page + 1, basePath, extraParams)}
-            className="rounded-full bg-[color:var(--panel-elevated)] px-3 py-1.5 text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+            className="hx-btn"
           >
             Next
           </Link>
         ) : (
-          <span className="rounded-full px-3 py-1.5 opacity-40">Next</span>
+          <span className="hx-btn opacity-40">Next</span>
         )}
       </div>
     </div>
