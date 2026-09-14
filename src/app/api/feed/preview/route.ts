@@ -4,7 +4,7 @@ import {
   fetchMemberStockPreview,
   fetchStockPreview,
 } from "@/lib/feed";
-import type { Chamber } from "@/lib/types";
+import { parseChartTradeSource } from "@/lib/chartTrades";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,12 +13,20 @@ export async function GET(request: Request) {
   try {
     if (kind === "stock") {
       const ticker = searchParams.get("ticker") ?? "";
-      const chamberRaw = searchParams.get("chamber") ?? "all";
-      const chamber =
-        chamberRaw === "house" || chamberRaw === "senate"
-          ? (chamberRaw as Chamber)
-          : "all";
-      const data = await fetchStockPreview(ticker, chamber);
+      const sourceRaw =
+        searchParams.get("source") ?? searchParams.get("chamber") ?? "congress";
+      const mapped =
+        sourceRaw === "all"
+          ? "congress"
+          : sourceRaw === "house" ||
+              sourceRaw === "senate" ||
+              sourceRaw === "ceo" ||
+              sourceRaw === "both" ||
+              sourceRaw === "congress"
+            ? sourceRaw
+            : "congress";
+      const tradeSource = parseChartTradeSource(mapped);
+      const data = await fetchStockPreview(ticker, tradeSource);
       if (!data) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }

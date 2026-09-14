@@ -1,4 +1,5 @@
 import type { Chamber } from "./types";
+import { resolveCeoTransactionCode } from "./ceoAggregate";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
 
 export type PerformerPeriod = "2026" | "6m" | "3m" | "1m";
@@ -13,6 +14,15 @@ export type TopPerformer = {
   pricedBuyCount: number;
   bestTicker: string | null;
   bestReturnPct: number | null;
+};
+
+export type PortfolioGrowth = {
+  /** Equal-weighted average return across all priced buys in the period. */
+  avgReturnPct: number;
+  pricedBuyCount: number;
+  buyCount: number;
+  congressPricedCount: number;
+  ceoPricedCount: number;
 };
 
 type BuyRow = {
@@ -32,6 +42,8 @@ const BAR_PAGE = 1000;
 /** Cap buys scanned so ranking stays fast enough for feed navigation. */
 const MAX_CONGRESS_BUYS = 400;
 const MAX_CEO_BUYS = 400;
+/** Over-fetch CEO rows before filtering sales mislabeled as purchases. */
+const CEO_FETCH_CAP = 1200;
 
 export function parsePerformerPeriod(
   value: string | string[] | undefined,
@@ -89,6 +101,32 @@ export function performerPeriodHref(
 function normalizeTicker(raw: string | null | undefined): string | null {
   const t = (raw ?? "").trim().toUpperCase();
   return t || null;
+}
+
+function buyReturns(
+  buys: BuyRow[],
+  entryClose: Map<string, number>,
+  latestClose: Map<string, number>,
+): Array<BuyRow & { returnPct: number }> {
+  const out: Array<BuyRow & { returnPct: number }> = [];
+  for (const buy of buys) {
+    const entry = entryClose.get(`${buy.ticker}|${buy.transactionDate}`);
+    const latest = latestClose.get(buy.ticker);
+    if (
+      entry == null ||
+      latest == null ||
+      !Number.isFinite(entry) ||
+      !Number.isFinite(latest) ||
+      entry <= 0
+    ) {
+      continue;
+    }
+    out.push({
+      ...buy,
+      returnPct: ((latest - entry) / entry) * 100,
+    });
+  }
+  return out;
 }
 
 /** Pure ranking helper for tests: average buy return per person. */
@@ -172,6 +210,24 @@ export function rankBuyPerformers(
     .slice(0, limit);
 }
 
+/** Equal-weighted portfolio return across all priced buys. */
+export function computePortfolioGrowth(
+  buys: BuyRow[],
+  entryClose: Map<string, number>,
+  latestClose: Map<string, number>,
+): PortfolioGrowth | null {
+  const priced = buyReturns(buys, entryClose, latestClose);
+  if (priced.length === 0) return null;
+  const sum = priced.reduce((a, b) => a + b.returnPct, 0);
+  return {
+    avgReturnPct: sum / priced.length,
+    pricedBuyCount: priced.length,
+    buyCount: buys.length,
+    congressPricedCount: priced.filter((b) => b.kind !== "ceo").length,
+    ceoPricedCount: priced.filter((b) => b.kind === "ceo").length,
+  };
+}
+
 async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
@@ -232,16 +288,14 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const buys: BuyRow[] = [];
   let from = 0;
 
-  while (buys.length < MAX_CEO_BUYS) {
-    const end = Math.min(from + PAGE - 1, MAX_CEO_BUYS - 1);
+  // Do not trust transaction_code alone — filter with raw_source.trans_code.
+  while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
+    const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
     const { data, error } = await supabase
       .from("ceo_stock_purchases")
-      .select("ceo_name, ticker, transaction_date, transaction_code")
+      .select("ceo_name, ticker, transaction_date, transaction_code, raw_source")
       .gte("transaction_date", cutoff)
       .not("ticker", "is", null)
-      .or(
-        "transaction_code.is.null,transaction_code.eq.P,transaction_code.eq.p",
-      )
       .order("transaction_date", { ascending: false })
       .range(from, end);
 
@@ -251,6 +305,14 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
 
     for (const row of rows) {
       if (buys.length >= MAX_CEO_BUYS) break;
+      if (
+        resolveCeoTransactionCode({
+          transaction_code: row.transaction_code as string | null,
+          raw_source: row.raw_source as Record<string, unknown> | null,
+        }) !== "P"
+      ) {
+        continue;
+      }
       const ticker = normalizeTicker(row.ticker as string | null);
       const name = String(row.ceo_name ?? "").trim();
       const tx = (row.transaction_date as string | null)?.slice(0, 10);
@@ -361,9 +423,13 @@ async function loadPriceMaps(
 export async function fetchTopPerformers(
   period: PerformerPeriod,
   limit = 10,
-): Promise<{ rows: TopPerformer[]; error: string | null }> {
+): Promise<{
+  rows: TopPerformer[];
+  portfolio: PortfolioGrowth | null;
+  error: string | null;
+}> {
   if (!hasPublicSupabaseConfig()) {
-    return { rows: [], error: null };
+    return { rows: [], portfolio: null, error: null };
   }
 
   try {
@@ -373,16 +439,20 @@ export async function fetchTopPerformers(
       fetchRecentCeoBuys(cutoff),
     ]);
     const buys = [...congress, ...ceos];
-    if (buys.length === 0) return { rows: [], error: null };
+    if (buys.length === 0) {
+      return { rows: [], portfolio: null, error: null };
+    }
 
     const { entryClose, latestClose } = await loadPriceMaps(buys);
     return {
       rows: rankBuyPerformers(buys, entryClose, latestClose, limit),
+      portfolio: computePortfolioGrowth(buys, entryClose, latestClose),
       error: null,
     };
   } catch (err) {
     return {
       rows: [],
+      portfolio: null,
       error:
         err instanceof Error ? err.message : "Failed to load top performers",
     };

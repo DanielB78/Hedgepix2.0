@@ -1,6 +1,7 @@
 import {
   aggregateCeoActivity,
   filterCeoActivity,
+  resolveCeoTransactionCode,
   type CeoActivityCard,
 } from "@/lib/ceoAggregate";
 import type { CeoStockPurchaseRow } from "@/lib/types";
@@ -24,7 +25,7 @@ export type CeoBuysResult = {
 export const CEO_PAGE_SIZE = 2;
 
 const SELECT_COLUMNS =
-  "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source";
+  "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code";
 
 function publicObjectUrl(objectPath: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
@@ -54,17 +55,7 @@ function sortRows(rows: CeoStockPurchaseRow[]): CeoStockPurchaseRow[] {
 }
 
 function normalizeRow(row: CeoStockPurchaseRow): CeoStockPurchaseRow {
-  const fromRaw =
-    typeof row.raw_source === "object" &&
-    row.raw_source &&
-    "trans_code" in row.raw_source
-      ? String(
-          (row.raw_source as { trans_code?: string }).trans_code ?? "",
-        ).toUpperCase()
-      : "";
-  const fromCol = String(row.transaction_code ?? "").toUpperCase();
-  const code = fromCol === "S" || fromRaw === "S" ? "S" : "P";
-  return { ...row, transaction_code: code };
+  return { ...row, transaction_code: resolveCeoTransactionCode(row) };
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {

@@ -9,7 +9,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import type { ChartRange, CongressTrade, StockPriceBar } from "@/lib/types";
+import type { ChartRange, StockPriceBar } from "@/lib/types";
+import { chartTradeLabel, type ChartTrade } from "@/lib/chartTrades";
 
 type ChartPoint = {
   date: string;
@@ -27,14 +28,14 @@ type MarkerGroup = {
   x: number;
   y: number;
   close: number;
-  trades: CongressTrade[];
+  trades: ChartTrade[];
   hasPurchase: boolean;
   hasSale: boolean;
 };
 
 type Props = {
   bars: StockPriceBar[];
-  trades: CongressTrade[];
+  trades: ChartTrade[];
   /** Show range + member filters and enable zoom/pan gestures. */
   interactive?: boolean;
   /** Taller chart for the full ticker page. */
@@ -106,7 +107,7 @@ function nearestPointIndex(points: ChartPoint[], clientX: number, svg: SVGSVGEle
   return best;
 }
 
-function memberMatches(trade: CongressTrade, filters: string[]) {
+function memberMatches(trade: ChartTrade, filters: string[]) {
   if (filters.length === 0) return true;
   const name = (trade.member ?? "").toLowerCase();
   const slug = (trade.member_slug ?? "").toLowerCase();
@@ -395,16 +396,16 @@ export function PriceChart({
     <div className="pointer-events-none absolute top-4 left-4 z-10 max-w-sm rounded-[16px] border border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--fog)] shadow-[var(--shadow-soft)]">
       <div className="font-semibold text-[color:var(--fog)]">
         {activeMarker.trades.length > 1
-          ? `${activeMarker.trades.length} congressional transactions`
-          : (activeMarker.trades[0]?.member ?? "Congressional trade")}
+          ? `${activeMarker.trades.length} transactions`
+          : (activeMarker.trades[0]?.member ?? "Trade")}
       </div>
       <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto">
         {activeMarker.trades.map((trade) => (
           <li key={trade.id} className="text-[color:var(--fog-dim)]">
             <div className="text-[color:var(--fog)]">
               {activeMarker.trades.length > 1
-                ? `${trade.member ?? "Unknown"} — `
-                : ""}
+                ? `${trade.member ?? "Unknown"} (${chartTradeLabel(trade)}) — `
+                : `${chartTradeLabel(trade)} · `}
               <span className="capitalize">{trade.transaction_type}</span>
               {trade.amount_range ? ` · ${trade.amount_range}` : ""}
             </div>

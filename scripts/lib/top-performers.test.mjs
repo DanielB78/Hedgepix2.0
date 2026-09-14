@@ -3,6 +3,7 @@ import {
   parsePerformerPeriod,
   performerCutoffDate,
   rankBuyPerformers,
+  computePortfolioGrowth,
 } from "../../src/lib/topPerformers.ts";
 
 assert.equal(parsePerformerPeriod("6m"), "6m");

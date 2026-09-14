@@ -27,8 +27,13 @@ import {
   performerPeriodHref,
   performerPeriodLabel,
   type PerformerPeriod,
+  type PortfolioGrowth,
   type TopPerformer,
 } from "@/lib/topPerformers";
+import {
+  type ChartTrade,
+  type ChartTradeSource,
+} from "@/lib/chartTrades";
 
 type Props = {
   view: FeedView;
@@ -40,7 +45,7 @@ type Props = {
 
 type StockPanelState = {
   ticker: string;
-  chamber: "all" | Chamber;
+  tradeSource: ChartTradeSource;
   data: StockPreviewPayload | null;
   loading: boolean;
   error: string | null;
@@ -67,7 +72,7 @@ async function loadJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-function TradeRow({ trade }: { trade: CongressTrade }) {
+function TradeRow({ trade }: { trade: ChartTrade | CongressTrade }) {
   const buy = trade.transaction_type === "purchase";
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] py-2.5 last:border-0">
@@ -76,7 +81,7 @@ function TradeRow({ trade }: { trade: CongressTrade }) {
           {trade.member ?? "Unknown"}
         </p>
         <p className="text-xs text-[color:var(--fog-dim)]">
-          {chamberLabel(trade.chamber)} ·{" "}
+          {("source" in trade && trade.source === "ceo") ? "CEO" : chamberLabel(trade.chamber)} ·{" "}
           {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
         </p>
       </div>
@@ -151,24 +156,24 @@ export function FeedBoard({
   );
 
   const openStock = useCallback(
-    async (ticker: string, chamber: "all" | Chamber = "all") => {
+    async (ticker: string, tradeSource: ChartTradeSource = "congress") => {
       const id = ++requestId.current;
       setMemberPanel(null);
       setStockPanel({
         ticker,
-        chamber,
+        tradeSource,
         data: null,
         loading: true,
         error: null,
       });
       try {
         const data = await loadJson<StockPreviewPayload>(
-          `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&chamber=${chamber}`,
+          `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&source=${tradeSource}`,
         );
         if (id !== requestId.current) return;
         setStockPanel({
           ticker,
-          chamber,
+          tradeSource,
           data,
           loading: false,
           error: null,
@@ -177,7 +182,7 @@ export function FeedBoard({
         if (id !== requestId.current) return;
         setStockPanel({
           ticker,
-          chamber,
+          tradeSource,
           data: null,
           loading: false,
           error: err instanceof Error ? err.message : "Failed to load",
@@ -385,7 +390,7 @@ export function FeedBoard({
             <StockPanel
               state={stockPanel}
               onClose={() => setStockPanel(null)}
-              onChamber={(c) => void openStock(stockPanel.ticker, c)}
+              onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
             />
           ) : null}
           {memberPanel ? (
@@ -427,6 +432,12 @@ export function FeedBoard({
               period={payload.performerPeriod}
               query={query}
             />
+            {payload.portfolioGrowth ? (
+              <PortfolioGrowthBanner
+                portfolio={payload.portfolioGrowth}
+                period={payload.performerPeriod}
+              />
+            ) : null}
             <div className="space-y-3">
               {topPerformers.length === 0 ? (
                 <Empty text="No priced purchases in this period yet." />
@@ -467,7 +478,7 @@ export function FeedBoard({
               <StockPanel
                 state={stockPanel}
                 onClose={() => setStockPanel(null)}
-                onChamber={(c) => void openStock(stockPanel.ticker, c)}
+                onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
               />
             ) : null}
           </section>
@@ -495,7 +506,7 @@ export function FeedBoard({
                         <StockPanel
                           state={stockPanel}
                           onClose={() => setStockPanel(null)}
-                          onChamber={(c) =>
+                          onTradeSource={(c) =>
                             void openStock(stockPanel.ticker, c)
                           }
                         />
@@ -525,7 +536,7 @@ export function FeedBoard({
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
-            onChamber={(ticker, c) => void openStock(ticker, c)}
+            onTradeSource={(ticker, s) => void openStock(ticker, s)}
           />
 
           <DigestBuysBlock
@@ -538,7 +549,7 @@ export function FeedBoard({
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
-            onChamber={(ticker, c) => void openStock(ticker, c)}
+            onTradeSource={(ticker, s) => void openStock(ticker, s)}
           />
 
           <CeoDigestBlock cards={ceoBuys} />
@@ -569,7 +580,7 @@ export function FeedBoard({
                       <StockPanel
                         state={stockPanel}
                         onClose={() => setStockPanel(null)}
-                        onChamber={(c) => void openStock(stockPanel.ticker, c)}
+                        onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
                       />
                     ) : null}
                   </div>
@@ -593,7 +604,7 @@ export function FeedBoard({
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
-            onChamber={(ticker, c) => void openStock(ticker, c)}
+            onTradeSource={(ticker, s) => void openStock(ticker, s)}
           />
           <MemberBlock
             title="House members"
@@ -632,7 +643,7 @@ export function FeedBoard({
             stockPanel={stockPanel}
             onOpenTicker={(ticker) => toggleStock(ticker)}
             onCloseStock={() => setStockPanel(null)}
-            onChamber={(ticker, c) => void openStock(ticker, c)}
+            onTradeSource={(ticker, s) => void openStock(ticker, s)}
           />
           <MemberBlock
             title="Senate members"
@@ -682,6 +693,40 @@ function performerChipClass(active: boolean) {
   return active
     ? "rounded-full bg-[color:var(--mint)] px-3 py-1.5 text-sm font-medium text-[color:var(--ink)]"
     : "rounded-full px-3 py-1.5 text-sm font-medium text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]";
+}
+
+
+function PortfolioGrowthBanner({
+  portfolio,
+  period,
+}: {
+  portfolio: PortfolioGrowth;
+  period: PerformerPeriod;
+}) {
+  const positive = portfolio.avgReturnPct >= 0;
+  return (
+    <div className="rounded-[18px] border border-[color:var(--mint)]/30 bg-[color:var(--panel)] px-5 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+        Portfolio growth · {performerPeriodLabel(period)}
+      </p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+        <p
+          className={`font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight ${
+            positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
+          }`}
+        >
+          {formatReturnPct(portfolio.avgReturnPct)}
+        </p>
+        <p className="text-sm text-[color:var(--fog-dim)]">
+          Equal-weighted avg across {portfolio.pricedBuyCount} priced buy
+          {portfolio.pricedBuyCount === 1 ? "" : "s"}
+          {" · "}
+          {portfolio.congressPricedCount} congress · {portfolio.ceoPricedCount}{" "}
+          CEO
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function PerformerPeriodChips({
@@ -802,7 +847,7 @@ function DigestBuysBlock({
   stockPanel,
   onOpenTicker,
   onCloseStock,
-  onChamber,
+  onTradeSource,
 }: {
   title: string;
   subtitle: string;
@@ -813,7 +858,7 @@ function DigestBuysBlock({
   stockPanel: StockPanelState | null;
   onOpenTicker: (ticker: string) => void;
   onCloseStock: () => void;
-  onChamber: (ticker: string, chamber: "all" | Chamber) => void;
+  onTradeSource: (ticker: string, source: ChartTradeSource) => void;
 }) {
   return (
     <section className="animate-rise space-y-4">
@@ -876,7 +921,7 @@ function DigestBuysBlock({
                   <StockPanel
                     state={stockPanel}
                     onClose={onCloseStock}
-                    onChamber={(c) => onChamber(ticker, c)}
+                    onTradeSource={(s) => onTradeSource(ticker, s)}
                   />
                 ) : null}
               </div>
@@ -1016,11 +1061,11 @@ function TickerCard({
 function StockPanel({
   state,
   onClose,
-  onChamber,
+  onTradeSource,
 }: {
   state: StockPanelState;
   onClose: () => void;
-  onChamber: (chamber: "all" | Chamber) => void;
+  onTradeSource: (source: ChartTradeSource) => void;
 }) {
   const ref = useScrollIntoView(true);
 
@@ -1050,12 +1095,14 @@ function StockPanel({
       <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
         <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
           <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="flex gap-1 rounded-full bg-[color:var(--panel-elevated)] p-1">
+            <div className="grid grid-cols-3 gap-1 rounded-[16px] bg-[color:var(--panel-elevated)] p-1 sm:grid-cols-5">
               {(
                 [
-                  ["all", "All"],
+                  ["congress", "Congress"],
                   ["house", "House"],
                   ["senate", "Senate"],
+                  ["ceo", "CEO"],
+                  ["both", "Both"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -1063,10 +1110,10 @@ function StockPanel({
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onChamber(value);
+                    onTradeSource(value);
                   }}
-                  className={`flex-1 rounded-full px-2 py-1.5 text-xs font-semibold transition-colors ${
-                    state.chamber === value
+                  className={`rounded-full px-2 py-2 text-xs font-semibold transition-colors ${
+                    state.tradeSource === value
                       ? "bg-[color:var(--mint)] text-[color:var(--ink)]"
                       : "text-[color:var(--fog-dim)] hover:text-[color:var(--fog)]"
                   }`}
@@ -1076,7 +1123,7 @@ function StockPanel({
               ))}
             </div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-              Members
+              Trades
               {state.data?.topTrades.length
                 ? ` · ${state.data.topTrades.length}`
                 : ""}
@@ -1150,7 +1197,7 @@ function TradeActivityBlock({
   stockPanel,
   onOpenTicker,
   onCloseStock,
-  onChamber,
+  onTradeSource,
 }: {
   title: string;
   subtitle: string;
@@ -1162,7 +1209,7 @@ function TradeActivityBlock({
   stockPanel: StockPanelState | null;
   onOpenTicker: (ticker: string) => void;
   onCloseStock: () => void;
-  onChamber: (ticker: string, chamber: "all" | Chamber) => void;
+  onTradeSource: (ticker: string, source: ChartTradeSource) => void;
 }) {
   const pageSize = 2;
   const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
@@ -1249,7 +1296,7 @@ function TradeActivityBlock({
             <StockPanel
               state={activeTicker}
               onClose={onCloseStock}
-              onChamber={(c) => onChamber(activeTicker.ticker, c)}
+              onTradeSource={(s) => onTradeSource(activeTicker.ticker, s)}
             />
           ) : null}
 
