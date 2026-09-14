@@ -91,6 +91,21 @@ export async function markFailed(
   if (error) throw new Error(`sec_ingest_state failed: ${error.message}`);
 }
 
+/** Collapse duplicate conflict keys within a batch (Postgres rejects multi-row ON CONFLICT on the same key). */
+export function dedupeByConflictKey<T extends Record<string, unknown>>(
+  rows: T[],
+  onConflict: string,
+): T[] {
+  const keys = onConflict.split(",").map((k) => k.trim()).filter(Boolean);
+  if (keys.length === 0) return rows;
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    const key = keys.map((k) => String(row[k] ?? "")).join("\0");
+    map.set(key, row);
+  }
+  return [...map.values()];
+}
+
 export async function upsertChunks<T extends Record<string, unknown>>(
   supabase: SupabaseClient,
   table: string,
@@ -98,9 +113,10 @@ export async function upsertChunks<T extends Record<string, unknown>>(
   onConflict: string,
   chunkSize = 200,
 ): Promise<number> {
+  const unique = dedupeByConflictKey(rows, onConflict);
   let upserted = 0;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
     const { error, count } = await supabase
       .from(table)
       .upsert(chunk as Record<string, unknown>[], { onConflict, count: "exact" });
