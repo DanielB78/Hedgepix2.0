@@ -49,3 +49,9 @@ next-env.d.ts
 
 # Kadoa dataset cache
 backend/.cache/
+
+# Local offline DB runtime
+.local/
+local-db/postgrest.log
+local-db/keys.env
+local-db/postgrest.conf

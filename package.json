@@ -21,7 +21,15 @@
     "purge:pre2026-data": "node --env-file=.env.local scripts/purge-pre2026-data.mjs",
     "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs && node scripts/lib/compute-holdings.test.mjs",
     "test:performers": "npx --yes tsx scripts/lib/top-performers.test.mjs",
-    "repair:ceo-codes": "node --env-file=.env.local scripts/repair-ceo-transaction-codes.mjs"
+    "repair:ceo-codes": "node --env-file=.env.local scripts/repair-ceo-transaction-codes.mjs",
+    "local:db:install": "bash scripts/local-db/install-postgrest.sh",
+    "local:db:bootstrap": "bash scripts/local-db/bootstrap.sh",
+    "local:db:migrate": "bash scripts/local-db/migrate.sh",
+    "local:db:start": "bash scripts/local-db/start.sh",
+    "local:db:stop": "bash scripts/local-db/stop.sh",
+    "local:db:status": "bash scripts/local-db/status.sh",
+    "local:db:seed": "sudo -u postgres psql -d hedgpix -f scripts/local-db/seed-demo.sql",
+    "local:dev": "bash scripts/local-db/run-next.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
