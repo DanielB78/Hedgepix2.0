@@ -26,6 +26,7 @@ type Props = {
   changePct: number | null;
   error: string | null;
   initialSource?: ChartTradeSource;
+  sectorLabel?: string | null;
 };
 
 function cleanAssetName(asset: string | null) {
@@ -116,6 +117,7 @@ export function StockDetailBoard({
   changePct,
   error,
   initialSource = "congress",
+  sectorLabel = null,
 }: Props) {
   const startSource =
     initialSource === "house" || initialSource === "senate"
@@ -145,6 +147,7 @@ export function StockDetailBoard({
           <p className="hx-page-title tracking-tight">{ticker}</p>
           <p className="hx-page-desc">
             {cleanAssetName(asset) ?? "Listed security"}
+            {sectorLabel ? ` · ${sectorLabel}` : ""}
             {uniqueMembers
               ? ` · ${uniqueMembers} member${uniqueMembers === 1 ? "" : "s"}`
               : ""}

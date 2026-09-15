@@ -17,6 +17,7 @@
     "backfill-nport": "npm run backfill-nport --prefix backend",
     "apply-sec-schema": "npm run apply-sec-schema --prefix backend",
     "sync:prices": "node --env-file=.env.local scripts/sync-stock-prices.mjs",
+    "sync:ticker-profiles": "npm run sync:ticker-profiles --prefix backend",
     "purge:pre2024-prices": "node --env-file=.env.local scripts/purge-pre2024-prices.mjs",
     "purge:pre2026-data": "node --env-file=.env.local scripts/purge-pre2026-data.mjs",
     "test:prices": "node scripts/lib/equity-tickers.test.mjs && node scripts/lib/sync-stock-prices.test.mjs && node scripts/lib/compute-holdings.test.mjs",

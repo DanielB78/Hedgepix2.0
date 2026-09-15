@@ -31,6 +31,10 @@ import {
   type ChartTrade,
   type ChartTradeSource,
 } from "./chartTrades";
+import {
+  fetchTickerProfiles,
+  tickerSectorLabel,
+} from "./tickerProfiles";
 
 export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
 export type { ChartTrade, ChartTradeSource };
@@ -60,6 +64,8 @@ export type FeedPayload = {
   topPerformers: TopPerformer[];
   portfolioGrowth: PortfolioGrowth | null;
   performerPeriod: PerformerPeriod;
+  /** ticker → industry/sector label for UI chips */
+  tickerSectors: Record<string, string>;
   configured: boolean;
   error: string | null;
 };
@@ -290,6 +296,7 @@ export async function fetchFeedPayload(
       topPerformers: [],
       portfolioGrowth: null,
       performerPeriod,
+      tickerSectors: {},
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
@@ -333,6 +340,19 @@ export async function fetchFeedPayload(
     topPerformers.error ||
     null;
 
+  const sectorTickers = [
+    ...recentHouse.rows.map((t) => t.ticker ?? ""),
+    ...recentSenate.rows.map((t) => t.ticker ?? ""),
+    ...trending.rows.map((t) => t.ticker),
+    ...topPerformers.rows.map((t) => t.bestTicker ?? ""),
+  ];
+  const profileMap = await fetchTickerProfiles(sectorTickers);
+  const tickerSectors: Record<string, string> = {};
+  for (const [ticker, profile] of profileMap.entries()) {
+    const label = tickerSectorLabel(profile);
+    if (label) tickerSectors[ticker] = label;
+  }
+
   return {
     trending: trending.rows.slice(0, 12),
     houseMembers: [],
@@ -345,6 +365,7 @@ export async function fetchFeedPayload(
     topPerformers: topPerformers.rows,
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
+    tickerSectors,
     configured: true,
     error,
   };

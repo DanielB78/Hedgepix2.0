@@ -421,6 +421,7 @@ export function FeedBoard({
                       rank={i + 1}
                       row={row}
                       active={active}
+                      sectorLabel={payload.tickerSectors[row.ticker] ?? null}
                       onOpen={() => toggleStock(row.ticker)}
                     />
                     {active && stockPanel ? (
@@ -448,6 +449,7 @@ export function FeedBoard({
           pageParam="housePage"
           query={query}
           view={view}
+          sectorByTicker={payload.tickerSectors}
         />
       ) : null}
 
@@ -460,6 +462,7 @@ export function FeedBoard({
           pageParam="senatePage"
           query={query}
           view={view}
+          sectorByTicker={payload.tickerSectors}
         />
       ) : null}
 
@@ -518,11 +521,13 @@ function TickerCard({
   row,
   active,
   onOpen,
+  sectorLabel,
 }: {
   rank: number;
   row: TrendingTicker;
   active: boolean;
   onOpen: () => void;
+  sectorLabel?: string | null;
 }) {
   return (
     <button
@@ -538,8 +543,13 @@ function TickerCard({
         {String(rank).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[color:var(--fog)]">
-          {row.ticker}
+        <p className="flex flex-wrap items-center gap-1.5 font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[color:var(--fog)]">
+          <span>{row.ticker}</span>
+          {sectorLabel ? (
+            <span className="rounded bg-[color:var(--panel-elevated)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--fog-dim)]">
+              {sectorLabel}
+            </span>
+          ) : null}
         </p>
         {row.asset ? (
           <p className="truncate text-sm text-[color:var(--fog-dim)]">
@@ -745,6 +755,7 @@ function DisclosureDayList({
   pageParam,
   query,
   view,
+  sectorByTicker,
 }: {
   title: string;
   subtitle: string;
@@ -753,6 +764,7 @@ function DisclosureDayList({
   pageParam: "housePage" | "senatePage";
   query?: string;
   view: FeedView;
+  sectorByTicker?: Record<string, string>;
 }) {
   const groups = useMemo(() => groupTradesByDisclosure(trades), [trades]);
   const pageSize = 8;
@@ -776,6 +788,7 @@ function DisclosureDayList({
                 key={group.key}
                 group={group}
                 defaultOpen={safePage === 1 && index === 0}
+                sectorByTicker={sectorByTicker}
               />
             ))}
           </div>

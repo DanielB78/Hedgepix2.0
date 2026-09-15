@@ -57,9 +57,12 @@ function pickDefaultTrade(trades: CongressTrade[]): CongressTrade | null {
 export function DisclosureDayCard({
   group,
   defaultOpen = false,
+  sectorByTicker,
 }: {
   group: TradeDisclosureGroup;
   defaultOpen?: boolean;
+  /** ticker → industry/sector label */
+  sectorByTicker?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -203,9 +206,24 @@ export function DisclosureDayCard({
           </div>
           <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">
             {hint || `${group.trades.length} trade${group.trades.length === 1 ? "" : "s"}`}
-            {tickers.length
-              ? ` · ${tickers.slice(0, 4).join(", ")}${tickers.length > 4 ? "…" : ""}`
-              : ""}
+            {tickers.length ? (
+              <>
+                {" · "}
+                {tickers.slice(0, 4).map((t, i) => (
+                  <span key={t}>
+                    {i > 0 ? ", " : ""}
+                    {t}
+                    {sectorByTicker?.[t] ? (
+                      <span className="text-[color:var(--fog-mute)]">
+                        {" "}
+                        ({sectorByTicker[t]})
+                      </span>
+                    ) : null}
+                  </span>
+                ))}
+                {tickers.length > 4 ? "…" : ""}
+              </>
+            ) : null}
           </p>
         </div>
         <span className="hx-meta shrink-0 whitespace-nowrap">
@@ -240,8 +258,13 @@ export function DisclosureDayCard({
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="font-medium tracking-tight text-[color:var(--fog)]">
-                            {ticker || "—"}
+                          <p className="flex flex-wrap items-center gap-1.5 font-medium tracking-tight text-[color:var(--fog)]">
+                            <span>{ticker || "—"}</span>
+                            {sectorByTicker?.[ticker] ? (
+                              <span className="rounded bg-[color:var(--panel-elevated)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--fog-dim)]">
+                                {sectorByTicker[ticker]}
+                              </span>
+                            ) : null}
                           </p>
                           <p className="hx-meta line-clamp-1">
                             {trade.asset ?? "Equity"}

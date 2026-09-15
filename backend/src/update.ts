@@ -309,6 +309,30 @@ async function main(): Promise<void> {
     console.log(`Errors: ${prices.errors}`);
     console.log("");
 
+    console.log("Classifying ticker sectors / industries…");
+    try {
+      const { syncTickerProfiles } = await import("./tickers/syncTickerProfiles.js");
+      const profiles = await syncTickerProfiles(supabase, {
+        secLimit: Number.parseInt(process.env.TICKER_PROFILE_SEC_LIMIT ?? "40", 10),
+      });
+      console.log("TICKER PROFILES");
+      console.log(`Status: ${profiles.status}`);
+      console.log(`Discovered: ${profiles.discovered}`);
+      console.log(`Upserted: ${profiles.upserted}`);
+      console.log(
+        `Sources — map: ${profiles.seededFromMap}, SEC: ${profiles.fromSec}, heuristic: ${profiles.fromHeuristic}, skipped existing: ${profiles.skippedExisting}`,
+      );
+      if (profiles.errorMessages.length) {
+        console.log(`Errors: ${profiles.errorMessages.slice(0, 3).join("; ")}`);
+      }
+    } catch (err) {
+      console.log("TICKER PROFILES");
+      console.log(
+        `Status: FAILED — ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    console.log("");
+
     console.log("Recomputing member holdings…");
     const holdings = await syncHoldingsAfterTrades(supabase);
     console.log("MEMBER HOLDINGS");
