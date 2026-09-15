@@ -478,3 +478,148 @@ export async function fetchTopPerformers(
     };
   }
 }
+
+export type MemberBuyPerformance = {
+  id: string;
+  ticker: string;
+  asset: string | null;
+  transactionDate: string;
+  disclosureDate: string | null;
+  amountLow: number | null;
+  amountHigh: number | null;
+  amountRange: string | null;
+  returnPct: number | null;
+  entryClose: number | null;
+  latestClose: number | null;
+};
+
+export type MemberBuysPayload = {
+  slug: string;
+  name: string;
+  chamber: Chamber | null;
+  state: string | null;
+  period: PerformerPeriod;
+  buys: MemberBuyPerformance[];
+};
+
+/** Purchases for one member in a period, each with % return since buy. */
+export async function fetchMemberBuysWithReturns(
+  slug: string,
+  period: PerformerPeriod,
+): Promise<MemberBuysPayload | null> {
+  if (!hasPublicSupabaseConfig()) return null;
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const cutoff = performerCutoffDate(period);
+  const supabase = createBrowserSupabase();
+  const { data, error } = await supabase
+    .from("congress_trades")
+    .select(
+      "id, member, member_slug, chamber, state, ticker, asset, transaction_date, disclosure_date, amount_low, amount_high, amount_range, is_listed_equity",
+    )
+    .eq("member_slug", normalized)
+    .eq("transaction_type", "purchase")
+    .eq("is_listed_equity", true)
+    .gte("disclosure_date", cutoff)
+    .not("ticker", "is", null)
+    .order("transaction_date", { ascending: false })
+    .limit(200);
+
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return {
+      slug: normalized,
+      name: normalized,
+      chamber: null,
+      state: null,
+      period,
+      buys: [],
+    };
+  }
+
+  const buyRows: BuyRow[] = [];
+  const detail: Array<{
+    id: string;
+    ticker: string;
+    asset: string | null;
+    transactionDate: string;
+    disclosureDate: string | null;
+    amountLow: number | null;
+    amountHigh: number | null;
+    amountRange: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    const ticker = normalizeTicker(row.ticker as string | null);
+    const tx = (row.transaction_date as string | null)?.slice(0, 10);
+    if (!ticker || !tx) continue;
+    const id = String(row.id ?? `${ticker}|${tx}`);
+    buyRows.push({
+      key: id,
+      name: String(row.member ?? normalized),
+      kind: (row.chamber as Chamber) === "senate" ? "senate" : "house",
+      memberSlug: normalized,
+      ticker,
+      transactionDate: tx,
+    });
+    detail.push({
+      id,
+      ticker,
+      asset: (row.asset as string | null) ?? null,
+      transactionDate: tx,
+      disclosureDate: (row.disclosure_date as string | null)?.slice(0, 10) ?? null,
+      amountLow:
+        row.amount_low == null ? null : Number(row.amount_low),
+      amountHigh:
+        row.amount_high == null ? null : Number(row.amount_high),
+      amountRange: (row.amount_range as string | null) ?? null,
+    });
+  }
+
+  const { entryClose, latestClose } = await loadPriceMaps(buyRows);
+  const buys: MemberBuyPerformance[] = detail.map((d) => {
+    const entry = entryClose.get(`${d.ticker}|${d.transactionDate}`) ?? null;
+    const latest = latestClose.get(d.ticker) ?? null;
+    let returnPct: number | null = null;
+    if (
+      entry != null &&
+      latest != null &&
+      Number.isFinite(entry) &&
+      Number.isFinite(latest) &&
+      entry > 0
+    ) {
+      returnPct = ((latest - entry) / entry) * 100;
+    }
+    return {
+      ...d,
+      returnPct,
+      entryClose: entry,
+      latestClose: latest,
+    };
+  });
+
+  // Best return first, then most recent.
+  buys.sort((a, b) => {
+    if (a.returnPct != null && b.returnPct != null && a.returnPct !== b.returnPct) {
+      return b.returnPct - a.returnPct;
+    }
+    if (a.returnPct != null && b.returnPct == null) return -1;
+    if (a.returnPct == null && b.returnPct != null) return 1;
+    return b.transactionDate.localeCompare(a.transactionDate);
+  });
+
+  const first = rows[0]!;
+  return {
+    slug: normalized,
+    name: String(first.member ?? normalized),
+    chamber:
+      first.chamber === "house" || first.chamber === "senate"
+        ? first.chamber
+        : null,
+    state: (first.state as string | null) ?? null,
+    period,
+    buys,
+  };
+}
