@@ -46,6 +46,12 @@ PGPASSWORD=localdev psql -h 127.0.0.1 -U postgres -d hedgpix <<'SQL'
 delete from public.congress_sync_state where provider = 'insiderwatch';
 insert into public.congress_sync_state (provider) values ('insiderwatch')
   on conflict (provider) do nothing;
+-- Drop bootstrap demo rows so Top performers / activity reflect real sources only.
+delete from public.congress_trades
+  where source_hash like 'trade:local-demo-%'
+     or member_slug in ('nancy-demo', 'alex-senate');
+delete from public.member_stock_holdings
+  where member_slug in ('nancy-demo', 'alex-senate');
 SQL
 
 LOG_DIR="/opt/cursor/artifacts"
@@ -54,13 +60,20 @@ LOG="$ROOT/local-db/seed-month.log"
 exec > >(tee "$LOG") 2>&1
 
 echo "=== LOCAL 1-MONTH SEED $(date -u -Iseconds) ==="
-echo "Target: InsiderWatch ~30d + CEO/Form144/13D/G/company filings for current quarter"
+echo "Target: InsiderWatch ~30d + Kadoa month (House+Senate) + lighter SEC"
 
 cd "$ROOT/backend"
 
 echo ""
-echo "=== 1/5 InsiderWatch + prices + news (update-data, SEC skipped) ==="
+echo "=== 1/6 InsiderWatch + prices + news (update-data, SEC skipped) ==="
 SKIP_SEC_FILINGS=1 INSIDERWATCH_INITIAL_DAYS=30 npm run update-data
+
+SINCE=$(python3 -c 'from datetime import date,timedelta; print((date.today()-timedelta(days=35)).isoformat())')
+echo ""
+echo "=== 2/6 Kadoa House+Senate stock trades since $SINCE (upsert, keep InsiderWatch) ==="
+npm run backfill-kadoa -- --no-clear --since "$SINCE" --skip-prices || {
+  echo "Kadoa month upsert failed — continuing with InsiderWatch-only congress data"
+}
 
 # Current calendar quarter for SEC bulk indexes (2026-09 → 2026q3)
 YEAR=$(date -u +%Y)
@@ -71,7 +84,7 @@ echo ""
 echo "Using SEC quarter: $QUARTER"
 
 echo ""
-echo "=== 2/5 CEO Form 4 ($QUARTER) ==="
+echo "=== 3/6 CEO Form 4 ($QUARTER) ==="
 npm run backfill-ceo-buys -- --from-year "$YEAR" --only "$QUARTER" || {
   echo "CEO backfill for $QUARTER failed or empty — trying previous quarter"
   PREV_Q=$(( Q == 1 ? 4 : Q - 1 ))
@@ -80,17 +93,28 @@ npm run backfill-ceo-buys -- --from-year "$YEAR" --only "$QUARTER" || {
 }
 
 echo ""
-echo "=== 3/5 Form 144 proposed sales ($QUARTER) ==="
+echo "=== 4/6 Form 144 proposed sales ($QUARTER) ==="
 npm run backfill-form144 -- --from-year "$YEAR" --only "$QUARTER" || true
 
 echo ""
-echo "=== 4/5 13D/13G ownership ($QUARTER) ==="
+echo "=== 5/6 13D/13G ownership ($QUARTER) ==="
 npm run backfill-sec-ownership -- --from-year "$YEAR" --only "$QUARTER" || true
 
 echo ""
-echo "=== 5/5 Company filings 8-K / 10-Q/K / offerings ($QUARTER) ==="
+echo "=== 6/6 Company filings 8-K / 10-Q/K / offerings ($QUARTER) ==="
 # company-filings --only is a period key filter inside each pipeline
 npm run backfill-company-filings -- --from-year "$YEAR" --only "$QUARTER" || true
+
+echo ""
+echo "=== CONGRESS COUNTS ==="
+PGPASSWORD=localdev psql -h 127.0.0.1 -U postgres -d hedgpix -c "
+SELECT chamber, transaction_type, count(*)
+FROM congress_trades
+GROUP BY 1, 2
+ORDER BY 1, 2;
+SELECT min(disclosure_date) AS from_d, max(disclosure_date) AS to_d, count(*) AS trades
+FROM congress_trades;
+"
 
 echo ""
 echo "=== COUNTS ==="

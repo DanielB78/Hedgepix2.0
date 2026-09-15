@@ -280,7 +280,7 @@ const EMPTY_SLICE: EmptySlice = { rows: [], error: null };
  * navigation is not blocked by the expensive top-performers scan.
  */
 export async function fetchFeedPayload(
-  performerPeriod: PerformerPeriod = "2026",
+  performerPeriod: PerformerPeriod = "1m",
   view: FeedView = "feed",
 ): Promise<FeedPayload> {
   if (!hasPublicSupabaseConfig()) {

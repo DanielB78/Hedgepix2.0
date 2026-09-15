@@ -47,6 +47,7 @@ const CEO_FETCH_CAP = 1200;
 
 export function parsePerformerPeriod(
   value: string | string[] | undefined,
+  fallback: PerformerPeriod = "1m",
 ): PerformerPeriod {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (raw === "2026" || raw === "ytd") return "2026";
@@ -55,7 +56,7 @@ export function parsePerformerPeriod(
   if (raw === "1m" || raw === "month" || raw === "1mo" || raw === "1") {
     return "1m";
   }
-  return "2026";
+  return fallback;
 }
 
 export function performerPeriodLabel(period: PerformerPeriod): string {
@@ -93,7 +94,8 @@ export function performerPeriodHref(
       if (val) params.set(key, val);
     }
   }
-  if (period !== "2026") params.set("perf", period);
+  // Default period is 1m (aligns with House/Senate/Trending activity windows).
+  if (period !== "1m") params.set("perf", period);
   const qs = params.toString();
   return qs ? `/app?${qs}` : "/app";
 }
@@ -241,13 +243,13 @@ async function fetchRecentCongressBuys(
     let query = supabase
       .from("congress_trades")
       .select(
-        "member, member_slug, chamber, ticker, transaction_date, is_listed_equity",
+        "member, member_slug, chamber, ticker, transaction_date, disclosure_date, is_listed_equity",
       )
       .eq("transaction_type", "purchase")
       .eq("is_listed_equity", true)
-      .gte("transaction_date", cutoff)
+      .gte("disclosure_date", cutoff)
       .not("ticker", "is", null)
-      .order("transaction_date", { ascending: false })
+      .order("disclosure_date", { ascending: false })
       .range(from, end);
     if (chamber === "house" || chamber === "senate") {
       query = query.eq("chamber", chamber);

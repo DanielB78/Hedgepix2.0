@@ -33,7 +33,7 @@ npm run local:db:bootstrap
 npm run local:db:start       # start Postgres + PostgREST + gateway
 npm run local:db:status
 npm run local:dev            # Next.js on :3000 (clears inherited cloud env)
-npm run local:db:seed-month  # ~30 days of Congress/CEO/lighter SEC data
+npm run local:db:seed-month  # ~30d InsiderWatch + Kadoa House/Senate + lighter SEC
 npm run local:db:stop        # stop gateway + PostgREST + Postgres (+ Next)
 # alias: npm run local:stop
 ```
