@@ -30,18 +30,20 @@ npm run local:db:bootstrap
 ## Daily use
 
 ```bash
-npm run local:db:start     # postgres + PostgREST + /rest/v1 gateway
+npm run local:db:start       # start Postgres + PostgREST + gateway
 npm run local:db:status
-npm run local:dev          # Next.js on :3000 (clears inherited cloud env)
-# optional: backend updater against local DB
-cd backend && npm run update-data
+npm run local:dev            # Next.js on :3000 (clears inherited cloud env)
+npm run local:db:seed-month  # ~30 days of Congress/CEO/lighter SEC data
+npm run local:db:stop        # stop gateway + PostgREST + Postgres (+ Next)
+# alias: npm run local:stop
 ```
+
+The stack does **not** stay up unless you start it. `local:db:stop` shuts
+everything down (including Postgres). Start again only when you need it.
 
 Important: if your shell already exports `NEXT_PUBLIC_SUPABASE_URL` (cloud),
 that overrides `.env.local`. Prefer `npm run local:dev`, which unsets those
 vars before starting Next.
-
-Stop with `npm run local:db:stop`.
 
 ## Credentials (local only)
 

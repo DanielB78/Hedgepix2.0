@@ -35,13 +35,15 @@ run a local Postgres + PostgREST stack instead (same JS client API):
 ```bash
 sudo apt-get install -y postgresql postgresql-contrib
 npm run local:db:bootstrap   # roles, schema, .env.local + backend/.env
-npm run local:db:start       # PostgREST on http://127.0.0.1:54321
-npm run local:db:status
-npm run dev
+npm run local:db:start       # Postgres + PostgREST + gateway
+npm run local:db:seed-month  # ~1 month of Congress / CEO / lighter SEC data
+npm run local:dev            # Next.js (clears inherited cloud env)
+npm run local:db:stop        # fully stop local stack when done
 ```
 
 Details: `local-db/README.md`. Do **not** run full Form 13F / N-PORT backfills
-into the local DB without filtering — those datasets are multi‑GB.
+into the local DB without filtering — those datasets are multi‑GB. The stack
+does not stay running; use `local:db:stop` to shut Postgres/PostgREST/gateway down.
 
 ## Setup
 

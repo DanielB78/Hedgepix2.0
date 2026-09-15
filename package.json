@@ -29,7 +29,9 @@
     "local:db:stop": "bash scripts/local-db/stop.sh",
     "local:db:status": "bash scripts/local-db/status.sh",
     "local:db:seed": "sudo -u postgres psql -d hedgpix -f scripts/local-db/seed-demo.sql",
-    "local:dev": "bash scripts/local-db/run-next.sh"
+    "local:db:seed-month": "bash scripts/local-db/seed-month.sh",
+    "local:dev": "bash scripts/local-db/run-next.sh",
+    "local:stop": "LOCAL_STOP_NEXT=1 bash scripts/local-db/stop.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
