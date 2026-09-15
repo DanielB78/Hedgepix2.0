@@ -21,7 +21,7 @@ export function FeedSearch({
     >
       {view ? <input type="hidden" name="view" value={view} /> : null}
       <label className="sr-only" htmlFor="feed-search">
-        Search House, Senate, or CEO names and tickers
+        Search House or Senate names and tickers
       </label>
       <input
         id="feed-search"

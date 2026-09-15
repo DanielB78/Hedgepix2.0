@@ -13,8 +13,6 @@ import {
   isMissingListedEquityColumn,
 } from "./stockFilter";
 import {
-  aggregateCeoActivity,
-  resolveCeoTransactionCode,
   type CeoActivityCard,
 } from "./ceoAggregate";
 import {
@@ -33,9 +31,20 @@ import {
   type ChartTrade,
   type ChartTradeSource,
 } from "./chartTrades";
+import {
+  fetchTickerProfiles,
+  tickerSectorLabel,
+} from "./tickerProfiles";
+import {
+  chamberScopeLabel,
+  computeSectorShare,
+  mergeIndustryLabels,
+  type SectorShareSlice,
+} from "./sectorShare";
 
 export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
 export type { ChartTrade, ChartTradeSource };
+export type { SectorShareSlice };
 
 export type FeedView = "feed" | "trending" | "house" | "senate";
 
@@ -62,6 +71,11 @@ export type FeedPayload = {
   topPerformers: TopPerformer[];
   portfolioGrowth: PortfolioGrowth | null;
   performerPeriod: PerformerPeriod;
+  /** ticker → industry/sector label for UI chips */
+  tickerSectors: Record<string, string>;
+  /** Sector mix for the chamber / window (buys+sales). */
+  sectorShare: SectorShareSlice[];
+  sectorShareScope: string;
   configured: boolean;
   error: string | null;
 };
@@ -111,13 +125,14 @@ export function parseFeedView(
   ) {
     return raw;
   }
-  return "feed";
+  // Default to House — product focus is congressional chambers for now.
+  return "house";
 }
 
 async function fetchRecentByChamber(
   chamber: Chamber,
   limit = 12,
-  options?: { purchasesOnly?: boolean },
+  options?: { purchasesOnly?: boolean; sinceDays?: number },
 ): Promise<{ rows: CongressTrade[]; error: string | null }> {
   const supabase = createBrowserSupabase();
   let query = supabase
@@ -132,6 +147,11 @@ async function fetchRecentByChamber(
   if (options?.purchasesOnly) {
     query = query.eq("transaction_type", "purchase");
   }
+  if (options?.sinceDays != null && options.sinceDays > 0) {
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
+    query = query.gte("disclosure_date", cutoff.toISOString().slice(0, 10));
+  }
 
   let result = await query;
 
@@ -145,6 +165,14 @@ async function fetchRecentByChamber(
       .limit(limit * 2);
     if (options?.purchasesOnly) {
       fallback = fallback.eq("transaction_type", "purchase");
+    }
+    if (options?.sinceDays != null && options.sinceDays > 0) {
+      const cutoff = new Date();
+      cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
+      fallback = fallback.gte(
+        "disclosure_date",
+        cutoff.toISOString().slice(0, 10),
+      );
     }
     result = await fallback;
     if (!result.error && result.data) {
@@ -165,31 +193,6 @@ async function fetchRecentByChamber(
 const CEO_FEED_COLUMNS =
   "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code";
 
-async function fetchRecentCeoBuys(
-  limit = 3,
-): Promise<{ rows: CeoActivityCard[]; error: string | null }> {
-  const supabase = createBrowserSupabase();
-  // Over-fetch: transaction_code may be wrong; resolve via raw_source.trans_code.
-  const { data, error } = await supabase
-    .from("ceo_stock_purchases")
-    .select(CEO_FEED_COLUMNS)
-    .order("filing_date", { ascending: false, nullsFirst: false })
-    .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(Math.max(limit * 24, 72));
-
-  if (error) {
-    return { rows: [], error: error.message };
-  }
-
-  const purchases = ((data as CeoStockPurchaseRow[] | null) ?? []).filter(
-    (row) => resolveCeoTransactionCode(row) === "P",
-  );
-  const cards = aggregateCeoActivity(purchases).filter(
-    (card) => card.side === "purchase",
-  );
-
-  return { rows: cards.slice(0, limit), error: null };
-}
 
 async function fetchPopularMembers(
   chamber: Chamber,
@@ -294,18 +297,13 @@ async function fetchPopularMembers(
 
 type EmptySlice = { rows: never[]; error: string | null };
 const EMPTY_SLICE: EmptySlice = { rows: [], error: null };
-const EMPTY_PERFORMERS = {
-  rows: [] as TopPerformer[],
-  portfolio: null as PortfolioGrowth | null,
-  error: null as string | null,
-};
 
 /**
  * Load feed data scoped to the active view so House/Senate/Trending
  * navigation is not blocked by the expensive top-performers scan.
  */
 export async function fetchFeedPayload(
-  performerPeriod: PerformerPeriod = "2026",
+  performerPeriod: PerformerPeriod = "1m",
   view: FeedView = "feed",
 ): Promise<FeedPayload> {
   if (!hasPublicSupabaseConfig()) {
@@ -321,72 +319,111 @@ export async function fetchFeedPayload(
       topPerformers: [],
       portfolioGrowth: null,
       performerPeriod,
+      tickerSectors: {},
+      sectorShare: [],
+      sectorShareScope: "Congress",
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     };
   }
 
-  const needFeedDigest = view === "feed";
-  const needTrending = view === "feed" || view === "trending";
-  const needHouse = view === "feed" || view === "house";
-  const needSenate = view === "feed" || view === "senate";
-  const needTopPerformers = view === "feed";
+  // House / Senate activity + top performers. Skip popular-members lists and CEO digest.
+  const needTrending = view === "trending";
+  // Always pull chamber trades for sector-share on trending too.
+  const needHouse =
+    view === "feed" || view === "house" || view === "trending";
+  const needSenate =
+    view === "feed" || view === "senate" || view === "trending";
+  const needTopPerformers =
+    view === "house" || view === "senate" || view === "trending" || view === "feed";
 
-  const [
-    trending,
-    houseMembers,
-    senateMembers,
-    recentHouse,
-    recentSenate,
-    recentHouseBuys,
-    recentSenateBuys,
-    recentCeoBuys,
-    topPerformers,
-  ] = await Promise.all([
-    needTrending
-      ? fetchTrending({ mode: "all", periodDays: 30 })
-      : EMPTY_SLICE,
-    needHouse ? fetchPopularMembers("house", 40) : EMPTY_SLICE,
-    needSenate ? fetchPopularMembers("senate", 40) : EMPTY_SLICE,
-    needHouse ? fetchRecentByChamber("house", 80) : EMPTY_SLICE,
-    needSenate ? fetchRecentByChamber("senate", 80) : EMPTY_SLICE,
-    needFeedDigest
-      ? fetchRecentByChamber("house", 3, { purchasesOnly: true })
-      : EMPTY_SLICE,
-    needFeedDigest
-      ? fetchRecentByChamber("senate", 3, { purchasesOnly: true })
-      : EMPTY_SLICE,
-    needFeedDigest ? fetchRecentCeoBuys(3) : EMPTY_SLICE,
-    needTopPerformers
-      ? fetchTopPerformers(performerPeriod, 10)
-      : EMPTY_PERFORMERS,
-  ]);
+  const performerOpts =
+    view === "house"
+      ? { chamber: "house" as const, includeCeo: false }
+      : view === "senate"
+        ? { chamber: "senate" as const, includeCeo: false }
+        : { includeCeo: false };
+
+  // Pull the full local month of disclosures (not a tiny recent slice).
+  // 120 rows previously collapsed to only ~4 member-days because big
+  // filers disclose dozens of trades on one day.
+  const MONTH_TRADE_LIMIT = 5000;
+  const MONTH_LOOKBACK_DAYS = 40;
+
+  const [trending, recentHouse, recentSenate, topPerformers] =
+    await Promise.all([
+      needTrending
+        ? fetchTrending({ mode: "all", periodDays: 30 })
+        : EMPTY_SLICE,
+      needHouse
+        ? fetchRecentByChamber("house", MONTH_TRADE_LIMIT, {
+            sinceDays: MONTH_LOOKBACK_DAYS,
+          })
+        : EMPTY_SLICE,
+      needSenate
+        ? fetchRecentByChamber("senate", MONTH_TRADE_LIMIT, {
+            sinceDays: MONTH_LOOKBACK_DAYS,
+          })
+        : EMPTY_SLICE,
+      needTopPerformers
+        ? fetchTopPerformers(performerPeriod, 10, performerOpts)
+        : Promise.resolve({
+            rows: [] as TopPerformer[],
+            portfolio: null,
+            error: null as string | null,
+          }),
+    ]);
 
   const error =
     trending.error ||
-    houseMembers.error ||
-    senateMembers.error ||
     recentHouse.error ||
     recentSenate.error ||
-    recentHouseBuys.error ||
-    recentSenateBuys.error ||
-    recentCeoBuys.error ||
     topPerformers.error ||
     null;
 
+  const sectorTickers = [
+    ...recentHouse.rows.map((t) => t.ticker ?? ""),
+    ...recentSenate.rows.map((t) => t.ticker ?? ""),
+    ...trending.rows.map((t) => t.ticker),
+    ...topPerformers.rows.map((t) => t.bestTicker ?? ""),
+  ];
+  const profileMap = await fetchTickerProfiles(sectorTickers);
+  const tickerSectors: Record<string, string> = {};
+  for (const [ticker, profile] of profileMap.entries()) {
+    const label = tickerSectorLabel(profile);
+    if (label) tickerSectors[ticker] = label;
+  }
+  // Prefer curated primary-industry labels wherever available.
+  const mergedSectors = mergeIndustryLabels(sectorTickers, tickerSectors);
+
+  const shareTrades =
+    view === "house"
+      ? recentHouse.rows
+      : view === "senate"
+        ? recentSenate.rows
+        : [...recentHouse.rows, ...recentSenate.rows];
+  // For trending tab without chamber rows loaded, reuse trending tickers via house+senate empty — load both when trending.
+  const sectorShare = computeSectorShare(shareTrades);
+  const sectorShareScope = chamberScopeLabel(
+    view === "feed" ? "feed" : view,
+  );
+
   return {
-    trending: trending.rows.slice(0, 12),
-    houseMembers: houseMembers.rows,
-    senateMembers: senateMembers.rows,
+    trending: trending.rows.slice(0, 40),
+    houseMembers: [],
+    senateMembers: [],
     recentHouse: recentHouse.rows,
     recentSenate: recentSenate.rows,
-    recentHouseBuys: recentHouseBuys.rows,
-    recentSenateBuys: recentSenateBuys.rows,
-    recentCeoBuys: recentCeoBuys.rows,
+    recentHouseBuys: [],
+    recentSenateBuys: [],
+    recentCeoBuys: [],
     topPerformers: topPerformers.rows,
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
+    tickerSectors: mergedSectors,
+    sectorShare,
+    sectorShareScope,
     configured: true,
     error,
   };

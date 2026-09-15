@@ -34,12 +34,26 @@ function parseArgs(argv: string[]) {
   const dataDirIdx = argv.indexOf("--data-dir");
   const dataDir =
     dataDirIdx >= 0 ? argv[dataDirIdx + 1] : process.env.KADOA_DATA_DIR;
+  const sinceIdx = argv.indexOf("--since");
+  const since =
+    sinceIdx >= 0
+      ? argv[sinceIdx + 1]
+      : process.env.KADOA_MIN_DISCLOSURE_DATE?.trim() || undefined;
+  const chamberIdx = argv.indexOf("--chamber");
+  const chamberRaw =
+    chamberIdx >= 0
+      ? argv[chamberIdx + 1]
+      : process.env.KADOA_CHAMBER?.trim() || undefined;
+  const chamber =
+    chamberRaw === "house" || chamberRaw === "senate" ? chamberRaw : undefined;
   return {
     replace,
     refresh,
     skipPrices,
     skipHoldings,
     dataDir,
+    since,
+    chamber,
   };
 }
 
@@ -111,6 +125,8 @@ export async function runKadoaBackfill(options?: {
   dataDir?: string;
   skipPrices?: boolean;
   skipHoldings?: boolean;
+  since?: string;
+  chamber?: "house" | "senate";
 }): Promise<void> {
   const replace = options?.replace !== false;
   const config = loadConfig();
@@ -125,11 +141,19 @@ export async function runKadoaBackfill(options?: {
         ? "Mode: REPLACE (clear congress_trades, then import)"
         : "Mode: UPSERT ONLY (--no-clear)",
     );
+    if (options?.since) {
+      console.log(`Min disclosure date: ${options.since}`);
+    }
+    if (options?.chamber) {
+      console.log(`Chamber filter: ${options.chamber}`);
+    }
     console.log("");
 
     const { trades, stats } = await loadKadoaCongressStockTrades({
       dataDir: options?.dataDir,
       refresh: options?.refresh,
+      minDisclosureDate: options?.since,
+      chamber: options?.chamber,
     });
 
     let cleared = 0;
@@ -214,6 +238,8 @@ async function main(): Promise<void> {
       dataDir: args.dataDir,
       skipPrices: args.skipPrices,
       skipHoldings: args.skipHoldings,
+      since: args.since,
+      chamber: args.chamber,
     });
   } catch {
     process.exitCode = 1;

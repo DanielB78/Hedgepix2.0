@@ -58,5 +58,10 @@ export function groupTradesByDisclosure(
     if (!group.state && trade.state) group.state = trade.state;
   }
 
-  return [...groups.values()];
+  return [...groups.values()].sort((a, b) => {
+    const da = a.disclosureDate ?? "";
+    const db = b.disclosureDate ?? "";
+    if (da !== db) return db.localeCompare(da);
+    return (a.member ?? "").localeCompare(b.member ?? "");
+  });
 }

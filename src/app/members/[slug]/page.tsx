@@ -46,10 +46,10 @@ export default async function MemberPage({ params, searchParams }: PageProps) {
     >
       <div className="mb-4">
         <Link
-          href="/app"
+          href="/app?view=house"
           className="text-[13px] text-[var(--fog-dim)] hover:text-[var(--accent)]"
         >
-          ← Overview
+          ← House
         </Link>
       </div>
 
