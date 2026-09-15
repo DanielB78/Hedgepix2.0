@@ -53,5 +53,6 @@ backend/.cache/
 # Local offline DB runtime
 .local/
 local-db/postgrest.log
+local-db/gateway.log
 local-db/keys.env
 local-db/postgrest.conf
