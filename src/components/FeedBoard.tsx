@@ -651,6 +651,7 @@ function StockPanel({
             </div>
           ) : state.data?.bars.length ? (
             <PriceChart
+              key={`${state.ticker}-${state.tradeSource}`}
               bars={state.data.bars}
               trades={state.data.topTrades}
               interactive
@@ -1056,6 +1057,7 @@ function MemberPanel({
             </div>
           ) : state.nested?.bars.length ? (
             <PriceChart
+              key={`${state.slug}-${state.nestedTicker}`}
               bars={state.nested.bars}
               trades={state.nested.trades}
               interactive
