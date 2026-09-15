@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DisclosureDayCard } from "@/components/DisclosureDayCard";
 import { PerformerExpandCard } from "@/components/PerformerExpandCard";
 import { PriceChart } from "@/components/PriceChart";
+import { SectorShareChart } from "@/components/SectorShareChart";
 import type {
   FeedPayload,
   FeedView,
@@ -39,8 +40,8 @@ type Props = {
   query?: string;
   housePage?: number;
   senatePage?: number;
-  /** activity (default) | performers */
-  tab?: "activity" | "performers";
+  /** activity (default) | performers | sectors */
+  tab?: "activity" | "performers" | "sectors";
 };
 
 type StockPanelState = {
@@ -319,6 +320,7 @@ export function FeedBoard({
   const showHouse = view === "house" || view === "feed";
   const showSenate = view === "senate" || view === "feed";
   const showPerformers = tab === "performers";
+  const showSectors = tab === "sectors";
   const showActivity = tab === "activity";
   const trendingLimit = 40;
   const trendingRows = useMemo(
@@ -366,14 +368,30 @@ export function FeedBoard({
       <ViewTabs view={view} tab={tab} query={query} />
 
       {showPerformers ? (
-        <TopPerformersSection
-          title={`Top performers · ${chamberLabelForTabs}`}
-          subtitle="Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
-          rows={topPerformers}
-          portfolio={payload.portfolioGrowth}
-          period={payload.performerPeriod}
-          query={query}
-          view={view}
+        <div className="space-y-8">
+          <SectorShareChart
+            title={`Sector mix · ${payload.sectorShareScope}`}
+            subtitle="Share of disclosed House/Senate trades by industry sector in the current window"
+            slices={payload.sectorShare}
+          />
+          <TopPerformersSection
+            title={`Top performers · ${chamberLabelForTabs}`}
+            subtitle="Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+            rows={topPerformers}
+            portfolio={payload.portfolioGrowth}
+            period={payload.performerPeriod}
+            query={query}
+            view={view}
+            sectorByTicker={payload.tickerSectors}
+          />
+        </div>
+      ) : null}
+
+      {showSectors ? (
+        <SectorShareChart
+          title={`Sector mix · ${payload.sectorShareScope}`}
+          subtitle="Market-share style breakdown of sectors being traded by this chamber"
+          slices={payload.sectorShare}
         />
       ) : null}
 
@@ -689,15 +707,16 @@ function ViewTabs({
   query,
 }: {
   view: FeedView;
-  tab: "activity" | "performers";
+  tab: "activity" | "performers" | "sectors";
   query?: string;
 }) {
   if (view !== "house" && view !== "senate" && view !== "trending") return null;
   const activityLabel = view === "trending" ? "Tickers" : "Activity";
-  function href(next: "activity" | "performers") {
+  function href(next: "activity" | "performers" | "sectors") {
     const params = new URLSearchParams();
     params.set("view", view);
     if (next === "performers") params.set("tab", "performers");
+    if (next === "sectors") params.set("tab", "sectors");
     if (query) params.set("q", query);
     return `/app?${params.toString()}`;
   }
@@ -716,6 +735,13 @@ function ViewTabs({
         data-active={tab === "performers" ? "true" : "false"}
       >
         Top performers
+      </Link>
+      <Link
+        href={href("sectors")}
+        className="hx-tab"
+        data-active={tab === "sectors" ? "true" : "false"}
+      >
+        Sectors
       </Link>
     </div>
   );
@@ -898,6 +924,7 @@ function TopPerformersSection({
   period,
   query,
   view,
+  sectorByTicker,
 }: {
   title: string;
   subtitle: string;
@@ -906,6 +933,7 @@ function TopPerformersSection({
   period: PerformerPeriod;
   query?: string;
   view: FeedView;
+  sectorByTicker?: Record<string, string>;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -932,6 +960,7 @@ function TopPerformersSection({
                 onToggle={() =>
                   setExpandedKey((prev) => (prev === key ? null : key))
                 }
+                sectorByTicker={sectorByTicker}
               />
             );
           })

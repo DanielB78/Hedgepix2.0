@@ -35,9 +35,16 @@ import {
   fetchTickerProfiles,
   tickerSectorLabel,
 } from "./tickerProfiles";
+import {
+  chamberScopeLabel,
+  computeSectorShare,
+  mergeIndustryLabels,
+  type SectorShareSlice,
+} from "./sectorShare";
 
 export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
 export type { ChartTrade, ChartTradeSource };
+export type { SectorShareSlice };
 
 export type FeedView = "feed" | "trending" | "house" | "senate";
 
@@ -66,6 +73,9 @@ export type FeedPayload = {
   performerPeriod: PerformerPeriod;
   /** ticker → industry/sector label for UI chips */
   tickerSectors: Record<string, string>;
+  /** Sector mix for the chamber / window (buys+sales). */
+  sectorShare: SectorShareSlice[];
+  sectorShareScope: string;
   configured: boolean;
   error: string | null;
 };
@@ -310,6 +320,8 @@ export async function fetchFeedPayload(
       portfolioGrowth: null,
       performerPeriod,
       tickerSectors: {},
+      sectorShare: [],
+      sectorShareScope: "Congress",
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
@@ -318,8 +330,11 @@ export async function fetchFeedPayload(
 
   // House / Senate activity + top performers. Skip popular-members lists and CEO digest.
   const needTrending = view === "trending";
-  const needHouse = view === "feed" || view === "house";
-  const needSenate = view === "feed" || view === "senate";
+  // Always pull chamber trades for sector-share on trending too.
+  const needHouse =
+    view === "feed" || view === "house" || view === "trending";
+  const needSenate =
+    view === "feed" || view === "senate" || view === "trending";
   const needTopPerformers =
     view === "house" || view === "senate" || view === "trending" || view === "feed";
 
@@ -379,6 +394,20 @@ export async function fetchFeedPayload(
     const label = tickerSectorLabel(profile);
     if (label) tickerSectors[ticker] = label;
   }
+  // Prefer curated primary-industry labels wherever available.
+  const mergedSectors = mergeIndustryLabels(sectorTickers, tickerSectors);
+
+  const shareTrades =
+    view === "house"
+      ? recentHouse.rows
+      : view === "senate"
+        ? recentSenate.rows
+        : [...recentHouse.rows, ...recentSenate.rows];
+  // For trending tab without chamber rows loaded, reuse trending tickers via house+senate empty — load both when trending.
+  const sectorShare = computeSectorShare(shareTrades);
+  const sectorShareScope = chamberScopeLabel(
+    view === "feed" ? "feed" : view,
+  );
 
   return {
     trending: trending.rows.slice(0, 40),
@@ -392,7 +421,9 @@ export async function fetchFeedPayload(
     topPerformers: topPerformers.rows,
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
-    tickerSectors,
+    tickerSectors: mergedSectors,
+    sectorShare,
+    sectorShareScope,
     configured: true,
     error,
   };

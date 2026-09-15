@@ -17,9 +17,11 @@ function parsePage(value: string | string[] | undefined): number {
 
 function parseTab(
   value: string | string[] | undefined,
-): "activity" | "performers" {
+): "activity" | "performers" | "sectors" {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return raw === "performers" ? "performers" : "activity";
+  if (raw === "performers") return "performers";
+  if (raw === "sectors") return "sectors";
+  return "activity";
 }
 
 const META: Record<string, { title: string; description: string }> = {

@@ -6,6 +6,7 @@ import {
   fetchTickerProfiles,
   tickerSectorLabel,
 } from "@/lib/tickerProfiles";
+import { curatedIndustryChip } from "@/lib/tickerIndustry";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -39,7 +40,8 @@ export default async function StockPage({ params, searchParams }: PageProps) {
   // Full history so the interactive chart can zoom / filter client-side.
   const stock = await fetchStockPage(ticker, "all");
   const profiles = await fetchTickerProfiles([ticker]);
-  const sectorLabel = tickerSectorLabel(profiles.get(ticker));
+  const sectorLabel =
+    curatedIndustryChip(ticker) ?? tickerSectorLabel(profiles.get(ticker));
 
   if (
     stock.configured &&

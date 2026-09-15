@@ -51,12 +51,14 @@ export function PerformerExpandCard({
   expanded,
   defaultPeriod,
   onToggle,
+  sectorByTicker,
 }: {
   rank: number;
   row: TopPerformer;
   expanded: boolean;
   defaultPeriod: PerformerPeriod;
   onToggle: () => void;
+  sectorByTicker?: Record<string, string>;
 }) {
   const positive = row.avgReturnPct >= 0;
   const clickableMember = !!row.memberSlug;
@@ -188,6 +190,12 @@ export function PerformerExpandCard({
                 <>
                   {" "}
                   · best {row.bestTicker}
+                  {sectorByTicker?.[row.bestTicker] ? (
+                    <span className="text-[color:var(--fog-mute)]">
+                      {" "}
+                      ({sectorByTicker[row.bestTicker]})
+                    </span>
+                  ) : null}
                   {row.bestReturnPct != null
                     ? ` (${formatReturnPct(row.bestReturnPct)})`
                     : null}
@@ -269,8 +277,13 @@ export function PerformerExpandCard({
                           }`}
                         >
                           <div className="min-w-0">
-                            <p className="font-medium tracking-tight text-[color:var(--fog)]">
-                              {buy.ticker}
+                            <p className="flex flex-wrap items-center gap-1.5 font-medium tracking-tight text-[color:var(--fog)]">
+                              <span>{buy.ticker}</span>
+                              {sectorByTicker?.[buy.ticker] ? (
+                                <span className="rounded bg-[color:var(--panel-elevated)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--fog-dim)]">
+                                  {sectorByTicker[buy.ticker]}
+                                </span>
+                              ) : null}
                             </p>
                             <p className="hx-meta line-clamp-1">
                               {buy.asset ?? "Equity"}
