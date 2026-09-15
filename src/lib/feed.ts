@@ -13,15 +13,12 @@ import {
   isMissingListedEquityColumn,
 } from "./stockFilter";
 import {
-  aggregateCeoActivity,
-  resolveCeoTransactionCode,
   type CeoActivityCard,
 } from "./ceoAggregate";
-import {
-  fetchTopPerformers,
-  type PerformerPeriod,
-  type PortfolioGrowth,
-  type TopPerformer,
+import type {
+  PerformerPeriod,
+  PortfolioGrowth,
+  TopPerformer,
 } from "./topPerformers";
 import {
   asCongressChartTrade,
@@ -111,7 +108,8 @@ export function parseFeedView(
   ) {
     return raw;
   }
-  return "feed";
+  // Default to House — product focus is congressional chambers for now.
+  return "house";
 }
 
 async function fetchRecentByChamber(
@@ -165,31 +163,6 @@ async function fetchRecentByChamber(
 const CEO_FEED_COLUMNS =
   "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code";
 
-async function fetchRecentCeoBuys(
-  limit = 3,
-): Promise<{ rows: CeoActivityCard[]; error: string | null }> {
-  const supabase = createBrowserSupabase();
-  // Over-fetch: transaction_code may be wrong; resolve via raw_source.trans_code.
-  const { data, error } = await supabase
-    .from("ceo_stock_purchases")
-    .select(CEO_FEED_COLUMNS)
-    .order("filing_date", { ascending: false, nullsFirst: false })
-    .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(Math.max(limit * 24, 72));
-
-  if (error) {
-    return { rows: [], error: error.message };
-  }
-
-  const purchases = ((data as CeoStockPurchaseRow[] | null) ?? []).filter(
-    (row) => resolveCeoTransactionCode(row) === "P",
-  );
-  const cards = aggregateCeoActivity(purchases).filter(
-    (card) => card.side === "purchase",
-  );
-
-  return { rows: cards.slice(0, limit), error: null };
-}
 
 async function fetchPopularMembers(
   chamber: Chamber,
@@ -294,11 +267,6 @@ async function fetchPopularMembers(
 
 type EmptySlice = { rows: never[]; error: string | null };
 const EMPTY_SLICE: EmptySlice = { rows: [], error: null };
-const EMPTY_PERFORMERS = {
-  rows: [] as TopPerformer[],
-  portfolio: null as PortfolioGrowth | null,
-  error: null as string | null,
-};
 
 /**
  * Load feed data scoped to the active view so House/Senate/Trending
@@ -327,41 +295,21 @@ export async function fetchFeedPayload(
     };
   }
 
-  const needFeedDigest = view === "feed";
-  const needTrending = view === "feed" || view === "trending";
+  // House / Senate only — skip CEO, top-performers digest, and other research loads.
+  const needTrending = view === "trending";
   const needHouse = view === "feed" || view === "house";
   const needSenate = view === "feed" || view === "senate";
-  const needTopPerformers = view === "feed";
 
-  const [
-    trending,
-    houseMembers,
-    senateMembers,
-    recentHouse,
-    recentSenate,
-    recentHouseBuys,
-    recentSenateBuys,
-    recentCeoBuys,
-    topPerformers,
-  ] = await Promise.all([
-    needTrending
-      ? fetchTrending({ mode: "all", periodDays: 30 })
-      : EMPTY_SLICE,
-    needHouse ? fetchPopularMembers("house", 40) : EMPTY_SLICE,
-    needSenate ? fetchPopularMembers("senate", 40) : EMPTY_SLICE,
-    needHouse ? fetchRecentByChamber("house", 80) : EMPTY_SLICE,
-    needSenate ? fetchRecentByChamber("senate", 80) : EMPTY_SLICE,
-    needFeedDigest
-      ? fetchRecentByChamber("house", 3, { purchasesOnly: true })
-      : EMPTY_SLICE,
-    needFeedDigest
-      ? fetchRecentByChamber("senate", 3, { purchasesOnly: true })
-      : EMPTY_SLICE,
-    needFeedDigest ? fetchRecentCeoBuys(3) : EMPTY_SLICE,
-    needTopPerformers
-      ? fetchTopPerformers(performerPeriod, 10)
-      : EMPTY_PERFORMERS,
-  ]);
+  const [trending, houseMembers, senateMembers, recentHouse, recentSenate] =
+    await Promise.all([
+      needTrending
+        ? fetchTrending({ mode: "all", periodDays: 30 })
+        : EMPTY_SLICE,
+      needHouse ? fetchPopularMembers("house", 40) : EMPTY_SLICE,
+      needSenate ? fetchPopularMembers("senate", 40) : EMPTY_SLICE,
+      needHouse ? fetchRecentByChamber("house", 80) : EMPTY_SLICE,
+      needSenate ? fetchRecentByChamber("senate", 80) : EMPTY_SLICE,
+    ]);
 
   const error =
     trending.error ||
@@ -369,10 +317,6 @@ export async function fetchFeedPayload(
     senateMembers.error ||
     recentHouse.error ||
     recentSenate.error ||
-    recentHouseBuys.error ||
-    recentSenateBuys.error ||
-    recentCeoBuys.error ||
-    topPerformers.error ||
     null;
 
   return {
@@ -381,11 +325,11 @@ export async function fetchFeedPayload(
     senateMembers: senateMembers.rows,
     recentHouse: recentHouse.rows,
     recentSenate: recentSenate.rows,
-    recentHouseBuys: recentHouseBuys.rows,
-    recentSenateBuys: recentSenateBuys.rows,
-    recentCeoBuys: recentCeoBuys.rows,
-    topPerformers: topPerformers.rows,
-    portfolioGrowth: topPerformers.portfolio,
+    recentHouseBuys: [],
+    recentSenateBuys: [],
+    recentCeoBuys: [],
+    topPerformers: [],
+    portfolioGrowth: null,
     performerPeriod,
     configured: true,
     error,

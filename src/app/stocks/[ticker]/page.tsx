@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppChrome";
 import { StockDetailBoard } from "@/components/StockDetailBoard";
-import { StockSecSections } from "@/components/StockSecSections";
+import { parseChartTradeSource } from "@/lib/chartTrades";
 import { fetchStockPage, parseChartRange } from "@/lib/prices";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -29,6 +29,9 @@ export default async function StockPage({ params, searchParams }: PageProps) {
 
   const query = await searchParams;
   const range = parseChartRange(query.range);
+  const source = parseChartTradeSource(
+    typeof query.source === "string" ? query.source : undefined,
+  );
   // Full history so the interactive chart can zoom / filter client-side.
   const stock = await fetchStockPage(ticker, "all");
 
@@ -73,8 +76,8 @@ export default async function StockPage({ params, searchParams }: PageProps) {
         latest={latest}
         changePct={changePct}
         error={stock.error}
+        initialSource={source}
       />
-      <StockSecSections ticker={ticker} />
     </AppShell>
   );
 }

@@ -2,7 +2,6 @@ import { AppShell } from "@/components/AppChrome";
 import { FeedBoard } from "@/components/FeedBoard";
 import { FeedSearch } from "@/components/FeedSearch";
 import { fetchFeedPayload, parseFeedView } from "@/lib/feed";
-import { parsePerformerPeriod } from "@/lib/topPerformers";
 
 export const dynamic = "force-dynamic";
 
@@ -17,21 +16,20 @@ function parsePage(value: string | string[] | undefined): number {
 
 const META: Record<string, { title: string; description: string }> = {
   feed: {
-    title: "Overview",
-    description:
-      "Latest congressional and insider activity with price context for followed names.",
+    title: "Congress",
+    description: "House and Senate stock disclosures.",
   },
   trending: {
     title: "Trending",
-    description: "Tickers with the most disclosed activity in the selected period.",
+    description: "Tickers with the most disclosed congressional activity.",
   },
   house: {
     title: "House",
-    description: "Recent House stock disclosures.",
+    description: "Recent House stock disclosures — open a member or ticker chart.",
   },
   senate: {
     title: "Senate",
-    description: "Recent Senate stock disclosures.",
+    description: "Recent Senate stock disclosures — open a member or ticker chart.",
   },
 };
 
@@ -41,8 +39,7 @@ export default async function AppPage({ searchParams }: PageProps) {
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const housePage = parsePage(params.housePage);
   const senatePage = parsePage(params.senatePage);
-  const performerPeriod = parsePerformerPeriod(params.perf);
-  const payload = await fetchFeedPayload(performerPeriod, view);
+  const payload = await fetchFeedPayload("2026", view);
   const meta = META[view] ?? META.feed!;
 
   return (
