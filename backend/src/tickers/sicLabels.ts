@@ -42,8 +42,8 @@ const SIC_RANGES: Array<{
 ];
 
 const KEYWORD_INDUSTRY: Array<[RegExp, SectorIndustry]> = [
-  [/\bnuclear\b/i, { sector: "Energy", industry: "Nuclear energy" }],
-  [/\bfuel\s*cell/i, { sector: "Energy", industry: "Fuel cells" }],
+  [/\bnuclear\b|\boklo\b|\bsmr\b|\bsmall\s*modular\s*reactor/i, { sector: "Energy", industry: "Nuclear energy" }],
+  [/\bfuel\s*cell|\bbloom\s*energy/i, { sector: "Energy", industry: "Fuel cells" }],
   [/\bhydrogen\b/i, { sector: "Energy", industry: "Hydrogen energy" }],
   [/\bsolar\b|\bphotovolta/i, { sector: "Energy", industry: "Solar energy" }],
   [/\bwind\b.*\b(power|energy|turbine)/i, { sector: "Energy", industry: "Wind energy" }],
