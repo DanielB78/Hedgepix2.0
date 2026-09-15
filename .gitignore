@@ -56,3 +56,4 @@ local-db/postgrest.log
 local-db/gateway.log
 local-db/keys.env
 local-db/postgrest.conf
+local-db/seed-month.log
