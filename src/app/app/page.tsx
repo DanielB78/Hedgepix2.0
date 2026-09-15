@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppChrome";
 import { FeedBoard } from "@/components/FeedBoard";
 import { FeedSearch } from "@/components/FeedSearch";
 import { fetchFeedPayload, parseFeedView } from "@/lib/feed";
+import { parsePerformerPeriod } from "@/lib/topPerformers";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,13 @@ type PageProps = {
 function parsePage(value: string | string[] | undefined): number {
   const raw = typeof value === "string" ? value : "1";
   return Math.max(1, Number.parseInt(raw, 10) || 1);
+}
+
+function parseTab(
+  value: string | string[] | undefined,
+): "activity" | "performers" {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return raw === "performers" ? "performers" : "activity";
 }
 
 const META: Record<string, { title: string; description: string }> = {
@@ -25,11 +33,13 @@ const META: Record<string, { title: string; description: string }> = {
   },
   house: {
     title: "House",
-    description: "Recent House stock disclosures — open a member or ticker chart.",
+    description:
+      "Same-day House disclosures with buys, charts, and top performers.",
   },
   senate: {
     title: "Senate",
-    description: "Recent Senate stock disclosures — open a member or ticker chart.",
+    description:
+      "Same-day Senate disclosures with buys, charts, and top performers.",
   },
 };
 
@@ -39,7 +49,9 @@ export default async function AppPage({ searchParams }: PageProps) {
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const housePage = parsePage(params.housePage);
   const senatePage = parsePage(params.senatePage);
-  const payload = await fetchFeedPayload("2026", view);
+  const tab = parseTab(params.tab);
+  const performerPeriod = parsePerformerPeriod(params.perf);
+  const payload = await fetchFeedPayload(performerPeriod, view);
   const meta = META[view] ?? META.feed!;
 
   return (
@@ -55,6 +67,7 @@ export default async function AppPage({ searchParams }: PageProps) {
         query={q || undefined}
         housePage={housePage}
         senatePage={senatePage}
+        tab={tab}
       />
     </AppShell>
   );

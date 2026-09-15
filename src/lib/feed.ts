@@ -15,10 +15,11 @@ import {
 import {
   type CeoActivityCard,
 } from "./ceoAggregate";
-import type {
-  PerformerPeriod,
-  PortfolioGrowth,
-  TopPerformer,
+import {
+  fetchTopPerformers,
+  type PerformerPeriod,
+  type PortfolioGrowth,
+  type TopPerformer,
 } from "./topPerformers";
 import {
   asCongressChartTrade,
@@ -295,41 +296,54 @@ export async function fetchFeedPayload(
     };
   }
 
-  // House / Senate only — skip CEO, top-performers digest, and other research loads.
+  // House / Senate activity + top performers. Skip popular-members lists and CEO digest.
   const needTrending = view === "trending";
   const needHouse = view === "feed" || view === "house";
   const needSenate = view === "feed" || view === "senate";
+  const needTopPerformers =
+    view === "house" || view === "senate" || view === "trending" || view === "feed";
 
-  const [trending, houseMembers, senateMembers, recentHouse, recentSenate] =
+  const performerOpts =
+    view === "house"
+      ? { chamber: "house" as const, includeCeo: false }
+      : view === "senate"
+        ? { chamber: "senate" as const, includeCeo: false }
+        : { includeCeo: false };
+
+  const [trending, recentHouse, recentSenate, topPerformers] =
     await Promise.all([
       needTrending
         ? fetchTrending({ mode: "all", periodDays: 30 })
         : EMPTY_SLICE,
-      needHouse ? fetchPopularMembers("house", 40) : EMPTY_SLICE,
-      needSenate ? fetchPopularMembers("senate", 40) : EMPTY_SLICE,
-      needHouse ? fetchRecentByChamber("house", 80) : EMPTY_SLICE,
-      needSenate ? fetchRecentByChamber("senate", 80) : EMPTY_SLICE,
+      needHouse ? fetchRecentByChamber("house", 120) : EMPTY_SLICE,
+      needSenate ? fetchRecentByChamber("senate", 120) : EMPTY_SLICE,
+      needTopPerformers
+        ? fetchTopPerformers(performerPeriod, 10, performerOpts)
+        : Promise.resolve({
+            rows: [] as TopPerformer[],
+            portfolio: null,
+            error: null as string | null,
+          }),
     ]);
 
   const error =
     trending.error ||
-    houseMembers.error ||
-    senateMembers.error ||
     recentHouse.error ||
     recentSenate.error ||
+    topPerformers.error ||
     null;
 
   return {
     trending: trending.rows.slice(0, 12),
-    houseMembers: houseMembers.rows,
-    senateMembers: senateMembers.rows,
+    houseMembers: [],
+    senateMembers: [],
     recentHouse: recentHouse.rows,
     recentSenate: recentSenate.rows,
     recentHouseBuys: [],
     recentSenateBuys: [],
     recentCeoBuys: [],
-    topPerformers: [],
-    portfolioGrowth: null,
+    topPerformers: topPerformers.rows,
+    portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
     configured: true,
     error,

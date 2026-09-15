@@ -228,14 +228,17 @@ export function computePortfolioGrowth(
   };
 }
 
-async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
+async function fetchRecentCongressBuys(
+  cutoff: string,
+  chamber?: Chamber,
+): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
   let from = 0;
 
   while (buys.length < MAX_CONGRESS_BUYS) {
     const end = Math.min(from + PAGE - 1, MAX_CONGRESS_BUYS - 1);
-    const { data, error } = await supabase
+    let query = supabase
       .from("congress_trades")
       .select(
         "member, member_slug, chamber, ticker, transaction_date, is_listed_equity",
@@ -246,6 +249,11 @@ async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
       .not("ticker", "is", null)
       .order("transaction_date", { ascending: false })
       .range(from, end);
+    if (chamber === "house" || chamber === "senate") {
+      query = query.eq("chamber", chamber);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     const rows = data ?? [];
@@ -256,20 +264,21 @@ async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
       const ticker = normalizeTicker(row.ticker as string | null);
       const name = String(row.member ?? "").trim();
       const slug = (row.member_slug as string | null)?.trim() || null;
-      const chamber = row.chamber as Chamber | null;
+      const rowChamber = row.chamber as Chamber | null;
       const tx = (row.transaction_date as string | null)?.slice(0, 10);
       if (
         !ticker ||
         !name ||
         !tx ||
-        (chamber !== "house" && chamber !== "senate")
+        (rowChamber !== "house" && rowChamber !== "senate")
       ) {
         continue;
       }
+      if (chamber && rowChamber !== chamber) continue;
       buys.push({
         key: `congress:${slug ?? name.toLowerCase()}`,
         name,
-        kind: chamber,
+        kind: rowChamber,
         memberSlug: slug,
         ticker,
         transactionDate: tx,
@@ -420,9 +429,17 @@ async function loadPriceMaps(
   return { entryClose, latestClose };
 }
 
+export type TopPerformerOptions = {
+  /** Limit congress buys to one chamber. */
+  chamber?: Chamber;
+  /** Include CEO Form 4 buys in the ranking (default true). */
+  includeCeo?: boolean;
+};
+
 export async function fetchTopPerformers(
   period: PerformerPeriod,
   limit = 10,
+  options?: TopPerformerOptions,
 ): Promise<{
   rows: TopPerformer[];
   portfolio: PortfolioGrowth | null;
@@ -434,9 +451,10 @@ export async function fetchTopPerformers(
 
   try {
     const cutoff = performerCutoffDate(period);
+    const includeCeo = options?.includeCeo !== false;
     const [congress, ceos] = await Promise.all([
-      fetchRecentCongressBuys(cutoff),
-      fetchRecentCeoBuys(cutoff),
+      fetchRecentCongressBuys(cutoff, options?.chamber),
+      includeCeo ? fetchRecentCeoBuys(cutoff) : Promise.resolve([] as BuyRow[]),
     ]);
     const buys = [...congress, ...ceos];
     if (buys.length === 0) {

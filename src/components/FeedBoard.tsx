@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DisclosureDayCard } from "@/components/DisclosureDayCard";
 import { PriceChart } from "@/components/PriceChart";
 import type {
   FeedPayload,
   FeedView,
   MemberPreviewPayload,
   MemberStockPreviewPayload,
-  PopularMember,
   StockPreviewPayload,
 } from "@/lib/feed";
 import {
@@ -17,11 +17,20 @@ import {
   formatShortDate,
   tradeVerb,
 } from "@/lib/format";
+import { groupTradesByDisclosure } from "@/lib/groupTrades";
 import type { CongressTrade, TrendingTicker } from "@/lib/types";
 import {
   type ChartTrade,
   type ChartTradeSource,
 } from "@/lib/chartTrades";
+import {
+  PERFORMER_PERIODS,
+  performerPeriodHref,
+  performerPeriodLabel,
+  type PerformerPeriod,
+  type PortfolioGrowth,
+  type TopPerformer,
+} from "@/lib/topPerformers";
 
 type Props = {
   view: FeedView;
@@ -29,6 +38,8 @@ type Props = {
   query?: string;
   housePage?: number;
   senatePage?: number;
+  /** activity (default) | performers */
+  tab?: "activity" | "performers";
 };
 
 type StockPanelState = {
@@ -133,6 +144,7 @@ export function FeedBoard({
   query,
   housePage = 1,
   senatePage = 1,
+  tab = "activity",
 }: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
@@ -305,6 +317,8 @@ export function FeedBoard({
   const showTrending = view === "trending";
   const showHouse = view === "house" || view === "feed";
   const showSenate = view === "senate" || view === "feed";
+  const showPerformers = tab === "performers";
+  const showActivity = tab === "activity";
   const trendingLimit = 20;
   const trendingRows = useMemo(
     () => payload.trending.filter(filterTicker),
@@ -318,23 +332,23 @@ export function FeedBoard({
     () => payload.recentSenate.filter(filterTrade),
     [filterTrade, payload.recentSenate],
   );
-  const houseMembers = useMemo(
+  const topPerformers = useMemo(
     () =>
-      payload.houseMembers.filter((member) =>
-        q ? member.name.toLowerCase().includes(q) : true,
-      ),
-    [payload.houseMembers, q],
-  );
-  const senateMembers = useMemo(
-    () =>
-      payload.senateMembers.filter((member) =>
-        q ? member.name.toLowerCase().includes(q) : true,
-      ),
-    [payload.senateMembers, q],
+      (payload.topPerformers ?? []).filter((row) => {
+        if (!q) return true;
+        return (
+          row.name.toLowerCase().includes(q) ||
+          (row.bestTicker ?? "").toLowerCase().includes(q)
+        );
+      }),
+    [payload.topPerformers, q],
   );
 
+  const chamberLabelForTabs =
+    view === "senate" ? "Senate" : view === "trending" ? "Trending" : "House";
+
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {payload.error ? (
         <div className="rounded-md border border-[color:var(--coral)]/40 bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--coral)]">
           {payload.error}
@@ -348,7 +362,48 @@ export function FeedBoard({
         </p>
       ) : null}
 
-      {showTrending ? (
+      <ViewTabs view={view} tab={tab} query={query} />
+
+      {showPerformers ? (
+        <TopPerformersSection
+          title={`Top performers · ${chamberLabelForTabs}`}
+          subtitle="Highest average return on stocks bought in the selected period"
+          rows={topPerformers}
+          portfolio={payload.portfolioGrowth}
+          period={payload.performerPeriod}
+          query={query}
+          view={view}
+          onOpenMember={(slug) => toggleMember(slug)}
+          onOpenTicker={(ticker) =>
+            toggleStock(
+              ticker,
+              view === "senate" ? "senate" : view === "house" ? "house" : "congress",
+            )
+          }
+          stockPanel={stockPanel}
+          memberPanel={memberPanel}
+          onCloseStock={() => setStockPanel(null)}
+          onTradeSource={(s) =>
+            stockPanel ? void openStock(stockPanel.ticker, s) : undefined
+          }
+          onOpenMemberStock={(slug, ticker) => void openMemberStock(slug, ticker)}
+          onCloseMember={() => setMemberPanel(null)}
+          onBackNested={() =>
+            setMemberPanel((p) =>
+              p
+                ? {
+                    ...p,
+                    nestedTicker: null,
+                    nested: null,
+                    nestedLoading: false,
+                  }
+                : p,
+            )
+          }
+        />
+      ) : null}
+
+      {showActivity && showTrending ? (
         <section className="animate-rise space-y-4">
           <SectionTitle
             title="Trending"
@@ -384,88 +439,50 @@ export function FeedBoard({
         </section>
       ) : null}
 
-      {showHouse ? (
-        <>
-          <TradeActivityBlock
-            title="House"
-            subtitle="Recent buys and sales — click a member or ticker"
-            trades={houseTrades}
-            page={housePage}
-            pageParam="housePage"
-            query={query}
-            view={view}
-            stockPanel={stockPanel}
-            memberPanel={memberPanel}
-            defaultTradeSource="house"
-            onOpenTicker={(ticker) => toggleStock(ticker, "house")}
-            onOpenMember={(slug) => toggleMember(slug)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-          <MemberBlock
-            title="House members"
-            subtitle="Popular representatives"
-            members={houseMembers}
-            panel={memberPanel}
-            onToggle={(slug) => toggleMember(slug)}
-            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-            onClose={() => setMemberPanel(null)}
-            onBackNested={() =>
-              setMemberPanel((p) =>
-                p
-                  ? {
-                      ...p,
-                      nestedTicker: null,
-                      nested: null,
-                      nestedLoading: false,
-                    }
-                  : p,
-              )
-            }
-          />
-        </>
+      {showActivity && showHouse ? (
+        <DisclosureDayList
+          title="House"
+          subtitle="Same-day disclosures — expand for buys and charts"
+          trades={houseTrades}
+          page={housePage}
+          pageParam="housePage"
+          query={query}
+          view={view}
+        />
       ) : null}
 
-      {showSenate ? (
-        <>
-          <TradeActivityBlock
-            title="Senate"
-            subtitle="Recent buys and sales — click a member or ticker"
-            trades={senateTrades}
-            page={senatePage}
-            pageParam="senatePage"
-            query={query}
-            view={view}
-            stockPanel={stockPanel}
-            memberPanel={memberPanel}
-            defaultTradeSource="senate"
-            onOpenTicker={(ticker) => toggleStock(ticker, "senate")}
-            onOpenMember={(slug) => toggleMember(slug)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-          <MemberBlock
-            title="Senate members"
-            subtitle="Popular senators"
-            members={senateMembers}
-            panel={memberPanel}
-            onToggle={(slug) => toggleMember(slug)}
-            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-            onClose={() => setMemberPanel(null)}
-            onBackNested={() =>
-              setMemberPanel((p) =>
-                p
-                  ? {
-                      ...p,
-                      nestedTicker: null,
-                      nested: null,
-                      nestedLoading: false,
-                    }
-                  : p,
-              )
-            }
-          />
-        </>
+      {showActivity && showSenate ? (
+        <DisclosureDayList
+          title="Senate"
+          subtitle="Same-day disclosures — expand for buys and charts"
+          trades={senateTrades}
+          page={senatePage}
+          pageParam="senatePage"
+          query={query}
+          view={view}
+        />
+      ) : null}
+
+      {showPerformers && memberPanel ? (
+        <MemberPanel
+          state={memberPanel}
+          onClose={() => setMemberPanel(null)}
+          onOpenTicker={(ticker) =>
+            void openMemberStock(memberPanel.slug, ticker)
+          }
+          onBackNested={() =>
+            setMemberPanel((p) =>
+              p
+                ? {
+                    ...p,
+                    nestedTicker: null,
+                    nested: null,
+                    nestedLoading: false,
+                  }
+                : p,
+            )
+          }
+        />
       ) : null}
     </div>
   );
@@ -681,7 +698,46 @@ function tradePageHref(opts: {
   return qs ? `/app?${qs}` : "/app";
 }
 
-function TradeActivityBlock({
+
+function ViewTabs({
+  view,
+  tab,
+  query,
+}: {
+  view: FeedView;
+  tab: "activity" | "performers";
+  query?: string;
+}) {
+  if (view !== "house" && view !== "senate" && view !== "trending") return null;
+  const activityLabel = view === "trending" ? "Tickers" : "Activity";
+  function href(next: "activity" | "performers") {
+    const params = new URLSearchParams();
+    params.set("view", view);
+    if (next === "performers") params.set("tab", "performers");
+    if (query) params.set("q", query);
+    return `/app?${params.toString()}`;
+  }
+  return (
+    <div className="hx-toolbar">
+      <Link
+        href={href("activity")}
+        className="hx-tab"
+        data-active={tab === "activity" ? "true" : "false"}
+      >
+        {activityLabel}
+      </Link>
+      <Link
+        href={href("performers")}
+        className="hx-tab"
+        data-active={tab === "performers" ? "true" : "false"}
+      >
+        Top performers
+      </Link>
+    </div>
+  );
+}
+
+function DisclosureDayList({
   title,
   subtitle,
   trades,
@@ -689,13 +745,6 @@ function TradeActivityBlock({
   pageParam,
   query,
   view,
-  stockPanel,
-  memberPanel,
-  defaultTradeSource,
-  onOpenTicker,
-  onOpenMember,
-  onCloseStock,
-  onTradeSource,
 }: {
   title: string;
   subtitle: string;
@@ -704,135 +753,37 @@ function TradeActivityBlock({
   pageParam: "housePage" | "senatePage";
   query?: string;
   view: FeedView;
-  stockPanel: StockPanelState | null;
-  memberPanel: MemberPanelState | null;
-  defaultTradeSource: ChartTradeSource;
-  onOpenTicker: (ticker: string) => void;
-  onOpenMember: (slug: string) => void;
-  onCloseStock: () => void;
-  onTradeSource: (ticker: string, source: ChartTradeSource) => void;
 }) {
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
+  const groups = useMemo(() => groupTradesByDisclosure(trades), [trades]);
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const slice = trades.slice(
+  const slice = groups.slice(
     (safePage - 1) * pageSize,
     (safePage - 1) * pageSize + pageSize,
   );
-  const activeTicker =
-    stockPanel &&
-    slice.some((t) => (t.ticker ?? "").toUpperCase() === stockPanel.ticker)
-      ? stockPanel
-      : null;
+
   return (
     <section className="animate-rise space-y-3">
       <SectionTitle title={title} subtitle={subtitle} />
-      {trades.length === 0 ? (
-        <Empty text={`No ${title.toLowerCase()} buys or sales match.`} />
+      {groups.length === 0 ? (
+        <Empty text={`No ${title.toLowerCase()} disclosures match.`} />
       ) : (
         <>
-          <div className="hx-table-wrap">
-            <table className="hx-table">
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>Ticker</th>
-                  <th>Type</th>
-                  <th className="num">Amount</th>
-                  <th>Filed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {slice.map((trade) => {
-                  const ticker = (trade.ticker ?? "").toUpperCase();
-                  const buy = trade.transaction_type === "purchase";
-                  const slug = trade.member_slug ?? "";
-                  const expandedTicker = activeTicker?.ticker === ticker;
-                  const expandedMember =
-                    !!slug && memberPanel?.slug === slug && !activeTicker;
-                  return (
-                    <tr
-                      key={trade.id}
-                      className={
-                        expandedTicker || expandedMember
-                          ? "bg-[color:var(--accent-soft)]"
-                          : undefined
-                      }
-                    >
-                      <td>
-                        {slug ? (
-                          <button
-                            type="button"
-                            className="text-left font-medium text-[color:var(--mint)] hover:opacity-80"
-                            onClick={() => onOpenMember(slug)}
-                          >
-                            {trade.member ?? "Unknown"}
-                          </button>
-                        ) : (
-                          <p className="font-medium text-[color:var(--fog)]">
-                            {trade.member ?? "Unknown"}
-                          </p>
-                        )}
-                        <p className="hx-meta">
-                          {chamberLabel(trade.chamber)}
-                          {trade.state ? ` · ${trade.state}` : ""}
-                        </p>
-                      </td>
-                      <td>
-                        {ticker ? (
-                          <button
-                            type="button"
-                            className="font-medium tracking-tight text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-                            onClick={() => onOpenTicker(ticker)}
-                          >
-                            {ticker}
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td>
-                        <span className={buy ? "hx-buy" : "hx-sell"}>
-                          {tradeVerb(trade.transaction_type)}
-                        </span>
-                      </td>
-                      <td className="num text-[color:var(--fog-dim)]">
-                        {formatAmountRange(
-                          trade.amount_low,
-                          trade.amount_high,
-                          trade.amount_range,
-                        )}
-                      </td>
-                      <td className="hx-meta whitespace-nowrap">
-                        {formatShortDate(
-                          trade.disclosure_date ?? trade.transaction_date,
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {slice.map((group, index) => (
+              <DisclosureDayCard
+                key={group.key}
+                group={group}
+                defaultOpen={safePage === 1 && index === 0}
+              />
+            ))}
           </div>
-
-          {activeTicker ? (
-            <StockPanel
-              state={activeTicker}
-              onClose={onCloseStock}
-              onTradeSource={(s) => onTradeSource(activeTicker.ticker, s)}
-              onOpenMember={onOpenMember}
-              preferredSources={[
-                "congress",
-                defaultTradeSource === "senate" ? "senate" : "house",
-                defaultTradeSource === "senate" ? "house" : "senate",
-              ]}
-            />
-          ) : null}
-
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
             <p>
               {(safePage - 1) * pageSize + 1}–
-              {Math.min(safePage * pageSize, trades.length)} of {trades.length}
+              {Math.min(safePage * pageSize, groups.length)} of {groups.length}{" "}
+              disclosure days
             </p>
             <div className="flex items-center gap-2">
               {safePage > 1 ? (
@@ -876,122 +827,226 @@ function TradeActivityBlock({
   );
 }
 
-function MemberBlock({
+function performerChipClass(active: boolean) {
+  return active ? "hx-chip hx-chip-accent" : "hx-chip";
+}
+
+function formatReturnPct(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  const sign = rounded > 0 ? "+" : "";
+  return `${sign}${rounded.toFixed(1)}%`;
+}
+
+function performerKindLabel(kind: TopPerformer["kind"]): string {
+  if (kind === "ceo") return "CEO";
+  if (kind === "house") return "House";
+  return "Senate";
+}
+
+function PerformerPeriodChips({
+  period,
+  query,
+  view,
+}: {
+  period: PerformerPeriod;
+  query?: string;
+  view: FeedView;
+}) {
+  return (
+    <div className="hx-toolbar">
+      {PERFORMER_PERIODS.map((value) => (
+        <Link
+          key={value}
+          href={performerPeriodHref(value, {
+            q: query,
+            view: view === "feed" ? undefined : view,
+            tab: "performers",
+          })}
+          className={performerChipClass(period === value)}
+          aria-current={period === value ? "page" : undefined}
+        >
+          {performerPeriodLabel(value)}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function PortfolioGrowthBanner({
+  portfolio,
+  period,
+}: {
+  portfolio: PortfolioGrowth;
+  period: PerformerPeriod;
+}) {
+  const positive = portfolio.avgReturnPct >= 0;
+  return (
+    <div className="rounded-md border border-[color:var(--mint)]/30 bg-[color:var(--panel)] px-4 py-2.5">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+        Portfolio growth · {performerPeriodLabel(period)}
+      </p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+        <p
+          className={`font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight ${
+            positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
+          }`}
+        >
+          {formatReturnPct(portfolio.avgReturnPct)}
+        </p>
+        <p className="text-sm text-[color:var(--fog-dim)]">
+          Equal-weighted avg across {portfolio.pricedBuyCount} priced buy
+          {portfolio.pricedBuyCount === 1 ? "" : "s"}
+          {" · "}
+          {portfolio.congressPricedCount} congress
+          {portfolio.ceoPricedCount
+            ? ` · ${portfolio.ceoPricedCount} CEO`
+            : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PerformerCard({
+  rank,
+  row,
+  onOpenMember,
+  onOpenTicker,
+}: {
+  rank: number;
+  row: TopPerformer;
+  onOpenMember: (slug: string) => void;
+  onOpenTicker: (ticker: string) => void;
+}) {
+  const positive = row.avgReturnPct >= 0;
+  const clickableMember = !!row.memberSlug;
+  const clickableTicker = !!row.bestTicker;
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-3">
+      <span className="w-6 shrink-0 text-sm font-semibold text-[color:var(--fog-dim)]">
+        {rank}
+      </span>
+      <div className="min-w-0 flex-1">
+        {clickableMember ? (
+          <button
+            type="button"
+            onClick={() => onOpenMember(row.memberSlug!)}
+            className="truncate text-left font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+          >
+            {row.name}
+          </button>
+        ) : (
+          <p className="truncate font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
+            {row.name}
+          </p>
+        )}
+        <p className="text-xs text-[color:var(--fog-dim)]">
+          {performerKindLabel(row.kind)} · {row.pricedBuyCount} priced buy
+          {row.pricedBuyCount === 1 ? "" : "s"}
+          {row.bestTicker ? (
+            <>
+              {" "}
+              · best{" "}
+              {clickableTicker ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenTicker(row.bestTicker!)}
+                  className="font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                >
+                  {row.bestTicker}
+                </button>
+              ) : (
+                row.bestTicker
+              )}
+              {row.bestReturnPct != null
+                ? ` (${formatReturnPct(row.bestReturnPct)})`
+                : null}
+            </>
+          ) : null}
+        </p>
+      </div>
+      <span
+        className={`shrink-0 font-[family-name:var(--font-display)] text-lg font-semibold tracking-tight ${
+          positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
+        }`}
+      >
+        {formatReturnPct(row.avgReturnPct)}
+      </span>
+    </div>
+  );
+}
+
+function TopPerformersSection({
   title,
   subtitle,
-  members,
-  panel,
-  onToggle,
-  onOpenStock,
-  onClose,
+  rows,
+  portfolio,
+  period,
+  query,
+  view,
+  onOpenMember,
+  onOpenTicker,
+  stockPanel,
+  memberPanel,
+  onCloseStock,
+  onTradeSource,
+  onOpenMemberStock,
+  onCloseMember,
   onBackNested,
 }: {
   title: string;
   subtitle: string;
-  members: PopularMember[];
-  panel: MemberPanelState | null;
-  onToggle: (slug: string) => void;
-  onOpenStock: (slug: string, ticker: string) => void;
-  onClose: () => void;
+  rows: TopPerformer[];
+  portfolio: PortfolioGrowth | null;
+  period: PerformerPeriod;
+  query?: string;
+  view: FeedView;
+  onOpenMember: (slug: string) => void;
+  onOpenTicker: (ticker: string) => void;
+  stockPanel: StockPanelState | null;
+  memberPanel: MemberPanelState | null;
+  onCloseStock: () => void;
+  onTradeSource: (source: ChartTradeSource) => void;
+  onOpenMemberStock: (slug: string, ticker: string) => void;
+  onCloseMember: () => void;
   onBackNested: () => void;
 }) {
-  const pageSize = 10;
-  const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageMembers = members.slice(
-    safePage * pageSize,
-    safePage * pageSize + pageSize,
-  );
-  // Keep panel open even if the member is on another page or opened from a trade row.
-  const active = panel;
-
-  useEffect(() => {
-    setPage(0);
-  }, [members.length, members[0]?.slug]);
-
   return (
-    <section className="animate-rise space-y-3">
+    <section className="animate-rise space-y-4">
       <SectionTitle title={title} subtitle={subtitle} />
-      {members.length === 0 ? (
-        <Empty text={`No active ${title.toLowerCase()} members yet.`} />
-      ) : (
-        <div className="hx-table-wrap">
-          <table className="hx-table">
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Chamber</th>
-                <th className="num">Trades</th>
-                <th className="num">Tickers</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageMembers.map((member) => {
-                const expanded = panel?.slug === member.slug;
-                return (
-                  <tr
-                    key={member.slug}
-                    className={
-                      expanded
-                        ? "bg-[color:var(--accent-soft)] cursor-pointer"
-                        : "cursor-pointer"
-                    }
-                    onClick={() => onToggle(member.slug)}
-                  >
-                    <td className="font-medium text-[color:var(--fog)]">
-                      {member.name}
-                    </td>
-                    <td className="hx-meta">
-                      {chamberLabel(member.chamber)}
-                      {member.state ? ` · ${member.state}` : ""}
-                    </td>
-                    <td className="num">{member.tradeCount}</td>
-                    <td className="num">{member.uniqueTickers}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {members.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
-          <p>
-            {safePage * pageSize + 1}–
-            {Math.min((safePage + 1) * pageSize, members.length)} of{" "}
-            {members.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={safePage <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="hx-btn hx-btn-ghost disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <span>
-              {safePage + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={safePage >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="hx-btn hx-btn-ghost disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+      <PerformerPeriodChips period={period} query={query} view={view} />
+      {portfolio ? (
+        <PortfolioGrowthBanner portfolio={portfolio} period={period} />
       ) : null}
-
-      {active ? (
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <Empty text="No priced purchases in this period yet." />
+        ) : (
+          rows.map((row, i) => (
+            <PerformerCard
+              key={row.key}
+              rank={i + 1}
+              row={row}
+              onOpenMember={onOpenMember}
+              onOpenTicker={onOpenTicker}
+            />
+          ))
+        )}
+      </div>
+      {stockPanel ? (
+        <StockPanel
+          state={stockPanel}
+          onClose={onCloseStock}
+          onTradeSource={onTradeSource}
+          onOpenMember={onOpenMember}
+        />
+      ) : null}
+      {memberPanel ? (
         <MemberPanel
-          state={active}
-          onClose={onClose}
-          onOpenTicker={(ticker) => onOpenStock(active.slug, ticker)}
+          state={memberPanel}
+          onClose={onCloseMember}
+          onOpenTicker={(ticker) => onOpenMemberStock(memberPanel.slug, ticker)}
           onBackNested={onBackNested}
         />
       ) : null}
