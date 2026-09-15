@@ -246,7 +246,7 @@ export function AppShell({
     <Suspense
       fallback={
         <AppShellFrame
-          active={active ?? "feed"}
+          active={active ?? "house"}
           title={title}
           description={description}
           actions={actions}

@@ -122,7 +122,7 @@ export function parseFeedView(
 async function fetchRecentByChamber(
   chamber: Chamber,
   limit = 12,
-  options?: { purchasesOnly?: boolean },
+  options?: { purchasesOnly?: boolean; sinceDays?: number },
 ): Promise<{ rows: CongressTrade[]; error: string | null }> {
   const supabase = createBrowserSupabase();
   let query = supabase
@@ -137,6 +137,11 @@ async function fetchRecentByChamber(
   if (options?.purchasesOnly) {
     query = query.eq("transaction_type", "purchase");
   }
+  if (options?.sinceDays != null && options.sinceDays > 0) {
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
+    query = query.gte("disclosure_date", cutoff.toISOString().slice(0, 10));
+  }
 
   let result = await query;
 
@@ -150,6 +155,14 @@ async function fetchRecentByChamber(
       .limit(limit * 2);
     if (options?.purchasesOnly) {
       fallback = fallback.eq("transaction_type", "purchase");
+    }
+    if (options?.sinceDays != null && options.sinceDays > 0) {
+      const cutoff = new Date();
+      cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
+      fallback = fallback.gte(
+        "disclosure_date",
+        cutoff.toISOString().slice(0, 10),
+      );
     }
     result = await fallback;
     if (!result.error && result.data) {
@@ -317,13 +330,27 @@ export async function fetchFeedPayload(
         ? { chamber: "senate" as const, includeCeo: false }
         : { includeCeo: false };
 
+  // Pull the full local month of disclosures (not a tiny recent slice).
+  // 120 rows previously collapsed to only ~4 member-days because big
+  // filers disclose dozens of trades on one day.
+  const MONTH_TRADE_LIMIT = 5000;
+  const MONTH_LOOKBACK_DAYS = 40;
+
   const [trending, recentHouse, recentSenate, topPerformers] =
     await Promise.all([
       needTrending
         ? fetchTrending({ mode: "all", periodDays: 30 })
         : EMPTY_SLICE,
-      needHouse ? fetchRecentByChamber("house", 120) : EMPTY_SLICE,
-      needSenate ? fetchRecentByChamber("senate", 120) : EMPTY_SLICE,
+      needHouse
+        ? fetchRecentByChamber("house", MONTH_TRADE_LIMIT, {
+            sinceDays: MONTH_LOOKBACK_DAYS,
+          })
+        : EMPTY_SLICE,
+      needSenate
+        ? fetchRecentByChamber("senate", MONTH_TRADE_LIMIT, {
+            sinceDays: MONTH_LOOKBACK_DAYS,
+          })
+        : EMPTY_SLICE,
       needTopPerformers
         ? fetchTopPerformers(performerPeriod, 10, performerOpts)
         : Promise.resolve({
@@ -354,7 +381,7 @@ export async function fetchFeedPayload(
   }
 
   return {
-    trending: trending.rows.slice(0, 12),
+    trending: trending.rows.slice(0, 40),
     houseMembers: [],
     senateMembers: [],
     recentHouse: recentHouse.rows,

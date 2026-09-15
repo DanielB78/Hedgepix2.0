@@ -319,7 +319,7 @@ export function FeedBoard({
   const showSenate = view === "senate" || view === "feed";
   const showPerformers = tab === "performers";
   const showActivity = tab === "activity";
-  const trendingLimit = 20;
+  const trendingLimit = 40;
   const trendingRows = useMemo(
     () => payload.trending.filter(filterTicker),
     [filterTicker, payload.trending],
@@ -787,7 +787,7 @@ function DisclosureDayList({
               <DisclosureDayCard
                 key={group.key}
                 group={group}
-                defaultOpen={safePage === 1 && index === 0}
+                defaultOpen={false}
                 sectorByTicker={sectorByTicker}
               />
             ))}
@@ -796,7 +796,9 @@ function DisclosureDayList({
             <p>
               {(safePage - 1) * pageSize + 1}–
               {Math.min(safePage * pageSize, groups.length)} of {groups.length}{" "}
-              disclosure days
+              disclosures
+              {" · "}
+              {trades.length} trade{trades.length === 1 ? "" : "s"}
             </p>
             <div className="flex items-center gap-2">
               {safePage > 1 ? (

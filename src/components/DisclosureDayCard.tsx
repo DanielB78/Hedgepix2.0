@@ -170,66 +170,66 @@ export function DisclosureDayCard({
 
   return (
     <div className="overflow-hidden rounded-md border border-[color:var(--line)] bg-[color:var(--panel)]">
-      <button
-        type="button"
-        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-[color:var(--panel-elevated)]"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span
-          aria-hidden
-          className={`text-sm text-[color:var(--fog-dim)] transition-transform ${
-            open ? "rotate-90" : ""
-          }`}
+      <div className="flex w-full items-center gap-3 px-4 py-3">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left hover:opacity-90"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
         >
-          ›
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            {group.memberSlug ? (
-              <Link
-                href={memberHref(group.memberSlug)}
-                className="truncate font-medium text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-                onClick={(event) => event.stopPropagation()}
-              >
-                {group.member ?? "Unknown member"}
-              </Link>
-            ) : (
+          <span
+            aria-hidden
+            className={`text-sm text-[color:var(--fog-dim)] transition-transform ${
+              open ? "rotate-90" : ""
+            }`}
+          >
+            ›
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="truncate font-medium text-[color:var(--fog)]">
                 {group.member ?? "Unknown member"}
               </span>
-            )}
-            <span className="hx-meta">
-              {chamberLabel(group.chamber)}
-              {group.state ? ` · ${group.state}` : ""}
-            </span>
+              <span className="hx-meta">
+                {chamberLabel(group.chamber)}
+                {group.state ? ` · ${group.state}` : ""}
+              </span>
+            </div>
+            <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">
+              {hint || `${group.trades.length} trade${group.trades.length === 1 ? "" : "s"}`}
+              {tickers.length ? (
+                <>
+                  {" · "}
+                  {tickers.slice(0, 4).map((t, i) => (
+                    <span key={t}>
+                      {i > 0 ? ", " : ""}
+                      {t}
+                      {sectorByTicker?.[t] ? (
+                        <span className="text-[color:var(--fog-mute)]">
+                          {" "}
+                          ({sectorByTicker[t]})
+                        </span>
+                      ) : null}
+                    </span>
+                  ))}
+                  {tickers.length > 4 ? "…" : ""}
+                </>
+              ) : null}
+            </p>
           </div>
-          <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">
-            {hint || `${group.trades.length} trade${group.trades.length === 1 ? "" : "s"}`}
-            {tickers.length ? (
-              <>
-                {" · "}
-                {tickers.slice(0, 4).map((t, i) => (
-                  <span key={t}>
-                    {i > 0 ? ", " : ""}
-                    {t}
-                    {sectorByTicker?.[t] ? (
-                      <span className="text-[color:var(--fog-mute)]">
-                        {" "}
-                        ({sectorByTicker[t]})
-                      </span>
-                    ) : null}
-                  </span>
-                ))}
-                {tickers.length > 4 ? "…" : ""}
-              </>
-            ) : null}
-          </p>
-        </div>
-        <span className="hx-meta shrink-0 whitespace-nowrap">
-          {formatShortDate(group.disclosureDate)}
-        </span>
-      </button>
+          <span className="hx-meta shrink-0 whitespace-nowrap">
+            {formatShortDate(group.disclosureDate)}
+          </span>
+        </button>
+        {group.memberSlug ? (
+          <Link
+            href={memberHref(group.memberSlug)}
+            className="shrink-0 text-xs font-medium text-[color:var(--mint)] hover:opacity-80"
+          >
+            Profile
+          </Link>
+        ) : null}
+      </div>
 
       {open ? (
         <div className="border-t border-[color:var(--line)]">
