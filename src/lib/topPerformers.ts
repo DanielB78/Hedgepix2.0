@@ -34,7 +34,7 @@ type BuyRow = {
   transactionDate: string;
 };
 
-export const PERFORMER_PERIODS: PerformerPeriod[] = ["2026", "6m", "3m", "1m"];
+export const PERFORMER_PERIODS: PerformerPeriod[] = ["1m", "3m", "6m", "2026"];
 
 const PAGE = 1000;
 const TICKER_CHUNK = 40;
