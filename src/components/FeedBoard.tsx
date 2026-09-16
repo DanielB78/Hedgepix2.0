@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { DisclosureDayCard } from "@/components/DisclosureDayCard";
 import { PerformerExpandCard } from "@/components/PerformerExpandCard";
 import { PriceChart } from "@/components/PriceChart";
 import { SectorShareChart } from "@/components/SectorShareChart";
+import { TradeFiltersBar } from "@/components/TradeFiltersBar";
 import type {
   FeedPayload,
   FeedView,
@@ -33,6 +35,13 @@ import {
   type PortfolioGrowth,
   type TopPerformer,
 } from "@/lib/topPerformers";
+import {
+  filterTrades,
+  parseAdvancedTradeFilters,
+  type AdvancedTradeFilters,
+  type TradeFilterContext,
+} from "@/lib/advancedTradeFilters";
+import { rankTrending } from "@/lib/trending";
 
 type Props = {
   view: FeedView;
@@ -156,19 +165,39 @@ export function FeedBoard({
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
   const requestId = useRef(0);
   const q = query?.trim().toLowerCase() ?? "";
+  const searchParams = useSearchParams();
+  const advancedFilters: AdvancedTradeFilters = useMemo(
+    () => parseAdvancedTradeFilters(searchParams),
+    [searchParams],
+  );
+  const allowMemberSectors = view !== "insiders";
+  const filterCtx: TradeFilterContext = useMemo(
+    () => ({
+      memberSectors: payload.memberSectors ?? {},
+      tradeSectorOverlaps: payload.tradeSectorOverlaps ?? {},
+      allowMemberSectors,
+    }),
+    [
+      allowMemberSectors,
+      payload.memberSectors,
+      payload.tradeSectorOverlaps,
+    ],
+  );
 
   const filterTrade = useCallback(
     (trade: CongressTrade) => {
-      if (!q) return true;
-      const ticker = (trade.ticker ?? "").toLowerCase();
-      const member = (trade.member ?? "").toLowerCase();
-      const asset = (trade.asset ?? "").toLowerCase();
-      return (
-        ticker.includes(q) ||
-        member.includes(q) ||
-        asset.includes(q) ||
-        ticker === q.toUpperCase().toLowerCase()
-      );
+      if (q) {
+        const ticker = (trade.ticker ?? "").toLowerCase();
+        const member = (trade.member ?? "").toLowerCase();
+        const asset = (trade.asset ?? "").toLowerCase();
+        const textOk =
+          ticker.includes(q) ||
+          member.includes(q) ||
+          asset.includes(q) ||
+          ticker === q.toUpperCase().toLowerCase();
+        if (!textOk) return false;
+      }
+      return true;
     },
     [q],
   );
@@ -328,34 +357,84 @@ export function FeedBoard({
   const showSectors = tab === "sectors";
   const showActivity = tab === "activity";
   const trendingLimit = 40;
-  const trendingRows = useMemo(
-    () => payload.trending.filter(filterTicker),
-    [filterTicker, payload.trending],
-  );
-  const houseTrades = useMemo(
-    () => payload.recentHouse.filter(filterTrade),
-    [filterTrade, payload.recentHouse],
-  );
-  const senateTrades = useMemo(
-    () => payload.recentSenate.filter(filterTrade),
-    [filterTrade, payload.recentSenate],
-  );
+
+  const houseTrades = useMemo(() => {
+    const base = payload.recentHouse.filter(filterTrade);
+    return filterTrades(base, advancedFilters, filterCtx);
+  }, [advancedFilters, filterCtx, filterTrade, payload.recentHouse]);
+
+  const senateTrades = useMemo(() => {
+    const base = payload.recentSenate.filter(filterTrade);
+    return filterTrades(base, advancedFilters, filterCtx);
+  }, [advancedFilters, filterCtx, filterTrade, payload.recentSenate]);
+
   const insiderTrades = useMemo(() => {
     const rows = payload.recentInsider ?? [];
-    if (!q) return rows;
-    return rows.filter((trade) => {
-      const ticker = (trade.ticker ?? "").toLowerCase();
-      const member = (trade.member ?? "").toLowerCase();
-      const title = (trade.state ?? "").toLowerCase();
-      const asset = (trade.asset ?? "").toLowerCase();
-      return (
-        ticker.includes(q) ||
-        member.includes(q) ||
-        title.includes(q) ||
-        asset.includes(q)
-      );
+    const textFiltered = !q
+      ? rows
+      : rows.filter((trade) => {
+          const ticker = (trade.ticker ?? "").toLowerCase();
+          const member = (trade.member ?? "").toLowerCase();
+          const title = (trade.state ?? "").toLowerCase();
+          const asset = (trade.asset ?? "").toLowerCase();
+          return (
+            ticker.includes(q) ||
+            member.includes(q) ||
+            title.includes(q) ||
+            asset.includes(q)
+          );
+        });
+    // Insiders: ticker sectors only; member sector source disabled in ctx
+    return filterTrades(textFiltered, advancedFilters, {
+      ...filterCtx,
+      allowMemberSectors: false,
     });
-  }, [payload.recentInsider, q]);
+  }, [advancedFilters, filterCtx, payload.recentInsider, q]);
+
+  /** Recalculate trending from filtered underlying congress trades (not post-hide). */
+  const trendingRows = useMemo(() => {
+    if (view !== "trending") {
+      return payload.trending.filter(filterTicker);
+    }
+    const underlying = filterTrades(
+      [...payload.recentHouse, ...payload.recentSenate].filter(filterTrade),
+      advancedFilters,
+      filterCtx,
+    );
+    return rankTrending(
+      underlying.map((t) => ({
+        ticker: t.ticker,
+        asset: t.asset,
+        transaction_type: t.transaction_type,
+        member_slug: t.member_slug,
+        disclosure_date: t.disclosure_date,
+      })),
+    ).filter(filterTicker);
+  }, [
+    advancedFilters,
+    filterCtx,
+    filterTicker,
+    filterTrade,
+    payload.recentHouse,
+    payload.recentSenate,
+    payload.trending,
+    view,
+  ]);
+
+  const resultCount = useMemo(() => {
+    if (view === "house") return houseTrades.length;
+    if (view === "senate") return senateTrades.length;
+    if (view === "insiders") return insiderTrades.length;
+    if (view === "trending") return trendingRows.length;
+    return houseTrades.length + senateTrades.length;
+  }, [
+    houseTrades.length,
+    insiderTrades.length,
+    senateTrades.length,
+    trendingRows.length,
+    view,
+  ]);
+
   const topPerformers = useMemo(
     () =>
       (payload.topPerformers ?? []).filter((row) => {
@@ -401,6 +480,12 @@ export function FeedBoard({
           <span className="font-semibold text-[color:var(--fog)]">{query}</span>
         </p>
       ) : null}
+
+      <TradeFiltersBar
+        allowMemberSectors={allowMemberSectors}
+        resultCount={resultCount}
+        resultLabel={view === "trending" ? "trending tickers" : "trades"}
+      />
 
       <ViewTabs view={view} tab={tab} query={query} />
 
@@ -753,15 +838,37 @@ function StockPanel({
   );
 }
 
+const FILTER_PARAM_KEYS = [
+  "tx",
+  "sectors",
+  "sectorSrc",
+  "overlap",
+  "members",
+  "tickers",
+] as const;
+
+function copyFilterParams(
+  target: URLSearchParams,
+  source: URLSearchParams | null | undefined,
+) {
+  if (!source) return;
+  for (const key of FILTER_PARAM_KEYS) {
+    const value = source.get(key);
+    if (value) target.set(key, value);
+  }
+}
+
 function tradePageHref(opts: {
   page: number;
   pageParam: "housePage" | "senatePage" | "insiderPage";
   query?: string;
   view: FeedView;
+  filterParams?: URLSearchParams | null;
 }): string {
   const params = new URLSearchParams();
   if (opts.view && opts.view !== "feed") params.set("view", opts.view);
   if (opts.query) params.set("q", opts.query);
+  copyFilterParams(params, opts.filterParams);
   if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
   const qs = params.toString();
   return qs ? `/app?${qs}` : "/app";
@@ -777,6 +884,7 @@ function ViewTabs({
   tab: "activity" | "performers" | "sectors";
   query?: string;
 }) {
+  const searchParams = useSearchParams();
   if (
     view !== "house" &&
     view !== "senate" &&
@@ -792,6 +900,7 @@ function ViewTabs({
     if (next === "performers") params.set("tab", "performers");
     if (next === "sectors") params.set("tab", "sectors");
     if (query) params.set("q", query);
+    copyFilterParams(params, searchParams);
     return `/app?${params.toString()}`;
   }
   return (
@@ -852,6 +961,7 @@ function DisclosureDayList({
     (safePage - 1) * pageSize,
     (safePage - 1) * pageSize + pageSize,
   );
+  const filterParams = useSearchParams();
 
   return (
     <section className="animate-rise space-y-3">
@@ -893,6 +1003,7 @@ function DisclosureDayList({
                     pageParam,
                     query,
                     view,
+                    filterParams,
                   })}
                   className="hx-btn hx-btn-ghost"
                 >
@@ -911,6 +1022,7 @@ function DisclosureDayList({
                     pageParam,
                     query,
                     view,
+                    filterParams,
                   })}
                   className="hx-btn hx-btn-ghost"
                 >
@@ -946,6 +1058,12 @@ function PerformerPeriodChips({
   query?: string;
   view: FeedView;
 }) {
+  const searchParams = useSearchParams();
+  const filterExtras: Record<string, string | undefined> = {};
+  for (const key of FILTER_PARAM_KEYS) {
+    const value = searchParams.get(key);
+    if (value) filterExtras[key] = value;
+  }
   return (
     <div className="hx-toolbar">
       {PERFORMER_PERIODS.map((value) => (
@@ -955,6 +1073,7 @@ function PerformerPeriodChips({
             q: query,
             view: view === "feed" ? undefined : view,
             tab: "performers",
+            ...filterExtras,
           })}
           className={performerChipClass(period === value)}
           aria-current={period === value ? "page" : undefined}
