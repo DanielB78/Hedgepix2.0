@@ -274,7 +274,7 @@ export function DisclosureDayCard({
                         }`}
                       >
                         <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-1.5 font-medium tracking-tight text-[color:var(--fog)]">
+                          <div className="flex flex-wrap items-center gap-1.5 font-medium tracking-tight text-[color:var(--fog)]">
                             <span>{ticker || "—"}</span>
                             {sectorByTicker?.[ticker] ? (
                               <span className="rounded bg-[color:var(--panel-elevated)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--fog-dim)]">
@@ -284,7 +284,7 @@ export function DisclosureDayCard({
                             <SectorOverlapBadge
                               overlap={sectorOverlaps?.[trade.id]}
                             />
-                          </p>
+                          </div>
                           <p className="hx-meta line-clamp-1">
                             {trade.asset ?? "Equity"}
                           </p>
