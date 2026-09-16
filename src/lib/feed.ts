@@ -41,10 +41,17 @@ import {
   mergeIndustryLabels,
   type SectorShareSlice,
 } from "./sectorShare";
+import {
+  computeTradeSectorOverlaps,
+  fetchMemberIndustryLabels,
+  memberSectorsRecord,
+  type SectorOverlapResult,
+} from "./memberSectors";
 
 export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
 export type { ChartTrade, ChartTradeSource };
 export type { SectorShareSlice };
+export type { SectorOverlapResult };
 
 export type FeedView = "feed" | "trending" | "house" | "senate" | "insiders";
 
@@ -75,6 +82,10 @@ export type FeedPayload = {
   performerPeriod: PerformerPeriod;
   /** ticker → industry/sector label for UI chips */
   tickerSectors: Record<string, string>;
+  /** member_slug → committee industry labels */
+  memberSectors: Record<string, string[]>;
+  /** trade id → sector overlap (matched trades only) */
+  tradeSectorOverlaps: Record<string, SectorOverlapResult>;
   /** Sector mix for the chamber / window (buys+sales). */
   sectorShare: SectorShareSlice[];
   sectorShareScope: string;
@@ -388,6 +399,8 @@ export async function fetchFeedPayload(
       portfolioGrowth: null,
       performerPeriod,
       tickerSectors: {},
+      memberSectors: {},
+      tradeSectorOverlaps: {},
       sectorShare: [],
       sectorShareScope: "Congress",
       configured: false,
@@ -491,6 +504,16 @@ export async function fetchFeedPayload(
     view === "feed" ? "feed" : view,
   );
 
+  const congressTrades = [...recentHouse.rows, ...recentSenate.rows];
+  const memberSlugs = congressTrades
+    .map((t) => t.member_slug)
+    .filter((s): s is string => Boolean(s));
+  const memberLabelMap = await fetchMemberIndustryLabels(memberSlugs);
+  const tradeSectorOverlaps = await computeTradeSectorOverlaps(
+    congressTrades,
+    memberLabelMap,
+  );
+
   return {
     trending: trending.rows.slice(0, 40),
     houseMembers: [],
@@ -505,6 +528,8 @@ export async function fetchFeedPayload(
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
     tickerSectors: mergedSectors,
+    memberSectors: memberSectorsRecord(memberLabelMap),
+    tradeSectorOverlaps,
     sectorShare,
     sectorShareScope,
     configured: true,

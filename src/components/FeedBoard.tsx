@@ -483,6 +483,8 @@ export function FeedBoard({
           query={query}
           view={view}
           sectorByTicker={payload.tickerSectors}
+          memberSectors={payload.memberSectors}
+          sectorOverlaps={payload.tradeSectorOverlaps}
         />
       ) : null}
 
@@ -496,6 +498,8 @@ export function FeedBoard({
           query={query}
           view={view}
           sectorByTicker={payload.tickerSectors}
+          memberSectors={payload.memberSectors}
+          sectorOverlaps={payload.tradeSectorOverlaps}
         />
       ) : null}
 
@@ -826,6 +830,8 @@ function DisclosureDayList({
   query,
   view,
   sectorByTicker,
+  memberSectors,
+  sectorOverlaps,
 }: {
   title: string;
   subtitle: string;
@@ -835,6 +841,8 @@ function DisclosureDayList({
   query?: string;
   view: FeedView;
   sectorByTicker?: Record<string, string>;
+  memberSectors?: Record<string, string[]>;
+  sectorOverlaps?: Record<string, import("@/lib/sectorOverlap").SectorOverlapResult>;
 }) {
   const groups = useMemo(() => groupTradesByDisclosure(trades), [trades]);
   const pageSize = 8;
@@ -853,12 +861,19 @@ function DisclosureDayList({
       ) : (
         <>
           <div className="space-y-3">
-            {slice.map((group, index) => (
+            {slice.map((group) => (
               <DisclosureDayCard
                 key={group.key}
                 group={group}
                 defaultOpen={false}
                 sectorByTicker={sectorByTicker}
+                memberSectors={
+                  group.memberSlug
+                    ? memberSectors?.[group.memberSlug] ??
+                      memberSectors?.[group.memberSlug.toLowerCase()]
+                    : undefined
+                }
+                sectorOverlaps={sectorOverlaps}
               />
             ))}
           </div>

@@ -2,14 +2,19 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { SectorChips } from "@/components/SectorChips";
+import { SectorOverlapBadge } from "@/components/SectorOverlapBadge";
 import { TickerLink } from "@/components/TickerLink";
 import type { CongressTrade } from "@/lib/types";
 import type { TradeDisclosureGroup } from "@/lib/groupTrades";
+import type { SectorOverlapResult } from "@/lib/sectorOverlap";
 import { memberHref } from "@/lib/holdings";
 
 type Props = {
   group: TradeDisclosureGroup;
   defaultOpen: boolean;
+  memberSectors?: string[];
+  sectorOverlaps?: Record<string, SectorOverlapResult>;
 };
 
 function formatDate(value: string | null, opts?: Intl.DateTimeFormatOptions) {
@@ -33,7 +38,13 @@ function activityHint(group: TradeDisclosureGroup) {
   return parts.join(" · ");
 }
 
-function TradeRows({ trades }: { trades: CongressTrade[] }) {
+function TradeRows({
+  trades,
+  sectorOverlaps,
+}: {
+  trades: CongressTrade[];
+  sectorOverlaps?: Record<string, SectorOverlapResult>;
+}) {
   return (
     <ul className="divide-y divide-[color:var(--line)]">
       {trades.map((trade) => (
@@ -59,6 +70,7 @@ function TradeRows({ trades }: { trades: CongressTrade[] }) {
               >
                 {trade.transaction_type ?? "trade"}
               </span>
+              <SectorOverlapBadge overlap={sectorOverlaps?.[trade.id]} />
             </div>
             {trade.asset ? (
               <p className="line-clamp-1 text-sm text-[color:var(--fog-dim)]">
@@ -94,7 +106,12 @@ function TradeRows({ trades }: { trades: CongressTrade[] }) {
   );
 }
 
-export function TradeDisclosureGroupCard({ group, defaultOpen }: Props) {
+export function TradeDisclosureGroupCard({
+  group,
+  defaultOpen,
+  memberSectors,
+  sectorOverlaps,
+}: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const count = group.trades.length;
   const hint = activityHint(group);
@@ -138,7 +155,12 @@ export function TradeDisclosureGroupCard({ group, defaultOpen }: Props) {
         </div>
       </summary>
       <div className="border-t border-[color:var(--line)] bg-[color:var(--panel-elevated)] px-3 py-2">
-        <TradeRows trades={group.trades} />
+        {memberSectors && memberSectors.length > 0 ? (
+          <div className="mb-2 px-1">
+            <SectorChips labels={memberSectors} />
+          </div>
+        ) : null}
+        <TradeRows trades={group.trades} sectorOverlaps={sectorOverlaps} />
       </div>
     </details>
   );

@@ -98,6 +98,8 @@ export type MemberProfile = {
   name: string;
   chamber: Chamber | null;
   state: string | null;
+  /** Committee-linked industry labels (not policy_topics). */
+  industryLabels?: string[];
 };
 
 export type MemberTab = "activity" | "holdings";

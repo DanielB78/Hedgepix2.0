@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppChrome";
 import { FollowButton } from "@/components/FollowButton";
 import { MemberHoldingsList } from "@/components/MemberHoldingsList";
 import { MemberTabs } from "@/components/MemberTabs";
+import { SectorChips } from "@/components/SectorChips";
 import { TradeTable } from "@/components/TradeTable";
 import { Pagination } from "@/components/Pagination";
 import { HOLDINGS_DISCLAIMER, parseMemberTab } from "@/lib/holdings";
@@ -65,6 +66,19 @@ export default async function MemberPage({ params, searchParams }: PageProps) {
         </p>
       ) : (
         <>
+          {profile.industryLabels && profile.industryLabels.length > 0 ? (
+            <div className="mb-4 space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--fog-dim)]">
+                Committee sector exposure
+              </p>
+              <SectorChips labels={profile.industryLabels} />
+              <p className="text-[11px] leading-relaxed text-[color:var(--fog-mute)]">
+                Derived from public committee and subcommittee assignments — not
+                a finding of misconduct.
+              </p>
+            </div>
+          ) : null}
+
           <MemberTabs slug={profile.slug} active={tab} />
 
           {tab === "holdings" ? (
@@ -76,7 +90,11 @@ export default async function MemberPage({ params, searchParams }: PageProps) {
             </section>
           ) : (
             <section className="mt-4 space-y-4">
-              <TradeTable trades={result.trades} />
+              <TradeTable
+                trades={result.trades}
+                memberSectors={profile.industryLabels ?? []}
+                sectorOverlaps={result.sectorOverlaps}
+              />
               <Pagination
                 filters={{ page }}
                 page={page}

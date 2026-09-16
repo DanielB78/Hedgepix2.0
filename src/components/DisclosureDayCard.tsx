@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PriceChart } from "@/components/PriceChart";
+import { SectorChips } from "@/components/SectorChips";
+import { SectorOverlapBadge } from "@/components/SectorOverlapBadge";
 import type { MemberStockPreviewPayload } from "@/lib/feed";
 import type { TradeDisclosureGroup } from "@/lib/groupTrades";
 import {
@@ -14,6 +16,7 @@ import {
 import { memberHref } from "@/lib/holdings";
 import type { CongressTrade } from "@/lib/types";
 import { asCongressChartTrade } from "@/lib/chartTrades";
+import type { SectorOverlapResult } from "@/lib/sectorOverlap";
 
 type ChartState = {
   ticker: string;
@@ -58,11 +61,16 @@ export function DisclosureDayCard({
   group,
   defaultOpen = false,
   sectorByTicker,
+  memberSectors,
+  sectorOverlaps,
 }: {
   group: TradeDisclosureGroup;
   defaultOpen?: boolean;
   /** ticker → industry/sector label */
   sectorByTicker?: Record<string, string>;
+  /** Committee industry labels for this member (shown when expanded). */
+  memberSectors?: string[];
+  sectorOverlaps?: Record<string, SectorOverlapResult>;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -236,6 +244,11 @@ export function DisclosureDayCard({
 
       {open ? (
         <div className="border-t border-[color:var(--line)]">
+          {memberSectors && memberSectors.length > 0 ? (
+            <div className="border-b border-[color:var(--line)] px-4 py-2.5">
+              <SectorChips labels={memberSectors} />
+            </div>
+          ) : null}
           <div className="grid lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
             <aside className="max-h-[420px] overflow-y-auto border-b border-[color:var(--line)] lg:max-h-[480px] lg:border-b-0 lg:border-r">
               <div className="px-4 py-3">
@@ -268,6 +281,9 @@ export function DisclosureDayCard({
                                 {sectorByTicker[ticker]}
                               </span>
                             ) : null}
+                            <SectorOverlapBadge
+                              overlap={sectorOverlaps?.[trade.id]}
+                            />
                           </p>
                           <p className="hx-meta line-clamp-1">
                             {trade.asset ?? "Equity"}
