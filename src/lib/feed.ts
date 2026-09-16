@@ -203,22 +203,54 @@ async function fetchRecentInsiderTrades(
   options?: { sinceDays?: number },
 ): Promise<{ rows: ChartTrade[]; error: string | null }> {
   const supabase = createBrowserSupabase();
-  let query = supabase
-    .from("ceo_stock_purchases")
-    .select(CEO_FEED_COLUMNS)
-    .order("filing_date", { ascending: false, nullsFirst: false })
-    .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(limit);
+  const sinceDays = options?.sinceDays;
 
-  if (options?.sinceDays != null && options.sinceDays > 0) {
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
-    query = query.gte("filing_date", cutoff.toISOString().slice(0, 10));
+  async function loadSince(cutoff: string | null) {
+    let query = supabase
+      .from("ceo_stock_purchases")
+      .select(CEO_FEED_COLUMNS)
+      .order("filing_date", { ascending: false, nullsFirst: false })
+      .order("transaction_date", { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (cutoff) query = query.gte("filing_date", cutoff);
+    return query;
   }
 
-  const { data, error } = await query;
+  let cutoff: string | null = null;
+  if (sinceDays != null && sinceDays > 0) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - sinceDays);
+    cutoff = d.toISOString().slice(0, 10);
+  }
+
+  let { data, error } = await loadSince(cutoff);
   if (error) {
     return { rows: [], error: error.message };
+  }
+
+  // SEC Form 4 bulk ZIPs lag the live calendar. If the calendar window is
+  // empty, fall back to the most recent ~sinceDays of filings in the table.
+  if ((data?.length ?? 0) === 0 && sinceDays != null && sinceDays > 0) {
+    const latest = await supabase
+      .from("ceo_stock_purchases")
+      .select("filing_date")
+      .not("filing_date", "is", null)
+      .order("filing_date", { ascending: false })
+      .limit(1);
+    const maxDate = (latest.data?.[0]?.filing_date as string | null)?.slice(
+      0,
+      10,
+    );
+    if (maxDate) {
+      const anchor = new Date(`${maxDate}T00:00:00Z`);
+      anchor.setUTCDate(anchor.getUTCDate() - sinceDays);
+      const fallbackCutoff = anchor.toISOString().slice(0, 10);
+      const retry = await loadSince(fallbackCutoff);
+      if (retry.error) {
+        return { rows: [], error: retry.error.message };
+      }
+      data = retry.data;
+    }
   }
 
   const rows: ChartTrade[] = [];

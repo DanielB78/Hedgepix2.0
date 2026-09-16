@@ -296,53 +296,87 @@ async function fetchRecentCongressBuys(
 
 async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
-  const buys: BuyRow[] = [];
-  let from = 0;
 
-  // Do not trust transaction_code alone — filter with raw_source.trans_code.
-  while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
-    const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
-    const { data, error } = await supabase
-      .from("ceo_stock_purchases")
-      .select("ceo_name, ticker, transaction_date, transaction_code, raw_source")
-      .gte("transaction_date", cutoff)
-      .not("ticker", "is", null)
-      .order("transaction_date", { ascending: false })
-      .range(from, end);
+  async function scan(fromDate: string): Promise<BuyRow[]> {
+    const buys: BuyRow[] = [];
+    let from = 0;
+    while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
+      const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
+      const { data, error } = await supabase
+        .from("ceo_stock_purchases")
+        .select(
+          "ceo_name, ticker, transaction_date, transaction_code, raw_source",
+        )
+        .gte("transaction_date", fromDate)
+        .not("ticker", "is", null)
+        .order("transaction_date", { ascending: false })
+        .range(from, end);
 
-    if (error) throw new Error(error.message);
-    const rows = data ?? [];
-    if (rows.length === 0) break;
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
 
-    for (const row of rows) {
-      if (buys.length >= MAX_CEO_BUYS) break;
-      if (
-        resolveCeoTransactionCode({
-          transaction_code: row.transaction_code as string | null,
-          raw_source: row.raw_source as Record<string, unknown> | null,
-        }) !== "P"
-      ) {
-        continue;
+      for (const row of rows) {
+        if (buys.length >= MAX_CEO_BUYS) break;
+        if (
+          resolveCeoTransactionCode({
+            transaction_code: row.transaction_code as string | null,
+            raw_source: row.raw_source as Record<string, unknown> | null,
+          }) !== "P"
+        ) {
+          continue;
+        }
+        const ticker = normalizeTicker(row.ticker as string | null);
+        const name = String(row.ceo_name ?? "").trim();
+        const tx = (row.transaction_date as string | null)?.slice(0, 10);
+        if (!ticker || !name || !tx) continue;
+        buys.push({
+          key: `ceo:${name.toLowerCase()}`,
+          name,
+          kind: "ceo",
+          memberSlug: null,
+          ticker,
+          transactionDate: tx,
+        });
       }
-      const ticker = normalizeTicker(row.ticker as string | null);
-      const name = String(row.ceo_name ?? "").trim();
-      const tx = (row.transaction_date as string | null)?.slice(0, 10);
-      if (!ticker || !name || !tx) continue;
-      buys.push({
-        key: `ceo:${name.toLowerCase()}`,
-        name,
-        kind: "ceo",
-        memberSlug: null,
-        ticker,
-        transactionDate: tx,
-      });
-    }
 
-    if (rows.length < end - from + 1) break;
-    from += PAGE;
+      if (rows.length < end - from + 1) break;
+      from += PAGE;
+    }
+    return buys;
   }
 
-  return buys;
+  let buys = await scan(cutoff);
+  if (buys.length > 0) return buys;
+
+  // Form 4 bulk ZIPs lag — fall back to the latest available transaction window.
+  const latest = await supabase
+    .from("ceo_stock_purchases")
+    .select("transaction_date")
+    .not("transaction_date", "is", null)
+    .order("transaction_date", { ascending: false })
+    .limit(1);
+  const maxDate = (latest.data?.[0]?.transaction_date as string | null)?.slice(
+    0,
+    10,
+  );
+  if (!maxDate) return [];
+
+  const today = new Date();
+  const todayUtc = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate(),
+  );
+  const cutoffUtc = Date.parse(`${cutoff}T00:00:00Z`);
+  const windowDays = Math.max(
+    30,
+    Math.round((todayUtc - cutoffUtc) / (24 * 60 * 60 * 1000)),
+  );
+  const anchor = new Date(`${maxDate}T00:00:00Z`);
+  anchor.setUTCDate(anchor.getUTCDate() - windowDays);
+  const fallbackCutoff = anchor.toISOString().slice(0, 10);
+  return scan(fallbackCutoff < "2026-01-01" ? "2026-01-01" : fallbackCutoff);
 }
 
 async function loadPriceMaps(
