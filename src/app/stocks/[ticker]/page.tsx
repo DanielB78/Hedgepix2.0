@@ -1,7 +1,12 @@
 import { AppShell } from "@/components/AppChrome";
 import { StockDetailBoard } from "@/components/StockDetailBoard";
-import { StockSecSections } from "@/components/StockSecSections";
+import { parseChartTradeSource } from "@/lib/chartTrades";
 import { fetchStockPage, parseChartRange } from "@/lib/prices";
+import {
+  fetchTickerProfiles,
+  tickerSectorLabel,
+} from "@/lib/tickerProfiles";
+import { curatedIndustryChip } from "@/lib/tickerIndustry";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -29,8 +34,14 @@ export default async function StockPage({ params, searchParams }: PageProps) {
 
   const query = await searchParams;
   const range = parseChartRange(query.range);
+  const source = parseChartTradeSource(
+    typeof query.source === "string" ? query.source : undefined,
+  );
   // Full history so the interactive chart can zoom / filter client-side.
   const stock = await fetchStockPage(ticker, "all");
+  const profiles = await fetchTickerProfiles([ticker]);
+  const sectorLabel =
+    curatedIndustryChip(ticker) ?? tickerSectorLabel(profiles.get(ticker));
 
   if (
     stock.configured &&
@@ -73,8 +84,9 @@ export default async function StockPage({ params, searchParams }: PageProps) {
         latest={latest}
         changePct={changePct}
         error={stock.error}
+        initialSource={source}
+        sectorLabel={sectorLabel}
       />
-      <StockSecSections ticker={ticker} />
     </AppShell>
   );
 }
