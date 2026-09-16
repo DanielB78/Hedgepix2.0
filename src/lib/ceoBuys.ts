@@ -30,6 +30,13 @@ const SELECT_COLUMNS =
 function publicObjectUrl(objectPath: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   if (!base) return null;
+  // Local PostgREST gateway has no Storage API — skip cloud blob fallback.
+  try {
+    const host = new URL(base).hostname;
+    if (host === "127.0.0.1" || host === "localhost") return null;
+  } catch {
+    return null;
+  }
   return `${base}/storage/v1/object/public/ceo-buys/${objectPath}`;
 }
 

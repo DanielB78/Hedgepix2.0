@@ -1,0 +1,2360 @@
+{
+  "AAPL": {
+    "company": "Apple",
+    "industries": [
+      "Consumer electronics",
+      "Smartphones",
+      "Personal computers",
+      "Digital services"
+    ],
+    "primary_industry": "Consumer electronics"
+  },
+  "ABCB": {
+    "company": "Ameris Bancorp",
+    "industries": [
+      "Regional banking",
+      "Commercial banking",
+      "Consumer banking"
+    ],
+    "primary_industry": "Regional banking"
+  },
+  "ABNB": {
+    "company": "Airbnb",
+    "industries": [
+      "Online travel marketplace",
+      "Short-term lodging",
+      "Travel technology"
+    ],
+    "primary_industry": "Online travel marketplace"
+  },
+  "ABT": {
+    "company": "Abbott Laboratories",
+    "industries": [
+      "Medical devices",
+      "Diagnostics",
+      "Nutrition products",
+      "Established pharmaceuticals"
+    ],
+    "primary_industry": "Medical devices"
+  },
+  "ACN": {
+    "company": "Accenture",
+    "industries": [
+      "IT consulting",
+      "Digital transformation",
+      "Cloud services",
+      "AI services",
+      "Business process outsourcing"
+    ],
+    "primary_industry": "IT consulting"
+  },
+  "ADBE": {
+    "company": "Adobe",
+    "industries": [
+      "Creative software",
+      "Digital media software",
+      "Marketing software",
+      "Document software"
+    ],
+    "primary_industry": "Creative software"
+  },
+  "ADI": {
+    "company": "Analog Devices",
+    "industries": [
+      "Analog semiconductors",
+      "Mixed-signal chips",
+      "Industrial semiconductors",
+      "Automotive semiconductors"
+    ],
+    "primary_industry": "Analog semiconductors"
+  },
+  "ADP": {
+    "company": "Automatic Data Processing",
+    "industries": [
+      "Payroll services",
+      "HR software",
+      "Benefits administration",
+      "Business process outsourcing"
+    ],
+    "primary_industry": "Payroll services"
+  },
+  "AEP": {
+    "company": "American Electric Power",
+    "industries": [
+      "Electric utilities",
+      "Power transmission",
+      "Power distribution",
+      "Power generation"
+    ],
+    "primary_industry": "Electric utilities"
+  },
+  "AGIO": {
+    "company": "Agios Pharmaceuticals",
+    "industries": [
+      "Rare-disease biotechnology",
+      "Hematology therapeutics",
+      "Small-molecule drugs"
+    ],
+    "primary_industry": "Rare-disease biotechnology"
+  },
+  "ALC": {
+    "company": "Alcon",
+    "industries": [
+      "Ophthalmic medical devices",
+      "Eye surgery equipment",
+      "Contact lenses",
+      "Vision care"
+    ],
+    "primary_industry": "Ophthalmic medical devices"
+  },
+  "ALKS": {
+    "company": "Alkermes",
+    "industries": [
+      "Neuroscience biopharma",
+      "Psychiatry therapeutics",
+      "Addiction treatment"
+    ],
+    "primary_industry": "Neuroscience biopharma"
+  },
+  "ALL": {
+    "company": "Allstate",
+    "industries": [
+      "Property & casualty insurance",
+      "Auto insurance",
+      "Home insurance"
+    ],
+    "primary_industry": "Property & casualty insurance"
+  },
+  "ALNY": {
+    "company": "Alnylam Pharmaceuticals",
+    "industries": [
+      "RNA interference biotechnology",
+      "Rare-disease therapeutics",
+      "Genetic medicines"
+    ],
+    "primary_industry": "RNA interference biotechnology"
+  },
+  "AMAT": {
+    "company": "Applied Materials",
+    "industries": [
+      "Semiconductor equipment",
+      "Wafer fabrication equipment",
+      "Materials engineering",
+      "Display manufacturing equipment"
+    ],
+    "primary_industry": "Semiconductor equipment"
+  },
+  "AMCR": {
+    "company": "Amcor",
+    "industries": [
+      "Packaging",
+      "Flexible packaging",
+      "Rigid packaging",
+      "Food & beverage packaging"
+    ],
+    "primary_industry": "Packaging"
+  },
+  "AMD": {
+    "company": "Advanced Micro Devices",
+    "industries": [
+      "Semiconductors",
+      "CPUs",
+      "GPUs",
+      "AI accelerators",
+      "Data-center chips"
+    ],
+    "primary_industry": "Semiconductors"
+  },
+  "AMGN": {
+    "company": "Amgen",
+    "industries": [
+      "Biotechnology",
+      "Biopharmaceuticals",
+      "Oncology",
+      "Immunology"
+    ],
+    "primary_industry": "Biotechnology"
+  },
+  "AMZN": {
+    "company": "Amazon",
+    "industries": [
+      "E-commerce",
+      "Cloud computing",
+      "Digital advertising",
+      "Logistics",
+      "Streaming media"
+    ],
+    "primary_industry": "E-commerce"
+  },
+  "AORT": {
+    "company": "Artivion",
+    "industries": [
+      "Cardiovascular medical devices",
+      "Aortic surgery products",
+      "Heart valves",
+      "Cardiac surgical products"
+    ],
+    "primary_industry": "Cardiovascular medical devices"
+  },
+  "APD": {
+    "company": "Air Products and Chemicals",
+    "industries": [
+      "Industrial gases",
+      "Hydrogen",
+      "Gas processing",
+      "Clean-energy gases"
+    ],
+    "primary_industry": "Industrial gases"
+  },
+  "APG": {
+    "company": "APi Group",
+    "industries": [
+      "Fire protection services",
+      "Safety services",
+      "Specialty construction",
+      "Infrastructure services"
+    ],
+    "primary_industry": "Fire protection services"
+  },
+  "APH": {
+    "company": "Amphenol",
+    "industries": [
+      "Electronic connectors",
+      "Interconnect systems",
+      "Sensors",
+      "Automotive electronics"
+    ],
+    "primary_industry": "Electronic connectors"
+  },
+  "APP": {
+    "company": "AppLovin",
+    "industries": [
+      "Advertising technology",
+      "Mobile advertising",
+      "Ad software",
+      "Mobile apps"
+    ],
+    "primary_industry": "Advertising technology"
+  },
+  "APTV": {
+    "company": "Aptiv",
+    "industries": [
+      "Automotive electronics",
+      "Vehicle software",
+      "Advanced driver assistance",
+      "Electrical architecture"
+    ],
+    "primary_industry": "Automotive electronics"
+  },
+  "ATRC": {
+    "company": "AtriCure",
+    "industries": [
+      "Cardiac ablation devices",
+      "Atrial-fibrillation treatment",
+      "Cardiovascular medical devices"
+    ],
+    "primary_industry": "Cardiac ablation devices"
+  },
+  "AVAV": {
+    "company": "AeroVironment",
+    "industries": [
+      "Military drones",
+      "Unmanned aerial systems",
+      "Loitering munitions",
+      "Defense technology"
+    ],
+    "primary_industry": "Military drones"
+  },
+  "AVGO": {
+    "company": "Broadcom",
+    "industries": [
+      "Semiconductors",
+      "Networking chips",
+      "AI/data-center connectivity",
+      "Infrastructure software"
+    ],
+    "primary_industry": "Semiconductors"
+  },
+  "AWK": {
+    "company": "American Water Works",
+    "industries": [
+      "Water utilities",
+      "Water infrastructure",
+      "Wastewater services"
+    ],
+    "primary_industry": "Water utilities"
+  },
+  "AXP": {
+    "company": "American Express",
+    "industries": [
+      "Credit cards",
+      "Payments",
+      "Consumer lending",
+      "Business payments",
+      "Travel services"
+    ],
+    "primary_industry": "Credit cards"
+  },
+  "BA": {
+    "company": "Boeing",
+    "industries": [
+      "Commercial aerospace",
+      "Defense aerospace",
+      "Space systems",
+      "Aircraft manufacturing"
+    ],
+    "primary_industry": "Commercial aerospace"
+  },
+  "BABA": {
+    "company": "Alibaba",
+    "industries": [
+      "E-commerce",
+      "Cloud computing",
+      "Logistics",
+      "Digital media"
+    ],
+    "primary_industry": "E-commerce"
+  },
+  "BCPC": {
+    "company": "Balchem",
+    "industries": [
+      "Specialty chemicals",
+      "Nutritional ingredients",
+      "Animal nutrition",
+      "Food ingredients"
+    ],
+    "primary_industry": "Specialty chemicals"
+  },
+  "BCRX": {
+    "company": "BioCryst Pharmaceuticals",
+    "industries": [
+      "Rare-disease biotechnology",
+      "Hereditary-angioedema therapeutics",
+      "Small-molecule drugs"
+    ],
+    "primary_industry": "Rare-disease biotechnology"
+  },
+  "BE": {
+    "company": "Bloom Energy",
+    "industries": [
+      "Fuel-cell energy",
+      "Distributed power generation",
+      "Hydrogen energy",
+      "Clean energy"
+    ],
+    "primary_industry": "Fuel-cell energy"
+  },
+  "BIIB": {
+    "company": "Biogen",
+    "industries": [
+      "Neuroscience biotechnology",
+      "Neurology therapeutics",
+      "Biopharmaceuticals"
+    ],
+    "primary_industry": "Neuroscience biotechnology"
+  },
+  "BLK": {
+    "company": "BlackRock",
+    "industries": [
+      "Asset management",
+      "ETFs",
+      "Institutional investing",
+      "Investment technology"
+    ],
+    "primary_industry": "Asset management"
+  },
+  "BRK.B": {
+    "company": "Berkshire Hathaway",
+    "industries": [
+      "Diversified holding company",
+      "Insurance",
+      "Railroads",
+      "Energy utilities",
+      "Industrial manufacturing"
+    ],
+    "primary_industry": "Diversified holding company"
+  },
+  "BRO": {
+    "company": "Brown & Brown",
+    "industries": [
+      "Insurance brokerage",
+      "Risk management",
+      "Employee benefits brokerage"
+    ],
+    "primary_industry": "Insurance brokerage"
+  },
+  "BSX": {
+    "company": "Boston Scientific",
+    "industries": [
+      "Medical devices",
+      "Cardiology devices",
+      "Electrophysiology",
+      "Endoscopy"
+    ],
+    "primary_industry": "Medical devices"
+  },
+  "BUD": {
+    "company": "Anheuser-Busch InBev",
+    "industries": [
+      "Brewing",
+      "Beer",
+      "Alcoholic beverages"
+    ],
+    "primary_industry": "Brewing"
+  },
+  "BWXT": {
+    "company": "BWX Technologies",
+    "industries": [
+      "Nuclear technology",
+      "Naval nuclear propulsion",
+      "Nuclear components",
+      "Defense nuclear systems",
+      "Nuclear energy services"
+    ],
+    "primary_industry": "Nuclear technology"
+  },
+  "CARR": {
+    "company": "Carrier Global",
+    "industries": [
+      "HVAC equipment",
+      "Refrigeration",
+      "Building climate systems",
+      "Fire & security systems"
+    ],
+    "primary_industry": "HVAC equipment"
+  },
+  "CB": {
+    "company": "Chubb",
+    "industries": [
+      "Property & casualty insurance",
+      "Commercial insurance",
+      "Specialty insurance"
+    ],
+    "primary_industry": "Property & casualty insurance"
+  },
+  "CBOE": {
+    "company": "Cboe Global Markets",
+    "industries": [
+      "Securities exchanges",
+      "Options trading",
+      "Derivatives",
+      "Market data"
+    ],
+    "primary_industry": "Securities exchanges"
+  },
+  "CCI": {
+    "company": "Crown Castle",
+    "industries": [
+      "Telecom infrastructure",
+      "Cell towers",
+      "Fiber networks",
+      "Small-cell networks"
+    ],
+    "primary_industry": "Telecom infrastructure"
+  },
+  "CDW": {
+    "company": "CDW",
+    "industries": [
+      "IT distribution",
+      "Enterprise hardware",
+      "Cloud solutions",
+      "IT services"
+    ],
+    "primary_industry": "IT distribution"
+  },
+  "CECO": {
+    "company": "CECO Environmental",
+    "industries": [
+      "Industrial pollution control",
+      "Air treatment",
+      "Water treatment",
+      "Environmental equipment"
+    ],
+    "primary_industry": "Industrial pollution control"
+  },
+  "CEG": {
+    "company": "Constellation Energy",
+    "industries": [
+      "Nuclear power generation",
+      "Electricity generation",
+      "Electricity retail",
+      "Clean energy"
+    ],
+    "primary_industry": "Nuclear power generation"
+  },
+  "CHRW": {
+    "company": "C.H. Robinson",
+    "industries": [
+      "Freight brokerage",
+      "Third-party logistics",
+      "Truckload logistics",
+      "Supply-chain services"
+    ],
+    "primary_industry": "Freight brokerage"
+  },
+  "CL": {
+    "company": "Colgate-Palmolive",
+    "industries": [
+      "Oral care",
+      "Personal care",
+      "Household products",
+      "Pet nutrition"
+    ],
+    "primary_industry": "Oral care"
+  },
+  "CLH": {
+    "company": "Clean Harbors",
+    "industries": [
+      "Hazardous-waste services",
+      "Environmental services",
+      "Industrial cleaning",
+      "Waste disposal"
+    ],
+    "primary_industry": "Hazardous-waste services"
+  },
+  "CMCSA": {
+    "company": "Comcast",
+    "industries": [
+      "Broadband & cable",
+      "Telecommunications",
+      "Streaming media",
+      "Film & entertainment",
+      "Theme parks"
+    ],
+    "primary_industry": "Broadband & cable"
+  },
+  "CNM": {
+    "company": "Core & Main",
+    "industries": [
+      "Water-infrastructure distribution",
+      "Pipes & valves",
+      "Storm drainage",
+      "Fire-protection products"
+    ],
+    "primary_industry": "Water-infrastructure distribution"
+  },
+  "COCO": {
+    "company": "The Vita Coco Company",
+    "industries": [
+      "Non-alcoholic beverages",
+      "Coconut water",
+      "Functional beverages"
+    ],
+    "primary_industry": "Non-alcoholic beverages"
+  },
+  "COHR": {
+    "company": "Coherent",
+    "industries": [
+      "Photonics",
+      "Lasers",
+      "Optical communications",
+      "Optoelectronic components"
+    ],
+    "primary_industry": "Photonics"
+  },
+  "COIN": {
+    "company": "Coinbase",
+    "industries": [
+      "Cryptocurrency exchange",
+      "Digital-asset custody",
+      "Blockchain financial services",
+      "Stablecoin services"
+    ],
+    "primary_industry": "Cryptocurrency exchange"
+  },
+  "COMP": {
+    "company": "Compass",
+    "industries": [
+      "Residential real-estate brokerage",
+      "Real-estate technology",
+      "Property sales"
+    ],
+    "primary_industry": "Residential real-estate brokerage"
+  },
+  "COST": {
+    "company": "Costco",
+    "industries": [
+      "Warehouse retail",
+      "Grocery retail",
+      "Consumer staples retail"
+    ],
+    "primary_industry": "Warehouse retail"
+  },
+  "CPAY": {
+    "company": "Corpay",
+    "industries": [
+      "Corporate payments",
+      "Fleet payments",
+      "Expense management",
+      "Cross-border payments"
+    ],
+    "primary_industry": "Corporate payments"
+  },
+  "CRDO": {
+    "company": "Credo Technology",
+    "industries": [
+      "Data-center connectivity semiconductors",
+      "High-speed SerDes",
+      "Networking chips",
+      "Active electrical cables"
+    ],
+    "primary_industry": "Data-center connectivity semiconductors"
+  },
+  "CRM": {
+    "company": "Salesforce",
+    "industries": [
+      "CRM software",
+      "Enterprise SaaS",
+      "Cloud software",
+      "AI software"
+    ],
+    "primary_industry": "CRM software"
+  },
+  "CRNX": {
+    "company": "Crinetics Pharmaceuticals",
+    "industries": [
+      "Endocrine biotechnology",
+      "Rare-disease therapeutics",
+      "Hormone-related disorders"
+    ],
+    "primary_industry": "Endocrine biotechnology"
+  },
+  "CRWD": {
+    "company": "CrowdStrike",
+    "industries": [
+      "Cybersecurity",
+      "Endpoint security",
+      "Cloud security",
+      "Threat intelligence"
+    ],
+    "primary_industry": "Cybersecurity"
+  },
+  "CSCO": {
+    "company": "Cisco",
+    "industries": [
+      "Networking equipment",
+      "Enterprise networking",
+      "Cybersecurity",
+      "Collaboration software"
+    ],
+    "primary_industry": "Networking equipment"
+  },
+  "CSGP": {
+    "company": "CoStar Group",
+    "industries": [
+      "Commercial real-estate data",
+      "Property marketplaces",
+      "Real-estate analytics",
+      "Real-estate software"
+    ],
+    "primary_industry": "Commercial real-estate data"
+  },
+  "CSW": {
+    "company": "CSW Industrials",
+    "industries": [
+      "Industrial products",
+      "HVAC/plumbing components",
+      "Building products",
+      "Specialty chemicals"
+    ],
+    "primary_industry": "Industrial products"
+  },
+  "CVX": {
+    "company": "Chevron",
+    "industries": [
+      "Integrated oil & gas",
+      "Oil exploration & production",
+      "Refining",
+      "LNG",
+      "Renewable fuels"
+    ],
+    "primary_industry": "Integrated oil & gas"
+  },
+  "DASH": {
+    "company": "DoorDash",
+    "industries": [
+      "Food delivery",
+      "Local-commerce marketplace",
+      "Last-mile logistics",
+      "Delivery technology"
+    ],
+    "primary_industry": "Food delivery"
+  },
+  "DCO": {
+    "company": "Ducommun",
+    "industries": [
+      "Aerospace components",
+      "Defense electronics",
+      "Aircraft structures",
+      "Military systems"
+    ],
+    "primary_industry": "Aerospace components"
+  },
+  "DD": {
+    "company": "DuPont",
+    "industries": [
+      "Specialty chemicals",
+      "Electronics materials",
+      "Water solutions",
+      "Industrial materials"
+    ],
+    "primary_industry": "Specialty chemicals"
+  },
+  "DGX": {
+    "company": "Quest Diagnostics",
+    "industries": [
+      "Clinical laboratory testing",
+      "Medical diagnostics",
+      "Genetic testing"
+    ],
+    "primary_industry": "Clinical laboratory testing"
+  },
+  "DIS": {
+    "company": "Walt Disney",
+    "industries": [
+      "Media & entertainment",
+      "Streaming",
+      "Film & television",
+      "Theme parks"
+    ],
+    "primary_industry": "Media & entertainment"
+  },
+  "DLTR": {
+    "company": "Dollar Tree",
+    "industries": [
+      "Discount retail",
+      "Consumer staples retail",
+      "Variety stores"
+    ],
+    "primary_industry": "Discount retail"
+  },
+  "EA": {
+    "company": "Electronic Arts",
+    "industries": [
+      "Video games",
+      "Interactive entertainment",
+      "Sports gaming"
+    ],
+    "primary_industry": "Video games"
+  },
+  "EL": {
+    "company": "Estée Lauder",
+    "industries": [
+      "Cosmetics",
+      "Skincare",
+      "Beauty products",
+      "Fragrances"
+    ],
+    "primary_industry": "Cosmetics"
+  },
+  "ELF": {
+    "company": "e.l.f. Beauty",
+    "industries": [
+      "Cosmetics",
+      "Skincare",
+      "Beauty products"
+    ],
+    "primary_industry": "Cosmetics"
+  },
+  "EME": {
+    "company": "EMCOR Group",
+    "industries": [
+      "Electrical & mechanical construction",
+      "Facilities services",
+      "HVAC contracting",
+      "Data-center construction"
+    ],
+    "primary_industry": "Electrical & mechanical construction"
+  },
+  "EMR": {
+    "company": "Emerson Electric",
+    "industries": [
+      "Industrial automation",
+      "Process control",
+      "Measurement systems",
+      "Industrial software"
+    ],
+    "primary_industry": "Industrial automation"
+  },
+  "ENTG": {
+    "company": "Entegris",
+    "industries": [
+      "Semiconductor materials",
+      "Contamination control",
+      "Wafer-fab consumables",
+      "Advanced materials"
+    ],
+    "primary_industry": "Semiconductor materials"
+  },
+  "EPAC": {
+    "company": "Enerpac Tool Group",
+    "industries": [
+      "Hydraulic tools",
+      "Industrial maintenance equipment",
+      "Heavy-lifting systems"
+    ],
+    "primary_industry": "Hydraulic tools"
+  },
+  "EQIX": {
+    "company": "Equinix",
+    "industries": [
+      "Data centers",
+      "Colocation",
+      "Digital infrastructure",
+      "Interconnection services"
+    ],
+    "primary_industry": "Data centers"
+  },
+  "EQT": {
+    "company": "EQT",
+    "industries": [
+      "Natural-gas exploration & production",
+      "Shale gas",
+      "Upstream energy"
+    ],
+    "primary_industry": "Natural-gas exploration & production"
+  },
+  "ESAB": {
+    "company": "ESAB",
+    "industries": [
+      "Welding equipment",
+      "Cutting equipment",
+      "Industrial fabrication"
+    ],
+    "primary_industry": "Welding equipment"
+  },
+  "ESE": {
+    "company": "ESCO Technologies",
+    "industries": [
+      "Aerospace components",
+      "RF test & measurement",
+      "Utility infrastructure technology",
+      "Filtration"
+    ],
+    "primary_industry": "Aerospace components"
+  },
+  "ETN": {
+    "company": "Eaton",
+    "industries": [
+      "Electrical equipment",
+      "Power management",
+      "Data-center power",
+      "Aerospace components"
+    ],
+    "primary_industry": "Electrical equipment"
+  },
+  "FDX": {
+    "company": "FedEx",
+    "industries": [
+      "Parcel delivery",
+      "Air freight",
+      "Logistics",
+      "Express shipping"
+    ],
+    "primary_industry": "Parcel delivery"
+  },
+  "FERG": {
+    "company": "Ferguson Enterprises",
+    "industries": [
+      "Plumbing distribution",
+      "HVAC distribution",
+      "Building-products distribution"
+    ],
+    "primary_industry": "Plumbing distribution"
+  },
+  "FISV": {
+    "company": "Fiserv",
+    "industries": [
+      "Payment processing",
+      "Merchant acquiring",
+      "Banking software",
+      "Fintech infrastructure"
+    ],
+    "primary_industry": "Payment processing"
+  },
+  "FITB": {
+    "company": "Fifth Third Bancorp",
+    "industries": [
+      "Regional banking",
+      "Commercial banking",
+      "Consumer banking"
+    ],
+    "primary_industry": "Regional banking"
+  },
+  "FN": {
+    "company": "Fabrinet",
+    "industries": [
+      "Optical-electronics manufacturing",
+      "Electronics manufacturing services",
+      "Optical communications"
+    ],
+    "primary_industry": "Optical-electronics manufacturing"
+  },
+  "FSLR": {
+    "company": "First Solar",
+    "industries": [
+      "Solar energy",
+      "Photovoltaic manufacturing",
+      "Utility-scale solar"
+    ],
+    "primary_industry": "Solar energy"
+  },
+  "FSV": {
+    "company": "FirstService",
+    "industries": [
+      "Property services",
+      "Property management",
+      "Restoration services",
+      "Facilities services"
+    ],
+    "primary_industry": "Property services"
+  },
+  "FTGC": {
+    "company": "First Trust Global Tactical Commodity Strategy Fund",
+    "industries": [
+      "Commodity ETF",
+      "Broad commodities",
+      "Futures-based commodity exposure"
+    ],
+    "primary_industry": "Commodity ETF"
+  },
+  "FWONK": {
+    "company": "Formula One Group",
+    "industries": [
+      "Motorsports",
+      "Sports media rights",
+      "Live events",
+      "Sports entertainment"
+    ],
+    "primary_industry": "Motorsports"
+  },
+  "GAP": {
+    "company": "Gap",
+    "industries": [
+      "Apparel retail",
+      "Fashion retail"
+    ],
+    "primary_industry": "Apparel retail"
+  },
+  "GBCI": {
+    "company": "Glacier Bancorp",
+    "industries": [
+      "Regional banking",
+      "Community banking",
+      "Commercial banking"
+    ],
+    "primary_industry": "Regional banking"
+  },
+  "GDDY": {
+    "company": "GoDaddy",
+    "industries": [
+      "Domain registration",
+      "Web hosting",
+      "Website software",
+      "Small-business software"
+    ],
+    "primary_industry": "Domain registration"
+  },
+  "GEM": {
+    "company": "Goldman Sachs ActiveBeta Emerging Markets Equity ETF",
+    "industries": [
+      "Emerging-markets equity ETF",
+      "Factor investing",
+      "International equities"
+    ],
+    "primary_industry": "Emerging-markets equity ETF"
+  },
+  "GMED": {
+    "company": "Globus Medical",
+    "industries": [
+      "Orthopedic medical devices",
+      "Spine surgery",
+      "Surgical robotics",
+      "Musculoskeletal implants"
+    ],
+    "primary_industry": "Orthopedic medical devices"
+  },
+  "GOOGL": {
+    "company": "Alphabet",
+    "industries": [
+      "Internet search",
+      "Digital advertising",
+      "Cloud computing",
+      "Artificial intelligence",
+      "Online video"
+    ],
+    "primary_industry": "Internet search"
+  },
+  "GS": {
+    "company": "Goldman Sachs",
+    "industries": [
+      "Investment banking",
+      "Trading",
+      "Asset management",
+      "Wealth management"
+    ],
+    "primary_industry": "Investment banking"
+  },
+  "GWW": {
+    "company": "W.W. Grainger",
+    "industries": [
+      "Industrial distribution",
+      "MRO supplies",
+      "Industrial equipment"
+    ],
+    "primary_industry": "Industrial distribution"
+  },
+  "HD": {
+    "company": "Home Depot",
+    "industries": [
+      "Home-improvement retail",
+      "Building materials retail",
+      "Home renovation products"
+    ],
+    "primary_industry": "Home-improvement retail"
+  },
+  "HLI": {
+    "company": "Houlihan Lokey",
+    "industries": [
+      "Investment banking",
+      "Restructuring advisory",
+      "M&A advisory",
+      "Valuation"
+    ],
+    "primary_industry": "Investment banking"
+  },
+  "HMN": {
+    "company": "Horace Mann Educators",
+    "industries": [
+      "Insurance",
+      "Auto insurance",
+      "Home insurance",
+      "Annuities",
+      "Educator-focused financial services"
+    ],
+    "primary_industry": "Insurance"
+  },
+  "HONA": {
+    "company": "Honeywell Aerospace",
+    "industries": [
+      "Aerospace systems",
+      "Avionics",
+      "Aircraft engines & APUs",
+      "Navigation systems",
+      "Defense aerospace"
+    ],
+    "primary_industry": "Aerospace systems"
+  },
+  "HQY": {
+    "company": "HealthEquity",
+    "industries": [
+      "Health-savings accounts",
+      "Benefits administration",
+      "Healthcare fintech"
+    ],
+    "primary_industry": "Health-savings accounts"
+  },
+  "HRL": {
+    "company": "Hormel Foods",
+    "industries": [
+      "Packaged foods",
+      "Meat products",
+      "Food brands"
+    ],
+    "primary_industry": "Packaged foods"
+  },
+  "HUBB": {
+    "company": "Hubbell",
+    "industries": [
+      "Electrical equipment",
+      "Power-grid components",
+      "Utility infrastructure",
+      "Wiring devices"
+    ],
+    "primary_industry": "Electrical equipment"
+  },
+  "HUBS": {
+    "company": "HubSpot",
+    "industries": [
+      "CRM software",
+      "Marketing automation",
+      "Sales software",
+      "SMB SaaS"
+    ],
+    "primary_industry": "CRM software"
+  },
+  "IBM": {
+    "company": "IBM",
+    "industries": [
+      "IT services",
+      "Hybrid cloud",
+      "Enterprise software",
+      "Artificial intelligence",
+      "Mainframe computing"
+    ],
+    "primary_industry": "IT services"
+  },
+  "IBP": {
+    "company": "Installed Building Products",
+    "industries": [
+      "Building-insulation installation",
+      "Construction services",
+      "Building products"
+    ],
+    "primary_industry": "Building-insulation installation"
+  },
+  "ICE": {
+    "company": "Intercontinental Exchange",
+    "industries": [
+      "Securities exchanges",
+      "Derivatives",
+      "Market data",
+      "Mortgage technology"
+    ],
+    "primary_industry": "Securities exchanges"
+  },
+  "ICLR": {
+    "company": "ICON",
+    "industries": [
+      "Clinical research organization",
+      "Drug-development services",
+      "Clinical trials"
+    ],
+    "primary_industry": "Clinical research organization"
+  },
+  "INTC": {
+    "company": "Intel",
+    "industries": [
+      "Semiconductors",
+      "CPUs",
+      "Foundry manufacturing",
+      "Data-center chips",
+      "PC chips"
+    ],
+    "primary_industry": "Semiconductors"
+  },
+  "INTU": {
+    "company": "Intuit",
+    "industries": [
+      "Financial software",
+      "Tax software",
+      "Accounting software",
+      "Personal finance",
+      "Fintech"
+    ],
+    "primary_industry": "Financial software"
+  },
+  "IRT": {
+    "company": "Independence Realty Trust",
+    "industries": [
+      "Multifamily residential REIT",
+      "Apartments",
+      "Residential real estate"
+    ],
+    "primary_industry": "Multifamily residential REIT"
+  },
+  "ITT": {
+    "company": "ITT",
+    "industries": [
+      "Industrial components",
+      "Pumps & flow control",
+      "Connectors",
+      "Motion technologies",
+      "Aerospace components"
+    ],
+    "primary_industry": "Industrial components"
+  },
+  "ITW": {
+    "company": "Illinois Tool Works",
+    "industries": [
+      "Industrial machinery",
+      "Welding equipment",
+      "Automotive components",
+      "Food equipment"
+    ],
+    "primary_industry": "Industrial machinery"
+  },
+  "JD": {
+    "company": "JD.com",
+    "industries": [
+      "E-commerce",
+      "Logistics",
+      "Retail technology",
+      "Online retail"
+    ],
+    "primary_industry": "E-commerce"
+  },
+  "JNJ": {
+    "company": "Johnson & Johnson",
+    "industries": [
+      "Pharmaceuticals",
+      "Medical devices",
+      "Oncology",
+      "Immunology"
+    ],
+    "primary_industry": "Pharmaceuticals"
+  },
+  "JPM": {
+    "company": "JPMorgan Chase",
+    "industries": [
+      "Banking",
+      "Investment banking",
+      "Payments",
+      "Asset management",
+      "Commercial banking"
+    ],
+    "primary_industry": "Banking"
+  },
+  "KMB": {
+    "company": "Kimberly-Clark",
+    "industries": [
+      "Personal-care products",
+      "Tissue & hygiene products",
+      "Consumer staples"
+    ],
+    "primary_industry": "Personal-care products"
+  },
+  "KMX": {
+    "company": "CarMax",
+    "industries": [
+      "Used-car retail",
+      "Auto finance",
+      "Automotive marketplace"
+    ],
+    "primary_industry": "Used-car retail"
+  },
+  "KVUE": {
+    "company": "Kenvue",
+    "industries": [
+      "Consumer health",
+      "OTC medicines",
+      "Skincare",
+      "Personal care"
+    ],
+    "primary_industry": "Consumer health"
+  },
+  "LAMR": {
+    "company": "Lamar Advertising",
+    "industries": [
+      "Outdoor advertising",
+      "Billboards",
+      "Transit advertising",
+      "Advertising REIT"
+    ],
+    "primary_industry": "Outdoor advertising"
+  },
+  "LH": {
+    "company": "Labcorp",
+    "industries": [
+      "Clinical laboratory testing",
+      "Medical diagnostics",
+      "Biopharma laboratory services"
+    ],
+    "primary_industry": "Clinical laboratory testing"
+  },
+  "LHX": {
+    "company": "L3Harris Technologies",
+    "industries": [
+      "Defense electronics",
+      "Military communications",
+      "Space systems",
+      "Sensors",
+      "Missile systems"
+    ],
+    "primary_industry": "Defense electronics"
+  },
+  "LIN": {
+    "company": "Linde",
+    "industries": [
+      "Industrial gases",
+      "Hydrogen",
+      "Engineering services",
+      "Medical gases"
+    ],
+    "primary_industry": "Industrial gases"
+  },
+  "LITE": {
+    "company": "Lumentum",
+    "industries": [
+      "Optical communications",
+      "Photonics",
+      "Lasers",
+      "Optical components"
+    ],
+    "primary_industry": "Optical communications"
+  },
+  "LLY": {
+    "company": "Eli Lilly",
+    "industries": [
+      "Pharmaceuticals",
+      "Diabetes & obesity",
+      "Oncology",
+      "Neuroscience"
+    ],
+    "primary_industry": "Pharmaceuticals"
+  },
+  "LOW": {
+    "company": "Lowe's",
+    "industries": [
+      "Home-improvement retail",
+      "Building materials retail",
+      "Home renovation products"
+    ],
+    "primary_industry": "Home-improvement retail"
+  },
+  "LRCX": {
+    "company": "Lam Research",
+    "industries": [
+      "Semiconductor equipment",
+      "Wafer-fabrication equipment",
+      "Etch & deposition systems"
+    ],
+    "primary_industry": "Semiconductor equipment"
+  },
+  "LTC": {
+    "company": "LTC Properties",
+    "industries": [
+      "Healthcare REIT",
+      "Senior housing",
+      "Skilled nursing real estate"
+    ],
+    "primary_industry": "Healthcare REIT"
+  },
+  "LTH": {
+    "company": "Life Time Group",
+    "industries": [
+      "Fitness clubs",
+      "Health & wellness",
+      "Leisure services"
+    ],
+    "primary_industry": "Fitness clubs"
+  },
+  "LYV": {
+    "company": "Live Nation Entertainment",
+    "industries": [
+      "Live entertainment",
+      "Concert promotion",
+      "Ticketing",
+      "Music venues"
+    ],
+    "primary_industry": "Live entertainment"
+  },
+  "MA": {
+    "company": "Mastercard",
+    "industries": [
+      "Payment networks",
+      "Card payments",
+      "Fintech",
+      "Cross-border payments"
+    ],
+    "primary_industry": "Payment networks"
+  },
+  "MBGL": {
+    "company": "Mobility Global",
+    "industries": [
+      "Automotive data & analytics",
+      "Vehicle-history data",
+      "Dealer software",
+      "Automotive market intelligence"
+    ],
+    "primary_industry": "Automotive data & analytics"
+  },
+  "MCD": {
+    "company": "McDonald's",
+    "industries": [
+      "Quick-service restaurants",
+      "Restaurant franchising",
+      "Fast food"
+    ],
+    "primary_industry": "Quick-service restaurants"
+  },
+  "MDT": {
+    "company": "Medtronic",
+    "industries": [
+      "Medical devices",
+      "Cardiac devices",
+      "Surgical technology",
+      "Diabetes devices"
+    ],
+    "primary_industry": "Medical devices"
+  },
+  "META": {
+    "company": "Meta Platforms",
+    "industries": [
+      "Social media",
+      "Digital advertising",
+      "Artificial intelligence",
+      "Virtual/augmented reality"
+    ],
+    "primary_industry": "Social media"
+  },
+  "MFP": {
+    "company": "Midera Food Processing",
+    "industries": [
+      "Food-processing equipment",
+      "Industrial machinery",
+      "Food-safety equipment",
+      "Packaging equipment"
+    ],
+    "primary_industry": "Food-processing equipment"
+  },
+  "MIDD": {
+    "company": "Middleby",
+    "industries": [
+      "Commercial foodservice equipment",
+      "Food-processing equipment",
+      "Residential kitchen appliances"
+    ],
+    "primary_industry": "Commercial foodservice equipment"
+  },
+  "MKL": {
+    "company": "Markel Group",
+    "industries": [
+      "Specialty insurance",
+      "Reinsurance",
+      "Diversified holdings"
+    ],
+    "primary_industry": "Specialty insurance"
+  },
+  "MLM": {
+    "company": "Martin Marietta Materials",
+    "industries": [
+      "Construction aggregates",
+      "Construction materials",
+      "Cement"
+    ],
+    "primary_industry": "Construction aggregates"
+  },
+  "MOG.A": {
+    "company": "Moog",
+    "industries": [
+      "Aerospace motion control",
+      "Defense systems",
+      "Precision components",
+      "Industrial automation"
+    ],
+    "primary_industry": "Aerospace motion control"
+  },
+  "MRK": {
+    "company": "Merck",
+    "industries": [
+      "Pharmaceuticals",
+      "Oncology",
+      "Vaccines",
+      "Animal health"
+    ],
+    "primary_industry": "Pharmaceuticals"
+  },
+  "MRNA": {
+    "company": "Moderna",
+    "industries": [
+      "mRNA biotechnology",
+      "Vaccines",
+      "Infectious disease",
+      "Oncology"
+    ],
+    "primary_industry": "mRNA biotechnology"
+  },
+  "MRSH": {
+    "company": "Marsh McLennan",
+    "industries": [
+      "Insurance brokerage",
+      "Risk consulting",
+      "Management consulting",
+      "Employee benefits"
+    ],
+    "primary_industry": "Insurance brokerage"
+  },
+  "MRVL": {
+    "company": "Marvell Technology",
+    "industries": [
+      "Data-center semiconductors",
+      "Networking chips",
+      "Storage controllers",
+      "Custom silicon"
+    ],
+    "primary_industry": "Data-center semiconductors"
+  },
+  "MSB": {
+    "company": "Mesabi Trust",
+    "industries": [
+      "Iron-ore royalties",
+      "Mining royalties",
+      "Iron ore"
+    ],
+    "primary_industry": "Iron-ore royalties"
+  },
+  "MSFT": {
+    "company": "Microsoft",
+    "industries": [
+      "Enterprise software",
+      "Cloud computing",
+      "Artificial intelligence",
+      "Gaming",
+      "Cybersecurity"
+    ],
+    "primary_industry": "Enterprise software"
+  },
+  "MSTR": {
+    "company": "Strategy",
+    "industries": [
+      "Bitcoin treasury",
+      "Digital assets",
+      "Enterprise analytics software"
+    ],
+    "primary_industry": "Bitcoin treasury"
+  },
+  "MTSI": {
+    "company": "MACOM Technology Solutions",
+    "industries": [
+      "RF semiconductors",
+      "Optical-networking chips",
+      "Defense semiconductors",
+      "Analog semiconductors"
+    ],
+    "primary_industry": "RF semiconductors"
+  },
+  "MTX": {
+    "company": "Minerals Technologies",
+    "industries": [
+      "Specialty minerals",
+      "Bentonite",
+      "Refractories",
+      "Environmental materials"
+    ],
+    "primary_industry": "Specialty minerals"
+  },
+  "MTZ": {
+    "company": "MasTec",
+    "industries": [
+      "Infrastructure construction",
+      "Power-grid construction",
+      "Telecom infrastructure",
+      "Pipelines",
+      "Renewable-energy infrastructure"
+    ],
+    "primary_industry": "Infrastructure construction"
+  },
+  "NDAQ": {
+    "company": "Nasdaq",
+    "industries": [
+      "Securities exchanges",
+      "Market technology",
+      "Market data",
+      "Financial software"
+    ],
+    "primary_industry": "Securities exchanges"
+  },
+  "NEE": {
+    "company": "NextEra Energy",
+    "industries": [
+      "Electric utilities",
+      "Wind energy",
+      "Solar energy",
+      "Nuclear power",
+      "Battery storage"
+    ],
+    "primary_industry": "Electric utilities"
+  },
+  "NEO": {
+    "company": "NeoGenomics",
+    "industries": [
+      "Cancer diagnostics",
+      "Genomic testing",
+      "Clinical laboratories"
+    ],
+    "primary_industry": "Cancer diagnostics"
+  },
+  "NET": {
+    "company": "Cloudflare",
+    "industries": [
+      "Cloud networking",
+      "Cybersecurity",
+      "Content delivery network",
+      "Edge computing"
+    ],
+    "primary_industry": "Cloud networking"
+  },
+  "NEW": {
+    "company": "Puxin Limited (legacy ticker; verify)",
+    "industries": [
+      "Private education",
+      "Tutoring services",
+      "Education services"
+    ],
+    "primary_industry": "Private education"
+  },
+  "NFLX": {
+    "company": "Netflix",
+    "industries": [
+      "Streaming media",
+      "Film & television production",
+      "Entertainment"
+    ],
+    "primary_industry": "Streaming media"
+  },
+  "NHI": {
+    "company": "National Health Investors",
+    "industries": [
+      "Healthcare REIT",
+      "Senior housing",
+      "Skilled nursing real estate"
+    ],
+    "primary_industry": "Healthcare REIT"
+  },
+  "NKE": {
+    "company": "Nike",
+    "industries": [
+      "Athletic footwear",
+      "Sports apparel",
+      "Sporting goods"
+    ],
+    "primary_industry": "Athletic footwear"
+  },
+  "NOW": {
+    "company": "ServiceNow",
+    "industries": [
+      "Enterprise workflow software",
+      "IT service management",
+      "Cloud software",
+      "AI software"
+    ],
+    "primary_industry": "Enterprise workflow software"
+  },
+  "NVDA": {
+    "company": "NVIDIA",
+    "industries": [
+      "AI semiconductors",
+      "GPUs",
+      "Data-center chips",
+      "Networking",
+      "AI infrastructure"
+    ],
+    "primary_industry": "AI semiconductors"
+  },
+  "NXPI": {
+    "company": "NXP Semiconductors",
+    "industries": [
+      "Automotive semiconductors",
+      "Industrial chips",
+      "IoT semiconductors",
+      "Secure connectivity"
+    ],
+    "primary_industry": "Automotive semiconductors"
+  },
+  "O": {
+    "company": "Realty Income",
+    "industries": [
+      "Net-lease REIT",
+      "Commercial real estate",
+      "Retail real estate"
+    ],
+    "primary_industry": "Net-lease REIT"
+  },
+  "OGN": {
+    "company": "Organon",
+    "industries": [
+      "Pharmaceuticals",
+      "Women's health",
+      "Biosimilars",
+      "Established medicines"
+    ],
+    "primary_industry": "Pharmaceuticals"
+  },
+  "ORCL": {
+    "company": "Oracle",
+    "industries": [
+      "Database software",
+      "Cloud infrastructure",
+      "Enterprise software",
+      "Business applications"
+    ],
+    "primary_industry": "Database software"
+  },
+  "OTIS": {
+    "company": "Otis Worldwide",
+    "industries": [
+      "Elevators & escalators",
+      "Building equipment",
+      "Maintenance services"
+    ],
+    "primary_industry": "Elevators & escalators"
+  },
+  "PAYX": {
+    "company": "Paychex",
+    "industries": [
+      "Payroll services",
+      "HR software",
+      "Benefits administration"
+    ],
+    "primary_industry": "Payroll services"
+  },
+  "PCVX": {
+    "company": "Vaxcyte",
+    "industries": [
+      "Vaccine biotechnology",
+      "Pneumococcal vaccines",
+      "Infectious-disease biotech"
+    ],
+    "primary_industry": "Vaccine biotechnology"
+  },
+  "PEP": {
+    "company": "PepsiCo",
+    "industries": [
+      "Soft drinks",
+      "Snacks",
+      "Packaged foods",
+      "Non-alcoholic beverages"
+    ],
+    "primary_industry": "Soft drinks"
+  },
+  "PFE": {
+    "company": "Pfizer",
+    "industries": [
+      "Pharmaceuticals",
+      "Vaccines",
+      "Oncology",
+      "Biopharmaceuticals"
+    ],
+    "primary_industry": "Pharmaceuticals"
+  },
+  "PG": {
+    "company": "Procter & Gamble",
+    "industries": [
+      "Household products",
+      "Personal care",
+      "Beauty",
+      "Consumer staples"
+    ],
+    "primary_industry": "Household products"
+  },
+  "PGR": {
+    "company": "Progressive",
+    "industries": [
+      "Auto insurance",
+      "Property & casualty insurance",
+      "Commercial auto insurance"
+    ],
+    "primary_industry": "Auto insurance"
+  },
+  "PHR": {
+    "company": "Phreesia",
+    "industries": [
+      "Healthcare software",
+      "Patient intake",
+      "Healthcare payments",
+      "Patient engagement"
+    ],
+    "primary_industry": "Healthcare software"
+  },
+  "PKG": {
+    "company": "Packaging Corporation of America",
+    "industries": [
+      "Corrugated packaging",
+      "Containerboard",
+      "Paper products"
+    ],
+    "primary_industry": "Corrugated packaging"
+  },
+  "PLTR": {
+    "company": "Palantir Technologies",
+    "industries": [
+      "Data-analytics software",
+      "Artificial intelligence platforms",
+      "Defense software",
+      "Government software"
+    ],
+    "primary_industry": "Data-analytics software"
+  },
+  "PODD": {
+    "company": "Insulet",
+    "industries": [
+      "Diabetes medical devices",
+      "Insulin pumps",
+      "Wearable medical devices"
+    ],
+    "primary_industry": "Diabetes medical devices"
+  },
+  "PRAX": {
+    "company": "Praxis Precision Medicines",
+    "industries": [
+      "Neuroscience biotechnology",
+      "Epilepsy therapeutics",
+      "CNS drugs"
+    ],
+    "primary_industry": "Neuroscience biotechnology"
+  },
+  "PSKY": {
+    "company": "Paramount Skydance",
+    "industries": [
+      "Film & television entertainment",
+      "Streaming media",
+      "Broadcasting",
+      "Movie studios"
+    ],
+    "primary_industry": "Film & television entertainment"
+  },
+  "PWR": {
+    "company": "Quanta Services",
+    "industries": [
+      "Electric-grid infrastructure",
+      "Utility construction",
+      "Renewable-energy infrastructure",
+      "Pipeline construction"
+    ],
+    "primary_industry": "Electric-grid infrastructure"
+  },
+  "PYPL": {
+    "company": "PayPal",
+    "industries": [
+      "Digital payments",
+      "Consumer wallets",
+      "Merchant payments",
+      "Fintech"
+    ],
+    "primary_industry": "Digital payments"
+  },
+  "QCOM": {
+    "company": "Qualcomm",
+    "industries": [
+      "Wireless semiconductors",
+      "Mobile chips",
+      "5G",
+      "Automotive semiconductors",
+      "IoT chips"
+    ],
+    "primary_industry": "Wireless semiconductors"
+  },
+  "RBC": {
+    "company": "RBC Bearings",
+    "industries": [
+      "Aerospace bearings",
+      "Industrial bearings",
+      "Precision components"
+    ],
+    "primary_industry": "Aerospace bearings"
+  },
+  "ROL": {
+    "company": "Rollins",
+    "industries": [
+      "Pest control",
+      "Environmental services",
+      "Residential services"
+    ],
+    "primary_industry": "Pest control"
+  },
+  "SAIL": {
+    "company": "SailPoint",
+    "industries": [
+      "Identity security",
+      "Cybersecurity",
+      "Identity governance",
+      "Access management"
+    ],
+    "primary_industry": "Identity security"
+  },
+  "SCI": {
+    "company": "Service Corporation International",
+    "industries": [
+      "Funeral services",
+      "Cemeteries",
+      "Deathcare"
+    ],
+    "primary_industry": "Funeral services"
+  },
+  "SF": {
+    "company": "Stifel Financial",
+    "industries": [
+      "Investment banking",
+      "Brokerage",
+      "Wealth management"
+    ],
+    "primary_industry": "Investment banking"
+  },
+  "SFM": {
+    "company": "Sprouts Farmers Market",
+    "industries": [
+      "Grocery retail",
+      "Natural & organic foods",
+      "Fresh food retail"
+    ],
+    "primary_industry": "Grocery retail"
+  },
+  "SGI": {
+    "company": "Somnigroup International",
+    "industries": [
+      "Mattresses & bedding",
+      "Sleep products",
+      "Consumer furnishings"
+    ],
+    "primary_industry": "Mattresses & bedding"
+  },
+  "SHAK": {
+    "company": "Shake Shack",
+    "industries": [
+      "Fast-casual restaurants",
+      "Restaurant chains"
+    ],
+    "primary_industry": "Fast-casual restaurants"
+  },
+  "SIG": {
+    "company": "Signet Jewelers",
+    "industries": [
+      "Jewelry retail",
+      "Diamonds",
+      "Luxury retail"
+    ],
+    "primary_industry": "Jewelry retail"
+  },
+  "SKHY": {
+    "company": "SK hynix",
+    "industries": [
+      "Memory semiconductors",
+      "DRAM",
+      "NAND flash",
+      "SSDs"
+    ],
+    "primary_industry": "Memory semiconductors"
+  },
+  "SKWD": {
+    "company": "Skyward Specialty Insurance",
+    "industries": [
+      "Specialty insurance",
+      "Property & casualty insurance"
+    ],
+    "primary_industry": "Specialty insurance"
+  },
+  "SMTC": {
+    "company": "Semtech",
+    "industries": [
+      "Analog & mixed-signal semiconductors",
+      "Connectivity chips",
+      "IoT",
+      "Signal integrity"
+    ],
+    "primary_industry": "Analog & mixed-signal semiconductors"
+  },
+  "SNOW": {
+    "company": "Snowflake",
+    "industries": [
+      "Cloud data platform",
+      "Data warehousing",
+      "Data analytics",
+      "AI data infrastructure"
+    ],
+    "primary_industry": "Cloud data platform"
+  },
+  "SOLS": {
+    "company": "Solstice Advanced Materials",
+    "industries": [
+      "Specialty chemicals",
+      "Advanced materials",
+      "Refrigerants",
+      "Thermal-management materials"
+    ],
+    "primary_industry": "Specialty chemicals"
+  },
+  "SPCX": {
+    "company": "Space Exploration Technologies",
+    "industries": [
+      "Space launch",
+      "Satellite broadband",
+      "Aerospace & defense",
+      "Satellite communications",
+      "AI infrastructure"
+    ],
+    "primary_industry": "Space launch"
+  },
+  "SPXC": {
+    "company": "SPX Technologies",
+    "industries": [
+      "HVAC equipment",
+      "Detection & measurement",
+      "Industrial equipment"
+    ],
+    "primary_industry": "HVAC equipment"
+  },
+  "STE": {
+    "company": "STERIS",
+    "industries": [
+      "Sterilization",
+      "Infection prevention",
+      "Medical equipment services",
+      "Healthcare equipment"
+    ],
+    "primary_industry": "Sterilization"
+  },
+  "STRL": {
+    "company": "Sterling Infrastructure",
+    "industries": [
+      "Infrastructure construction",
+      "Data-center construction",
+      "Transportation infrastructure",
+      "Site development"
+    ],
+    "primary_industry": "Infrastructure construction"
+  },
+  "STZ": {
+    "company": "Constellation Brands",
+    "industries": [
+      "Alcoholic beverages",
+      "Beer",
+      "Wine & spirits"
+    ],
+    "primary_industry": "Alcoholic beverages"
+  },
+  "SYK": {
+    "company": "Stryker",
+    "industries": [
+      "Orthopedic medical devices",
+      "Surgical equipment",
+      "Neurotechnology"
+    ],
+    "primary_industry": "Orthopedic medical devices"
+  },
+  "T": {
+    "company": "AT&T",
+    "industries": [
+      "Wireless telecommunications",
+      "Fiber broadband",
+      "Telecommunications"
+    ],
+    "primary_industry": "Wireless telecommunications"
+  },
+  "TDG": {
+    "company": "TransDigm Group",
+    "industries": [
+      "Aerospace components",
+      "Aircraft parts",
+      "Defense aerospace"
+    ],
+    "primary_industry": "Aerospace components"
+  },
+  "TDY": {
+    "company": "Teledyne Technologies",
+    "industries": [
+      "Aerospace electronics",
+      "Digital imaging",
+      "Instrumentation",
+      "Sensors"
+    ],
+    "primary_industry": "Aerospace electronics"
+  },
+  "TGT": {
+    "company": "Target",
+    "industries": [
+      "General merchandise retail",
+      "Consumer staples retail",
+      "Grocery retail"
+    ],
+    "primary_industry": "General merchandise retail"
+  },
+  "TOST": {
+    "company": "Toast",
+    "industries": [
+      "Restaurant software",
+      "Point-of-sale systems",
+      "Payment processing",
+      "Restaurant fintech"
+    ],
+    "primary_industry": "Restaurant software"
+  },
+  "TPYP": {
+    "company": "Tortoise North American Pipeline ETF",
+    "industries": [
+      "Energy-infrastructure ETF",
+      "Oil & gas pipelines",
+      "Midstream energy"
+    ],
+    "primary_industry": "Energy-infrastructure ETF"
+  },
+  "TRMB": {
+    "company": "Trimble",
+    "industries": [
+      "Geospatial technology",
+      "Construction software",
+      "GPS",
+      "Industrial technology"
+    ],
+    "primary_industry": "Geospatial technology"
+  },
+  "TRV": {
+    "company": "Travelers",
+    "industries": [
+      "Property & casualty insurance",
+      "Commercial insurance",
+      "Personal insurance"
+    ],
+    "primary_industry": "Property & casualty insurance"
+  },
+  "TSCO": {
+    "company": "Tractor Supply",
+    "industries": [
+      "Rural lifestyle retail",
+      "Farm supplies",
+      "Pet supplies",
+      "Home & garden retail"
+    ],
+    "primary_industry": "Rural lifestyle retail"
+  },
+  "TSLA": {
+    "company": "Tesla",
+    "industries": [
+      "Electric vehicles",
+      "Battery storage",
+      "Solar energy",
+      "Charging infrastructure",
+      "Robotics & AI"
+    ],
+    "primary_industry": "Electric vehicles"
+  },
+  "TTD": {
+    "company": "The Trade Desk",
+    "industries": [
+      "Advertising technology",
+      "Programmatic advertising",
+      "Digital media buying"
+    ],
+    "primary_industry": "Advertising technology"
+  },
+  "TTWO": {
+    "company": "Take-Two Interactive",
+    "industries": [
+      "Video games",
+      "Interactive entertainment"
+    ],
+    "primary_industry": "Video games"
+  },
+  "TXRH": {
+    "company": "Texas Roadhouse",
+    "industries": [
+      "Casual dining",
+      "Restaurant chains"
+    ],
+    "primary_industry": "Casual dining"
+  },
+  "TYL": {
+    "company": "Tyler Technologies",
+    "industries": [
+      "Government software",
+      "Public-sector SaaS",
+      "Civic technology"
+    ],
+    "primary_industry": "Government software"
+  },
+  "UBER": {
+    "company": "Uber Technologies",
+    "industries": [
+      "Ride-hailing",
+      "Food delivery",
+      "Freight logistics",
+      "Mobility technology"
+    ],
+    "primary_industry": "Ride-hailing"
+  },
+  "UNH": {
+    "company": "UnitedHealth Group",
+    "industries": [
+      "Health insurance",
+      "Managed care",
+      "Healthcare services",
+      "Pharmacy benefits"
+    ],
+    "primary_industry": "Health insurance"
+  },
+  "UPST": {
+    "company": "Upstart",
+    "industries": [
+      "AI lending",
+      "Consumer finance",
+      "Fintech",
+      "Credit underwriting"
+    ],
+    "primary_industry": "AI lending"
+  },
+  "USB": {
+    "company": "U.S. Bancorp",
+    "industries": [
+      "Banking",
+      "Consumer banking",
+      "Commercial banking",
+      "Payments"
+    ],
+    "primary_industry": "Banking"
+  },
+  "USPH": {
+    "company": "U.S. Physical Therapy",
+    "industries": [
+      "Physical therapy clinics",
+      "Rehabilitation services",
+      "Outpatient healthcare"
+    ],
+    "primary_industry": "Physical therapy clinics"
+  },
+  "V": {
+    "company": "Visa",
+    "industries": [
+      "Payment networks",
+      "Card payments",
+      "Fintech",
+      "Cross-border payments"
+    ],
+    "primary_industry": "Payment networks"
+  },
+  "VIAV": {
+    "company": "Viavi Solutions",
+    "industries": [
+      "Telecom test & measurement",
+      "Optical components",
+      "Network testing",
+      "Photonics"
+    ],
+    "primary_industry": "Telecom test & measurement"
+  },
+  "VIK": {
+    "company": "Viking Holdings",
+    "industries": [
+      "Cruise travel",
+      "River cruises",
+      "Ocean cruises",
+      "Travel & leisure"
+    ],
+    "primary_industry": "Cruise travel"
+  },
+  "VLTO": {
+    "company": "Veralto",
+    "industries": [
+      "Water-quality technology",
+      "Environmental monitoring",
+      "Analytical instruments",
+      "Product identification"
+    ],
+    "primary_industry": "Water-quality technology"
+  },
+  "VRSK": {
+    "company": "Verisk Analytics",
+    "industries": [
+      "Insurance analytics",
+      "Risk data",
+      "Data services",
+      "Catastrophe modeling"
+    ],
+    "primary_industry": "Insurance analytics"
+  },
+  "VRTX": {
+    "company": "Vertex Pharmaceuticals",
+    "industries": [
+      "Biotechnology",
+      "Cystic-fibrosis therapeutics",
+      "Gene editing",
+      "Rare diseases"
+    ],
+    "primary_industry": "Biotechnology"
+  },
+  "VSAT": {
+    "company": "Viasat",
+    "industries": [
+      "Satellite communications",
+      "Satellite broadband",
+      "Defense communications"
+    ],
+    "primary_industry": "Satellite communications"
+  },
+  "VSNT": {
+    "company": "Versant Media Group",
+    "industries": [
+      "Media networks",
+      "Business news",
+      "Sports media",
+      "Digital entertainment"
+    ],
+    "primary_industry": "Media networks"
+  },
+  "VZ": {
+    "company": "Verizon",
+    "industries": [
+      "Wireless telecommunications",
+      "Fiber broadband",
+      "Telecommunications"
+    ],
+    "primary_industry": "Wireless telecommunications"
+  },
+  "WAB": {
+    "company": "Wabtec",
+    "industries": [
+      "Rail equipment",
+      "Locomotives",
+      "Transit systems",
+      "Rail technology"
+    ],
+    "primary_industry": "Rail equipment"
+  },
+  "WAT": {
+    "company": "Waters Corporation",
+    "industries": [
+      "Analytical instruments",
+      "Chromatography",
+      "Mass spectrometry",
+      "Life-sciences tools"
+    ],
+    "primary_industry": "Analytical instruments"
+  },
+  "WDAY": {
+    "company": "Workday",
+    "industries": [
+      "HR software",
+      "Financial-management software",
+      "Enterprise SaaS"
+    ],
+    "primary_industry": "HR software"
+  },
+  "WDC": {
+    "company": "Western Digital",
+    "industries": [
+      "Data storage",
+      "Hard-disk drives",
+      "Enterprise storage hardware"
+    ],
+    "primary_industry": "Data storage"
+  },
+  "WFC": {
+    "company": "Wells Fargo",
+    "industries": [
+      "Banking",
+      "Commercial banking",
+      "Consumer finance",
+      "Wealth management"
+    ],
+    "primary_industry": "Banking"
+  },
+  "WMT": {
+    "company": "Walmart",
+    "industries": [
+      "Mass retail",
+      "Grocery retail",
+      "E-commerce",
+      "Consumer staples retail"
+    ],
+    "primary_industry": "Mass retail"
+  },
+  "WPM": {
+    "company": "Wheaton Precious Metals",
+    "industries": [
+      "Precious-metals streaming",
+      "Gold",
+      "Silver",
+      "Mining royalties"
+    ],
+    "primary_industry": "Precious-metals streaming"
+  },
+  "ZTS": {
+    "company": "Zoetis",
+    "industries": [
+      "Animal-health pharmaceuticals",
+      "Veterinary vaccines",
+      "Pet health",
+      "Livestock health"
+    ],
+    "primary_industry": "Animal-health pharmaceuticals"
+  }
+}

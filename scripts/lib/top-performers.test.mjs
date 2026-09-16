@@ -8,7 +8,7 @@ import {
 
 assert.equal(parsePerformerPeriod("6m"), "6m");
 assert.equal(parsePerformerPeriod("month"), "1m");
-assert.equal(parsePerformerPeriod(undefined), "2026");
+assert.equal(parsePerformerPeriod(undefined), "1m");
 assert.equal(performerCutoffDate("2026"), "2026-01-01");
 
 const ranked = rankBuyPerformers(
