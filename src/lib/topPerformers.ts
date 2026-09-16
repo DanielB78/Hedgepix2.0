@@ -681,25 +681,59 @@ export async function fetchOfficerBuysWithReturns(
 
   const cutoff = performerCutoffDate(period);
   const supabase = createBrowserSupabase();
-  const { data, error } = await supabase
-    .from("ceo_stock_purchases")
-    .select(
-      "id, ceo_name, officer_title, ticker, issuer_name, security_title, transaction_date, filing_date, shares_purchased, price_per_share, transaction_code, raw_source",
-    )
-    .ilike("ceo_name", person)
-    .gte("transaction_date", cutoff)
-    .not("ticker", "is", null)
-    .order("transaction_date", { ascending: false })
-    .limit(400);
 
-  if (error) throw new Error(error.message);
-  const rows = (data ?? []).filter(
-    (row) =>
-      resolveCeoTransactionCode({
-        transaction_code: row.transaction_code as string | null,
-        raw_source: row.raw_source as Record<string, unknown> | null,
-      }) === "P",
-  );
+  async function loadPurchases(fromDate: string) {
+    const { data, error } = await supabase
+      .from("ceo_stock_purchases")
+      .select(
+        "id, ceo_name, officer_title, ticker, issuer_name, security_title, transaction_date, filing_date, shares_purchased, price_per_share, transaction_code, raw_source",
+      )
+      .ilike("ceo_name", person)
+      .gte("transaction_date", fromDate)
+      .not("ticker", "is", null)
+      .order("transaction_date", { ascending: false })
+      .limit(400);
+    if (error) throw new Error(error.message);
+    return (data ?? []).filter(
+      (row) =>
+        resolveCeoTransactionCode({
+          transaction_code: row.transaction_code as string | null,
+          raw_source: row.raw_source as Record<string, unknown> | null,
+        }) === "P",
+    );
+  }
+
+  let rows = await loadPurchases(cutoff);
+  if (rows.length === 0) {
+    const latest = await supabase
+      .from("ceo_stock_purchases")
+      .select("transaction_date")
+      .ilike("ceo_name", person)
+      .not("transaction_date", "is", null)
+      .order("transaction_date", { ascending: false })
+      .limit(1);
+    const maxDate = (
+      latest.data?.[0]?.transaction_date as string | null
+    )?.slice(0, 10);
+    if (maxDate) {
+      const today = new Date();
+      const todayUtc = Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+      );
+      const cutoffUtc = Date.parse(`${cutoff}T00:00:00Z`);
+      const windowDays = Math.max(
+        30,
+        Math.round((todayUtc - cutoffUtc) / (24 * 60 * 60 * 1000)),
+      );
+      const anchor = new Date(`${maxDate}T00:00:00Z`);
+      anchor.setUTCDate(anchor.getUTCDate() - windowDays);
+      let fallbackCutoff = anchor.toISOString().slice(0, 10);
+      if (fallbackCutoff < "2026-01-01") fallbackCutoff = "2026-01-01";
+      rows = await loadPurchases(fallbackCutoff);
+    }
+  }
 
   if (rows.length === 0) {
     return {
@@ -732,7 +766,12 @@ export async function fetchOfficerBuysWithReturns(
     const price =
       row.price_per_share == null ? null : Number(row.price_per_share);
     let amountRange: string | null = null;
-    if (shares != null && price != null && Number.isFinite(shares) && Number.isFinite(price)) {
+    if (
+      shares != null &&
+      price != null &&
+      Number.isFinite(shares) &&
+      Number.isFinite(price)
+    ) {
       amountRange = `${shares.toLocaleString("en-US")} @ ${price.toFixed(2)}`;
     } else if (shares != null && Number.isFinite(shares)) {
       amountRange = `${shares.toLocaleString("en-US")} shares`;
@@ -784,7 +823,11 @@ export async function fetchOfficerBuysWithReturns(
   });
 
   buys.sort((a, b) => {
-    if (a.returnPct != null && b.returnPct != null && a.returnPct !== b.returnPct) {
+    if (
+      a.returnPct != null &&
+      b.returnPct != null &&
+      a.returnPct !== b.returnPct
+    ) {
       return b.returnPct - a.returnPct;
     }
     if (a.returnPct != null && b.returnPct == null) return -1;
