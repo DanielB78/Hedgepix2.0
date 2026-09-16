@@ -15,6 +15,7 @@ import {
   performerPeriodLabel,
   type MemberBuyPerformance,
   type MemberBuysPayload,
+  type OfficerBuysPayload,
   type PerformerPeriod,
   type TopPerformer,
 } from "@/lib/topPerformers";
@@ -61,9 +62,11 @@ export function PerformerExpandCard({
   sectorByTicker?: Record<string, string>;
 }) {
   const positive = row.avgReturnPct >= 0;
-  const clickableMember = !!row.memberSlug;
+  const isOfficer = row.kind === "ceo";
+  const clickable = isOfficer || !!row.memberSlug;
   const [period, setPeriod] = useState<PerformerPeriod>(defaultPeriod);
   const [buysPayload, setBuysPayload] = useState<MemberBuysPayload | null>(null);
+  const [officerTitle, setOfficerTitle] = useState<string | null>(null);
   const [loadingBuys, setLoadingBuys] = useState(false);
   const [buysError, setBuysError] = useState<string | null>(null);
   const [chart, setChart] = useState<ChartState | null>(null);
@@ -75,18 +78,32 @@ export function PerformerExpandCard({
   }, [defaultPeriod, expanded]);
 
   useEffect(() => {
-    if (!expanded || !row.memberSlug) return;
-    const slug = row.memberSlug;
+    if (!expanded) return;
+    if (!isOfficer && !row.memberSlug) return;
     const id = ++buysRequestId.current;
     setLoadingBuys(true);
     setBuysError(null);
     setChart(null);
-    void loadJson<MemberBuysPayload>(
-      `/api/feed/preview?kind=member-buys&slug=${encodeURIComponent(slug)}&perf=${encodeURIComponent(period)}`,
-    )
+    const url = isOfficer
+      ? `/api/feed/preview?kind=officer-buys&name=${encodeURIComponent(row.name)}&perf=${encodeURIComponent(period)}`
+      : `/api/feed/preview?kind=member-buys&slug=${encodeURIComponent(row.memberSlug!)}&perf=${encodeURIComponent(period)}`;
+    void loadJson<MemberBuysPayload | OfficerBuysPayload>(url)
       .then((data) => {
         if (id !== buysRequestId.current) return;
-        setBuysPayload(data);
+        if ("officerTitle" in data) {
+          setOfficerTitle(data.officerTitle);
+          setBuysPayload({
+            slug: "",
+            name: data.name,
+            chamber: null,
+            state: null,
+            period: data.period,
+            buys: data.buys,
+          });
+        } else {
+          setOfficerTitle(null);
+          setBuysPayload(data);
+        }
         setLoadingBuys(false);
       })
       .catch((err) => {
@@ -95,14 +112,12 @@ export function PerformerExpandCard({
         setLoadingBuys(false);
         setBuysError(err instanceof Error ? err.message : "Failed to load buys");
       });
-  }, [expanded, period, row.memberSlug]);
+  }, [expanded, isOfficer, period, row.memberSlug, row.name]);
 
   const buys = buysPayload?.buys ?? [];
 
   const loadBuyChart = useCallback(
     async (buy: MemberBuyPerformance) => {
-      if (!row.memberSlug) return;
-      const slug = row.memberSlug;
       setChart({
         buyId: buy.id,
         ticker: buy.ticker,
@@ -113,9 +128,30 @@ export function PerformerExpandCard({
       });
       const id = ++chartRequestId.current;
       try {
-        const data = await loadJson<MemberStockPreviewPayload>(
-          `/api/feed/preview?kind=member-stock&slug=${encodeURIComponent(slug)}&ticker=${encodeURIComponent(buy.ticker)}`,
-        );
+        let data: MemberStockPreviewPayload;
+        if (isOfficer) {
+          const stock = await loadJson<{
+            ticker: string;
+            asset: string | null;
+            bars: MemberStockPreviewPayload["bars"];
+            topTrades: MemberStockPreviewPayload["trades"];
+          }>(
+            `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(buy.ticker)}&source=ceo`,
+          );
+          data = {
+            slug: "",
+            name: row.name,
+            ticker: buy.ticker,
+            asset: stock.asset,
+            bars: stock.bars,
+            trades: stock.topTrades,
+          };
+        } else {
+          if (!row.memberSlug) return;
+          data = await loadJson<MemberStockPreviewPayload>(
+            `/api/feed/preview?kind=member-stock&slug=${encodeURIComponent(row.memberSlug)}&ticker=${encodeURIComponent(buy.ticker)}`,
+          );
+        }
         if (id !== chartRequestId.current) return;
         setChart({
           buyId: buy.id,
@@ -137,7 +173,7 @@ export function PerformerExpandCard({
         });
       }
     },
-    [row.memberSlug],
+    [isOfficer, row.memberSlug, row.name],
   );
 
   // Auto-select best / first priced buy when list loads.
@@ -153,6 +189,12 @@ export function PerformerExpandCard({
     return chart.data.trades.map(asCongressChartTrade);
   }, [chart?.data?.trades]);
 
+  const kindLabel = isOfficer
+    ? officerTitle?.trim() || "Insider"
+    : row.kind === "house"
+      ? "House"
+      : "Senate";
+
   return (
     <div className="overflow-hidden rounded-md border border-[color:var(--line)] bg-[color:var(--panel)]">
       <div className="flex w-full items-center gap-3 px-4 py-3">
@@ -161,7 +203,7 @@ export function PerformerExpandCard({
           className="flex min-w-0 flex-1 items-center gap-3 text-left hover:opacity-90"
           onClick={onToggle}
           aria-expanded={expanded}
-          disabled={!clickableMember}
+          disabled={!clickable}
         >
           <span
             aria-hidden
@@ -179,12 +221,7 @@ export function PerformerExpandCard({
               {row.name}
             </p>
             <p className="text-xs text-[color:var(--fog-dim)]">
-              {row.kind === "ceo"
-                ? "CEO"
-                : row.kind === "house"
-                  ? "House"
-                  : "Senate"}{" "}
-              · {row.pricedBuyCount} priced buy
+              {kindLabel} · {row.pricedBuyCount} priced buy
               {row.pricedBuyCount === 1 ? "" : "s"}
               {row.bestTicker ? (
                 <>

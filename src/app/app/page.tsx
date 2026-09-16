@@ -43,6 +43,11 @@ const META: Record<string, { title: string; description: string }> = {
     description:
       "Same-day Senate disclosures with buys, charts, and top performers.",
   },
+  insiders: {
+    title: "Insiders",
+    description:
+      "Form 4 officer buys and sales (CEO, CFO, and other named officers) with charts and top performers.",
+  },
 };
 
 export default async function AppPage({ searchParams }: PageProps) {
@@ -51,6 +56,7 @@ export default async function AppPage({ searchParams }: PageProps) {
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const housePage = parsePage(params.housePage);
   const senatePage = parsePage(params.senatePage);
+  const insiderPage = parsePage(params.insiderPage);
   const tab = parseTab(params.tab);
   const performerPeriod = parsePerformerPeriod(params.perf);
   const payload = await fetchFeedPayload(performerPeriod, view);
@@ -69,6 +75,7 @@ export default async function AppPage({ searchParams }: PageProps) {
         query={q || undefined}
         housePage={housePage}
         senatePage={senatePage}
+        insiderPage={insiderPage}
         tab={tab}
       />
     </AppShell>

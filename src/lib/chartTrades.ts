@@ -73,7 +73,8 @@ export function ceoRowToChartTrade(row: CeoStockPurchaseRow): ChartTrade | null 
     member: row.ceo_name,
     member_slug: null,
     chamber: null,
-    state: null,
+    // Reuse state for officer title so disclosure cards can show CFO/COO/etc.
+    state: row.officer_title?.trim() || null,
     ticker,
     asset: row.issuer_name ?? row.security_title,
     transaction_type: side,
@@ -96,7 +97,9 @@ export function ceoRowToChartTrade(row: CeoStockPurchaseRow): ChartTrade | null 
 }
 
 export function chartTradeLabel(trade: ChartTrade): string {
-  if (trade.source === "ceo") return "CEO";
+  if (trade.source === "ceo") {
+    return trade.state?.trim() || "Insider";
+  }
   if (trade.chamber === "house") return "House";
   if (trade.chamber === "senate") return "Senate";
   return "Congress";

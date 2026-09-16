@@ -434,8 +434,10 @@ async function loadPriceMaps(
 export type TopPerformerOptions = {
   /** Limit congress buys to one chamber. */
   chamber?: Chamber;
-  /** Include CEO Form 4 buys in the ranking (default true). */
+  /** Include Form 4 officer buys in the ranking (default true). */
   includeCeo?: boolean;
+  /** Include congress buys (default true). Set false for Insiders-only. */
+  includeCongress?: boolean;
 };
 
 export async function fetchTopPerformers(
@@ -454,8 +456,11 @@ export async function fetchTopPerformers(
   try {
     const cutoff = performerCutoffDate(period);
     const includeCeo = options?.includeCeo !== false;
+    const includeCongress = options?.includeCongress !== false;
     const [congress, ceos] = await Promise.all([
-      fetchRecentCongressBuys(cutoff, options?.chamber),
+      includeCongress
+        ? fetchRecentCongressBuys(cutoff, options?.chamber)
+        : Promise.resolve([] as BuyRow[]),
       includeCeo ? fetchRecentCeoBuys(cutoff) : Promise.resolve([] as BuyRow[]),
     ]);
     const buys = [...congress, ...ceos];
@@ -619,6 +624,147 @@ export async function fetchMemberBuysWithReturns(
         ? first.chamber
         : null,
     state: (first.state as string | null) ?? null,
+    period,
+    buys,
+  };
+}
+
+export type OfficerBuysPayload = {
+  name: string;
+  officerTitle: string | null;
+  period: PerformerPeriod;
+  buys: MemberBuyPerformance[];
+};
+
+/** Form 4 purchases for one officer (matched by exact ceo_name) with % return. */
+export async function fetchOfficerBuysWithReturns(
+  name: string,
+  period: PerformerPeriod,
+): Promise<OfficerBuysPayload | null> {
+  if (!hasPublicSupabaseConfig()) return null;
+  const person = name.trim();
+  if (!person) return null;
+
+  const cutoff = performerCutoffDate(period);
+  const supabase = createBrowserSupabase();
+  const { data, error } = await supabase
+    .from("ceo_stock_purchases")
+    .select(
+      "id, ceo_name, officer_title, ticker, issuer_name, security_title, transaction_date, filing_date, shares_purchased, price_per_share, transaction_code, raw_source",
+    )
+    .ilike("ceo_name", person)
+    .gte("transaction_date", cutoff)
+    .not("ticker", "is", null)
+    .order("transaction_date", { ascending: false })
+    .limit(400);
+
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []).filter(
+    (row) =>
+      resolveCeoTransactionCode({
+        transaction_code: row.transaction_code as string | null,
+        raw_source: row.raw_source as Record<string, unknown> | null,
+      }) === "P",
+  );
+
+  if (rows.length === 0) {
+    return {
+      name: person,
+      officerTitle: null,
+      period,
+      buys: [],
+    };
+  }
+
+  const buyRows: BuyRow[] = [];
+  const detail: Array<{
+    id: string;
+    ticker: string;
+    asset: string | null;
+    transactionDate: string;
+    disclosureDate: string | null;
+    amountLow: number | null;
+    amountHigh: number | null;
+    amountRange: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    const ticker = normalizeTicker(row.ticker as string | null);
+    const tx = (row.transaction_date as string | null)?.slice(0, 10);
+    if (!ticker || !tx) continue;
+    const id = String(row.id ?? `${ticker}|${tx}`);
+    const shares =
+      row.shares_purchased == null ? null : Number(row.shares_purchased);
+    const price =
+      row.price_per_share == null ? null : Number(row.price_per_share);
+    let amountRange: string | null = null;
+    if (shares != null && price != null && Number.isFinite(shares) && Number.isFinite(price)) {
+      amountRange = `${shares.toLocaleString("en-US")} @ ${price.toFixed(2)}`;
+    } else if (shares != null && Number.isFinite(shares)) {
+      amountRange = `${shares.toLocaleString("en-US")} shares`;
+    }
+
+    buyRows.push({
+      key: id,
+      name: person,
+      kind: "ceo",
+      memberSlug: null,
+      ticker,
+      transactionDate: tx,
+    });
+    detail.push({
+      id,
+      ticker,
+      asset:
+        (row.issuer_name as string | null) ??
+        (row.security_title as string | null) ??
+        null,
+      transactionDate: tx,
+      disclosureDate: (row.filing_date as string | null)?.slice(0, 10) ?? null,
+      amountLow: null,
+      amountHigh: null,
+      amountRange,
+    });
+  }
+
+  const { entryClose, latestClose } = await loadPriceMaps(buyRows);
+  const buys: MemberBuyPerformance[] = detail.map((d) => {
+    const entry = entryClose.get(`${d.ticker}|${d.transactionDate}`) ?? null;
+    const latest = latestClose.get(d.ticker) ?? null;
+    let returnPct: number | null = null;
+    if (
+      entry != null &&
+      latest != null &&
+      Number.isFinite(entry) &&
+      Number.isFinite(latest) &&
+      entry > 0
+    ) {
+      returnPct = ((latest - entry) / entry) * 100;
+    }
+    return {
+      ...d,
+      returnPct,
+      entryClose: entry,
+      latestClose: latest,
+    };
+  });
+
+  buys.sort((a, b) => {
+    if (a.returnPct != null && b.returnPct != null && a.returnPct !== b.returnPct) {
+      return b.returnPct - a.returnPct;
+    }
+    if (a.returnPct != null && b.returnPct == null) return -1;
+    if (a.returnPct == null && b.returnPct != null) return 1;
+    return b.transactionDate.localeCompare(a.transactionDate);
+  });
+
+  const title =
+    (rows.find((r) => (r.officer_title as string | null)?.trim())
+      ?.officer_title as string | null) ?? null;
+
+  return {
+    name: String(rows[0]?.ceo_name ?? person),
+    officerTitle: title,
     period,
     buys,
   };

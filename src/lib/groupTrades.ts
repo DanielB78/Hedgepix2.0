@@ -1,4 +1,5 @@
 import type { CongressTrade } from "./types";
+import type { ChartTrade } from "./chartTrades";
 
 export type TradeDisclosureGroup = {
   key: string;
@@ -6,6 +7,10 @@ export type TradeDisclosureGroup = {
   memberSlug: string | null;
   chamber: CongressTrade["chamber"];
   state: string | null;
+  /** Officer title or other role line (Form 4). */
+  roleLabel: string | null;
+  /** How expand charts should load trades. */
+  chartSource: "congress" | "ceo";
   disclosureDate: string | null;
   trades: CongressTrade[];
   purchaseCount: number;
@@ -18,6 +23,10 @@ function memberKey(trade: CongressTrade): string {
   return "unknown";
 }
 
+function isCeoSource(trade: CongressTrade): boolean {
+  return "source" in trade && (trade as ChartTrade).source === "ceo";
+}
+
 /** Group trades by member identity + disclosure_date (presentation only). */
 export function groupTradesByDisclosure(
   trades: CongressTrade[],
@@ -28,6 +37,7 @@ export function groupTradesByDisclosure(
     const mKey = memberKey(trade);
     const dateKey = trade.disclosure_date ?? "unknown";
     const key = `${mKey}|${dateKey}`;
+    const ceo = isCeoSource(trade);
 
     let group = groups.get(key);
     if (!group) {
@@ -37,6 +47,8 @@ export function groupTradesByDisclosure(
         memberSlug: trade.member_slug,
         chamber: trade.chamber,
         state: trade.state,
+        roleLabel: ceo ? trade.state : null,
+        chartSource: ceo ? "ceo" : "congress",
         disclosureDate: trade.disclosure_date,
         trades: [],
         purchaseCount: 0,
@@ -56,6 +68,8 @@ export function groupTradesByDisclosure(
     }
     if (!group.chamber && trade.chamber) group.chamber = trade.chamber;
     if (!group.state && trade.state) group.state = trade.state;
+    if (ceo && trade.state && !group.roleLabel) group.roleLabel = trade.state;
+    if (ceo) group.chartSource = "ceo";
   }
 
   return [...groups.values()].sort((a, b) => {

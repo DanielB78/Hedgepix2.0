@@ -7,6 +7,7 @@ import {
 import { parseChartTradeSource } from "@/lib/chartTrades";
 import {
   fetchMemberBuysWithReturns,
+  fetchOfficerBuysWithReturns,
   parsePerformerPeriod,
 } from "@/lib/topPerformers";
 
@@ -60,6 +61,16 @@ export async function GET(request: Request) {
       const slug = searchParams.get("slug") ?? "";
       const period = parsePerformerPeriod(searchParams.get("perf") ?? undefined);
       const data = await fetchMemberBuysWithReturns(slug, period);
+      if (!data) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      return NextResponse.json(data);
+    }
+
+    if (kind === "officer-buys") {
+      const name = searchParams.get("name") ?? "";
+      const period = parsePerformerPeriod(searchParams.get("perf") ?? undefined);
+      const data = await fetchOfficerBuysWithReturns(name, period);
       if (!data) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }

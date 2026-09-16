@@ -40,6 +40,7 @@ type Props = {
   query?: string;
   housePage?: number;
   senatePage?: number;
+  insiderPage?: number;
   /** activity (default) | performers | sectors */
   tab?: "activity" | "performers" | "sectors";
 };
@@ -107,8 +108,10 @@ function TradeRow({
           </p>
         )}
         <p className="text-xs text-[color:var(--fog-dim)]">
-          {("source" in trade && trade.source === "ceo") ? "CEO" : chamberLabel(trade.chamber)} ·{" "}
-          {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
+          {("source" in trade && trade.source === "ceo")
+            ? (trade.state?.trim() || "Insider")
+            : chamberLabel(trade.chamber)}{" "}
+          · {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
         </p>
       </div>
       <div className="shrink-0 text-right">
@@ -146,6 +149,7 @@ export function FeedBoard({
   query,
   housePage = 1,
   senatePage = 1,
+  insiderPage = 1,
   tab = "activity",
 }: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
@@ -319,6 +323,7 @@ export function FeedBoard({
   const showTrending = view === "trending";
   const showHouse = view === "house" || view === "feed";
   const showSenate = view === "senate" || view === "feed";
+  const showInsiders = view === "insiders";
   const showPerformers = tab === "performers";
   const showSectors = tab === "sectors";
   const showActivity = tab === "activity";
@@ -335,6 +340,22 @@ export function FeedBoard({
     () => payload.recentSenate.filter(filterTrade),
     [filterTrade, payload.recentSenate],
   );
+  const insiderTrades = useMemo(() => {
+    const rows = payload.recentInsider ?? [];
+    if (!q) return rows;
+    return rows.filter((trade) => {
+      const ticker = (trade.ticker ?? "").toLowerCase();
+      const member = (trade.member ?? "").toLowerCase();
+      const title = (trade.state ?? "").toLowerCase();
+      const asset = (trade.asset ?? "").toLowerCase();
+      return (
+        ticker.includes(q) ||
+        member.includes(q) ||
+        title.includes(q) ||
+        asset.includes(q)
+      );
+    });
+  }, [payload.recentInsider, q]);
   const topPerformers = useMemo(
     () =>
       (payload.topPerformers ?? []).filter((row) => {
@@ -348,7 +369,23 @@ export function FeedBoard({
   );
 
   const chamberLabelForTabs =
-    view === "senate" ? "Senate" : view === "trending" ? "Trending" : "House";
+    view === "senate"
+      ? "Senate"
+      : view === "insiders"
+        ? "Insiders"
+        : view === "trending"
+          ? "Trending"
+          : "House";
+
+  const sectorSubtitle =
+    view === "insiders"
+      ? "Share of Form 4 officer trades by industry sector in the current window"
+      : "Share of disclosed House/Senate trades by industry sector in the current window";
+
+  const sectorsTabSubtitle =
+    view === "insiders"
+      ? "Market-share style breakdown of sectors being traded by officers"
+      : "Market-share style breakdown of sectors being traded by this chamber";
 
   return (
     <div className="space-y-8">
@@ -371,12 +408,16 @@ export function FeedBoard({
         <div className="space-y-8">
           <SectorShareChart
             title={`Sector mix · ${payload.sectorShareScope}`}
-            subtitle="Share of disclosed House/Senate trades by industry sector in the current window"
+            subtitle={sectorSubtitle}
             slices={payload.sectorShare}
           />
           <TopPerformersSection
             title={`Top performers · ${chamberLabelForTabs}`}
-            subtitle="Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+            subtitle={
+              view === "insiders"
+                ? "Highest average return on stocks bought by officers in the selected period — expand for buys, returns, and charts"
+                : "Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+            }
             rows={topPerformers}
             portfolio={payload.portfolioGrowth}
             period={payload.performerPeriod}
@@ -390,7 +431,7 @@ export function FeedBoard({
       {showSectors ? (
         <SectorShareChart
           title={`Sector mix · ${payload.sectorShareScope}`}
-          subtitle="Market-share style breakdown of sectors being traded by this chamber"
+          subtitle={sectorsTabSubtitle}
           slices={payload.sectorShare}
         />
       ) : null}
@@ -452,6 +493,19 @@ export function FeedBoard({
           trades={senateTrades}
           page={senatePage}
           pageParam="senatePage"
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+        />
+      ) : null}
+
+      {showActivity && showInsiders ? (
+        <DisclosureDayList
+          title="Insiders"
+          subtitle="Form 4 officer filings (CEO, CFO, and other named officers) — expand for buys and charts"
+          trades={insiderTrades}
+          page={insiderPage}
+          pageParam="insiderPage"
           query={query}
           view={view}
           sectorByTicker={payload.tickerSectors}
@@ -564,7 +618,7 @@ function StockPanel({
   onClose,
   onTradeSource,
   onOpenMember,
-  preferredSources = ["congress", "house", "senate"],
+  preferredSources = ["congress", "house", "senate", "ceo"],
 }: {
   state: StockPanelState;
   onClose: () => void;
@@ -573,8 +627,13 @@ function StockPanel({
   preferredSources?: ChartTradeSource[];
 }) {
   const ref = useScrollIntoView(true);
-  const sources = preferredSources.filter((s) =>
-    s === "congress" || s === "house" || s === "senate",
+  const sources = preferredSources.filter(
+    (s) =>
+      s === "congress" ||
+      s === "house" ||
+      s === "senate" ||
+      s === "ceo" ||
+      s === "both",
   );
 
   return (
@@ -588,7 +647,7 @@ function StockPanel({
             {state.ticker}
           </p>
           <p className="text-sm text-[color:var(--fog-dim)]">
-            {state.data?.asset ?? "Congressional activity"}
+            {state.data?.asset ?? "Trade activity"}
           </p>
         </div>
         <button
@@ -610,7 +669,11 @@ function StockPanel({
                     ? "Congress"
                     : value === "house"
                       ? "House"
-                      : "Senate";
+                      : value === "senate"
+                        ? "Senate"
+                        : value === "both"
+                          ? "All"
+                          : "Insiders";
                 return (
                   <button
                     key={value}
@@ -688,7 +751,7 @@ function StockPanel({
 
 function tradePageHref(opts: {
   page: number;
-  pageParam: "housePage" | "senatePage";
+  pageParam: "housePage" | "senatePage" | "insiderPage";
   query?: string;
   view: FeedView;
 }): string {
@@ -710,7 +773,14 @@ function ViewTabs({
   tab: "activity" | "performers" | "sectors";
   query?: string;
 }) {
-  if (view !== "house" && view !== "senate" && view !== "trending") return null;
+  if (
+    view !== "house" &&
+    view !== "senate" &&
+    view !== "trending" &&
+    view !== "insiders"
+  ) {
+    return null;
+  }
   const activityLabel = view === "trending" ? "Tickers" : "Activity";
   function href(next: "activity" | "performers" | "sectors") {
     const params = new URLSearchParams();
@@ -761,7 +831,7 @@ function DisclosureDayList({
   subtitle: string;
   trades: CongressTrade[];
   page: number;
-  pageParam: "housePage" | "senatePage";
+  pageParam: "housePage" | "senatePage" | "insiderPage";
   query?: string;
   view: FeedView;
   sectorByTicker?: Record<string, string>;
@@ -908,7 +978,7 @@ function PortfolioGrowthBanner({
           {" · "}
           {portfolio.congressPricedCount} congress
           {portfolio.ceoPricedCount
-            ? ` · ${portfolio.ceoPricedCount} CEO`
+            ? ` · ${portfolio.ceoPricedCount} officer`
             : ""}
         </p>
       </div>

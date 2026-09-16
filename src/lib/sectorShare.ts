@@ -102,9 +102,10 @@ export function mergeIndustryLabels(
 }
 
 export function chamberScopeLabel(
-  view: "house" | "senate" | "trending" | "feed",
+  view: "house" | "senate" | "trending" | "feed" | "insiders",
 ): string {
   if (view === "house") return "House";
   if (view === "senate") return "Senate";
+  if (view === "insiders") return "Insiders";
   return "Congress";
 }

@@ -108,14 +108,15 @@ export function DisclosureDayCard({
             error: null,
           });
         } else {
-          // Fallback: stock preview scoped to congress when slug is missing
+          // Fallback: stock preview when slug is missing (or Form 4 insiders)
+          const source = group.chartSource === "ceo" ? "ceo" : "congress";
           const data = await loadJson<{
             ticker: string;
             asset: string | null;
             bars: MemberStockPreviewPayload["bars"];
             topTrades: CongressTrade[];
           }>(
-            `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&source=congress`,
+            `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&source=${source}`,
           );
           if (id !== requestId.current) return;
           setChart({
@@ -144,7 +145,7 @@ export function DisclosureDayCard({
         });
       }
     },
-    [group.member, group.memberSlug],
+    [group.chartSource, group.member, group.memberSlug],
   );
 
   useEffect(() => {
@@ -191,8 +192,10 @@ export function DisclosureDayCard({
                 {group.member ?? "Unknown member"}
               </span>
               <span className="hx-meta">
-                {chamberLabel(group.chamber)}
-                {group.state ? ` · ${group.state}` : ""}
+                {group.roleLabel
+                  ? group.roleLabel
+                  : chamberLabel(group.chamber)}
+                {!group.roleLabel && group.state ? ` · ${group.state}` : ""}
               </span>
             </div>
             <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">

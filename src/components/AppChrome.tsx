@@ -6,9 +6,9 @@ import { Suspense, useState, type ReactNode } from "react";
 import {
   Building2,
   Landmark,
-  LineChart,
   Menu,
   TrendingUp,
+  Users,
   X,
 } from "lucide-react";
 import { AuthControls } from "@/components/AuthControls";
@@ -18,6 +18,7 @@ export type ChromeNavKey =
   | "trending"
   | "house"
   | "senate"
+  | "insiders"
   | "ceo-buys"
   | "investors"
   | "filings"
@@ -31,13 +32,19 @@ type NavItem = {
   key: ChromeNavKey;
   href: string;
   label: string;
-  icon: typeof LineChart;
+  icon: typeof TrendingUp;
 };
 
-/** House / Senate focused navigation — other research surfaces stay off the chrome for now. */
+/** House / Senate / Insiders focused navigation. */
 const NAV_ITEMS: NavItem[] = [
   { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
   { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
+  {
+    key: "insiders",
+    href: "/app?view=insiders",
+    label: "Insiders",
+    icon: Users,
+  },
   {
     key: "trending",
     href: "/app?view=trending",
@@ -53,9 +60,11 @@ function resolveActive(
 ): ChromeNavKey {
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
+  if (pathname.startsWith("/ceo-buys")) return "insiders";
   if (pathname === "/app" || pathname.startsWith("/app")) {
     if (view === "trending") return "trending";
     if (view === "senate") return "senate";
+    if (view === "insiders" || view === "ceo") return "insiders";
     if (view === "house" || view === "feed" || !view) return "house";
     return "house";
   }

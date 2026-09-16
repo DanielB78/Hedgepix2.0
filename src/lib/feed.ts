@@ -46,7 +46,7 @@ export type { PerformerPeriod, PortfolioGrowth, TopPerformer };
 export type { ChartTrade, ChartTradeSource };
 export type { SectorShareSlice };
 
-export type FeedView = "feed" | "trending" | "house" | "senate";
+export type FeedView = "feed" | "trending" | "house" | "senate" | "insiders";
 
 export type PopularMember = {
   slug: string;
@@ -68,6 +68,8 @@ export type FeedPayload = {
   recentHouseBuys: CongressTrade[];
   recentSenateBuys: CongressTrade[];
   recentCeoBuys: CeoActivityCard[];
+  /** Form 4 officer trades (CEO/CFO/…) for the Insiders activity view. */
+  recentInsider: ChartTrade[];
   topPerformers: TopPerformer[];
   portfolioGrowth: PortfolioGrowth | null;
   performerPeriod: PerformerPeriod;
@@ -121,10 +123,12 @@ export function parseFeedView(
     raw === "trending" ||
     raw === "house" ||
     raw === "senate" ||
+    raw === "insiders" ||
     raw === "feed"
   ) {
     return raw;
   }
+  if (raw === "ceo") return "insiders";
   // Default to House — product focus is congressional chambers for now.
   return "house";
 }
@@ -193,6 +197,37 @@ async function fetchRecentByChamber(
 const CEO_FEED_COLUMNS =
   "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code";
 
+/** Recent Form 4 officer P/S rows as chart trades (activity disclosure cards). */
+async function fetchRecentInsiderTrades(
+  limit = 5000,
+  options?: { sinceDays?: number },
+): Promise<{ rows: ChartTrade[]; error: string | null }> {
+  const supabase = createBrowserSupabase();
+  let query = supabase
+    .from("ceo_stock_purchases")
+    .select(CEO_FEED_COLUMNS)
+    .order("filing_date", { ascending: false, nullsFirst: false })
+    .order("transaction_date", { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (options?.sinceDays != null && options.sinceDays > 0) {
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - options.sinceDays);
+    query = query.gte("filing_date", cutoff.toISOString().slice(0, 10));
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    return { rows: [], error: error.message };
+  }
+
+  const rows: ChartTrade[] = [];
+  for (const row of (data as CeoStockPurchaseRow[] | null) ?? []) {
+    const trade = ceoRowToChartTrade(row);
+    if (trade) rows.push(trade);
+  }
+  return { rows, error: null };
+}
 
 async function fetchPopularMembers(
   chamber: Chamber,
@@ -316,6 +351,7 @@ export async function fetchFeedPayload(
       recentHouseBuys: [],
       recentSenateBuys: [],
       recentCeoBuys: [],
+      recentInsider: [],
       topPerformers: [],
       portfolioGrowth: null,
       performerPeriod,
@@ -328,22 +364,28 @@ export async function fetchFeedPayload(
     };
   }
 
-  // House / Senate activity + top performers. Skip popular-members lists and CEO digest.
+  // House / Senate / Insiders activity + top performers.
   const needTrending = view === "trending";
-  // Always pull chamber trades for sector-share on trending too.
   const needHouse =
     view === "feed" || view === "house" || view === "trending";
   const needSenate =
     view === "feed" || view === "senate" || view === "trending";
+  const needInsiders = view === "insiders";
   const needTopPerformers =
-    view === "house" || view === "senate" || view === "trending" || view === "feed";
+    view === "house" ||
+    view === "senate" ||
+    view === "trending" ||
+    view === "feed" ||
+    view === "insiders";
 
   const performerOpts =
     view === "house"
-      ? { chamber: "house" as const, includeCeo: false }
+      ? { chamber: "house" as const, includeCeo: false, includeCongress: true }
       : view === "senate"
-        ? { chamber: "senate" as const, includeCeo: false }
-        : { includeCeo: false };
+        ? { chamber: "senate" as const, includeCeo: false, includeCongress: true }
+        : view === "insiders"
+          ? { includeCeo: true, includeCongress: false }
+          : { includeCeo: false, includeCongress: true };
 
   // Pull the full local month of disclosures (not a tiny recent slice).
   // 120 rows previously collapsed to only ~4 member-days because big
@@ -351,7 +393,7 @@ export async function fetchFeedPayload(
   const MONTH_TRADE_LIMIT = 5000;
   const MONTH_LOOKBACK_DAYS = 40;
 
-  const [trending, recentHouse, recentSenate, topPerformers] =
+  const [trending, recentHouse, recentSenate, recentInsider, topPerformers] =
     await Promise.all([
       needTrending
         ? fetchTrending({ mode: "all", periodDays: 30 })
@@ -363,6 +405,11 @@ export async function fetchFeedPayload(
         : EMPTY_SLICE,
       needSenate
         ? fetchRecentByChamber("senate", MONTH_TRADE_LIMIT, {
+            sinceDays: MONTH_LOOKBACK_DAYS,
+          })
+        : EMPTY_SLICE,
+      needInsiders
+        ? fetchRecentInsiderTrades(MONTH_TRADE_LIMIT, {
             sinceDays: MONTH_LOOKBACK_DAYS,
           })
         : EMPTY_SLICE,
@@ -379,12 +426,14 @@ export async function fetchFeedPayload(
     trending.error ||
     recentHouse.error ||
     recentSenate.error ||
+    recentInsider.error ||
     topPerformers.error ||
     null;
 
   const sectorTickers = [
     ...recentHouse.rows.map((t) => t.ticker ?? ""),
     ...recentSenate.rows.map((t) => t.ticker ?? ""),
+    ...recentInsider.rows.map((t) => t.ticker ?? ""),
     ...trending.rows.map((t) => t.ticker),
     ...topPerformers.rows.map((t) => t.bestTicker ?? ""),
   ];
@@ -402,8 +451,9 @@ export async function fetchFeedPayload(
       ? recentHouse.rows
       : view === "senate"
         ? recentSenate.rows
-        : [...recentHouse.rows, ...recentSenate.rows];
-  // For trending tab without chamber rows loaded, reuse trending tickers via house+senate empty — load both when trending.
+        : view === "insiders"
+          ? recentInsider.rows
+          : [...recentHouse.rows, ...recentSenate.rows];
   const sectorShare = computeSectorShare(shareTrades);
   const sectorShareScope = chamberScopeLabel(
     view === "feed" ? "feed" : view,
@@ -418,6 +468,7 @@ export async function fetchFeedPayload(
     recentHouseBuys: [],
     recentSenateBuys: [],
     recentCeoBuys: [],
+    recentInsider: recentInsider.rows,
     topPerformers: topPerformers.rows,
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
