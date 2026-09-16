@@ -300,6 +300,8 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   async function scan(fromDate: string): Promise<BuyRow[]> {
     const buys: BuyRow[] = [];
     let from = 0;
+    // Prefer transaction_code=P so sales-heavy Form 4 dumps do not exhaust the
+    // fetch cap before purchases are seen. Still verify via raw_source.
     while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
       const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
       const { data, error } = await supabase
@@ -307,6 +309,7 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
         .select(
           "ceo_name, ticker, transaction_date, transaction_code, raw_source",
         )
+        .eq("transaction_code", "P")
         .gte("transaction_date", fromDate)
         .not("ticker", "is", null)
         .order("transaction_date", { ascending: false })
@@ -353,6 +356,7 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const latest = await supabase
     .from("ceo_stock_purchases")
     .select("transaction_date")
+    .eq("transaction_code", "P")
     .not("transaction_date", "is", null)
     .order("transaction_date", { ascending: false })
     .limit(1);
