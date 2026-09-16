@@ -309,6 +309,30 @@ async function main(): Promise<void> {
     console.log(`Errors: ${prices.errors}`);
     console.log("");
 
+    console.log("Classifying ticker sectors / industries…");
+    try {
+      const { syncTickerProfiles } = await import("./tickers/syncTickerProfiles.js");
+      const profiles = await syncTickerProfiles(supabase, {
+        secLimit: Number.parseInt(process.env.TICKER_PROFILE_SEC_LIMIT ?? "40", 10),
+      });
+      console.log("TICKER PROFILES");
+      console.log(`Status: ${profiles.status}`);
+      console.log(`Discovered: ${profiles.discovered}`);
+      console.log(`Upserted: ${profiles.upserted}`);
+      console.log(
+        `Sources — map: ${profiles.seededFromMap}, SEC: ${profiles.fromSec}, heuristic: ${profiles.fromHeuristic}, skipped existing: ${profiles.skippedExisting}`,
+      );
+      if (profiles.errorMessages.length) {
+        console.log(`Errors: ${profiles.errorMessages.slice(0, 3).join("; ")}`);
+      }
+    } catch (err) {
+      console.log("TICKER PROFILES");
+      console.log(
+        `Status: FAILED — ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    console.log("");
+
     console.log("Recomputing member holdings…");
     const holdings = await syncHoldingsAfterTrades(supabase);
     console.log("MEMBER HOLDINGS");
@@ -350,29 +374,39 @@ async function main(): Promise<void> {
     }
     console.log("");
 
-    console.log("Fetching SEC filing datasets (13F, 13D/G, 144, 8-K, fundamentals, offerings, N-PORT)…");
+    const skipSec =
+      process.env.SKIP_SEC_FILINGS === "1" ||
+      process.env.LOCAL_SKIP_SEC === "1";
     let secSummary;
-    try {
-      secSummary = await runSecFilingsUpdate(supabase);
-    } catch (err) {
-      console.error(
-        `SEC filings section failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    if (skipSec) {
+      console.log("Skipping SEC filing datasets (SKIP_SEC_FILINGS=1).");
       secSummary = null;
-    }
-    console.log("SEC FILINGS");
-    if (secSummary) {
-      for (const [name, result] of Object.entries(secSummary.sources)) {
-        console.log(
-          `  ${name}: ${result.status} (periods=${result.periods}, rows=${result.rows}${
-            result.error ? `, error=${result.error}` : ""
-          })`,
-        );
-      }
     } else {
-      console.log("  Status: FAILED (uncaught error, see log above)");
+      console.log(
+        "Fetching SEC filing datasets (13F, 13D/G, 144, 8-K, fundamentals, offerings, N-PORT)…",
+      );
+      try {
+        secSummary = await runSecFilingsUpdate(supabase);
+      } catch (err) {
+        console.error(
+          `SEC filings section failed unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        secSummary = null;
+      }
+      console.log("SEC FILINGS");
+      if (secSummary) {
+        for (const [name, result] of Object.entries(secSummary.sources)) {
+          console.log(
+            `  ${name}: ${result.status} (periods=${result.periods}, rows=${result.rows}${
+              result.error ? `, error=${result.error}` : ""
+            })`,
+          );
+        }
+      } else {
+        console.log("  Status: FAILED (uncaught error, see log above)");
+      }
+      console.log("");
     }
-    console.log("");
 
     console.log("========================================");
     console.log("UPDATE SUMMARY");
@@ -382,7 +416,9 @@ async function main(): Promise<void> {
       `Stock prices: ${prices.status === "FAILED" ? "FAILED" : "SUCCESS"}`,
     );
     console.log(`GDELT news: ${news.status}`);
-    console.log(`SEC filings: ${secSummary ? secSummary.status : "FAILED"}`);
+    console.log(
+      `SEC filings: ${skipSec ? "SKIPPED" : secSummary ? secSummary.status : "FAILED"}`,
+    );
     if (secSummary) {
       for (const [name, result] of Object.entries(secSummary.sources)) {
         console.log(`  - SEC/${name}: ${result.status}`);

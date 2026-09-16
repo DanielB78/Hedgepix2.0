@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
 export function AuthControls({ compact = true }: { compact?: boolean }) {
   const { user, loading, signOut } = useAuth();
+  // Avoid SSR/client auth chrome mismatches (loading → logged-out flash).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (loading) {
-    return <span className="text-xs text-[var(--fog-dim)]">…</span>;
+  if (!mounted || loading) {
+    return (
+      <div
+        className={`flex h-8 items-center gap-1.5 ${compact ? "" : "flex-col"}`}
+        aria-hidden
+        suppressHydrationWarning
+      >
+        <span className="inline-block h-8 w-14 rounded-md bg-[var(--panel-muted)]" />
+        <span className="inline-block h-8 w-16 rounded-md bg-[var(--panel-muted)]" />
+      </div>
+    );
   }
 
   if (!user) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   isCeoOfficerTitle,
+  isNamedOfficerTitle,
   isOfficerRelationship,
   isPublicStockSecurityTitle,
 } from "../sec/ceoFilter.js";
@@ -26,6 +27,20 @@ assert.equal(isCeoOfficerTitle("CFO", "Officer"), false);
 assert.equal(isCeoOfficerTitle("Vice President", "Officer"), false);
 assert.equal(isCeoOfficerTitle("Chief Executive Officer", "Director"), false);
 assert.equal(isCeoOfficerTitle("Vice CEO", "Officer"), false);
+
+assert.equal(isNamedOfficerTitle("Chief Executive Officer", "Officer"), true);
+assert.equal(isNamedOfficerTitle("CFO", "Officer"), true);
+assert.equal(isNamedOfficerTitle("Chief Financial Officer", "Officer"), true);
+assert.equal(isNamedOfficerTitle("COO", "Officer,Director"), true);
+assert.equal(isNamedOfficerTitle("Chief Operating Officer", "Officer"), true);
+assert.equal(isNamedOfficerTitle("CTO", "Officer"), true);
+assert.equal(isNamedOfficerTitle("Chief Technology Officer", "Officer"), true);
+assert.equal(isNamedOfficerTitle("President", "Officer"), true);
+assert.equal(isNamedOfficerTitle("General Counsel", "Officer"), true);
+assert.equal(isNamedOfficerTitle("Vice President", "Officer"), false);
+assert.equal(isNamedOfficerTitle("Senior Vice President", "Officer"), false);
+assert.equal(isNamedOfficerTitle("CFO", "Director"), false);
+assert.equal(isNamedOfficerTitle("Interim CFO", "Officer"), false);
 
 assert.equal(isPublicStockSecurityTitle("Common Stock"), true);
 assert.equal(

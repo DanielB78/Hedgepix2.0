@@ -14,6 +14,19 @@ function publicConfig(): { url: string; anonKey: string } | null {
   return { url, anonKey };
 }
 
+/** True when pointing at the local Postgres/PostgREST gateway (no GoTrue). */
+export function isLocalSupabaseUrl(
+  url = process.env.NEXT_PUBLIC_SUPABASE_URL,
+): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
 /** Unauthenticated / public data reads (no session). */
 export function createBrowserSupabase(): SupabaseClient {
   const cfg = publicConfig();
@@ -32,10 +45,12 @@ export function createBrowserSupabase(): SupabaseClient {
  * Browser auth client with session persistence.
  * Returns null when public Supabase env is missing so build/prerender
  * never throws from auth setup.
+ * Also returns null for the local offline DB (no GoTrue).
  */
 export function createAuthSupabase(): SupabaseClient | null {
   const cfg = publicConfig();
   if (!cfg) return null;
+  if (isLocalSupabaseUrl(cfg.url)) return null;
 
   return createClient(cfg.url, cfg.anonKey, {
     auth: {

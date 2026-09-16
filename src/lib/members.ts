@@ -5,12 +5,19 @@ import {
   applyListedEquityFallback,
   isMissingListedEquityColumn,
 } from "./stockFilter";
+import {
+  computeTradeSectorOverlaps,
+  fetchMemberIndustryLabels,
+  type SectorOverlapResult,
+} from "./memberSectors";
 
 export type MemberPageData = {
   profile: MemberProfile | null;
   trades: CongressTrade[];
   holdings: MemberHolding[];
   totalTradeCount: number;
+  /** trade id → sector overlap (only when matched). */
+  sectorOverlaps: Record<string, SectorOverlapResult>;
   configured: boolean;
   error: string | null;
 };
@@ -41,6 +48,7 @@ export async function fetchMemberPage(
       trades: [],
       holdings: [],
       totalTradeCount: 0,
+      sectorOverlaps: {},
       configured: false,
       error:
         "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.",
@@ -116,12 +124,16 @@ export async function fetchMemberPage(
       trades: [],
       holdings: [],
       totalTradeCount: 0,
+      sectorOverlaps: {},
       configured: true,
       error: tradesResult.error.message,
     };
   }
 
   const profileRow = profileResult.data;
+  const industryBySlug = await fetchMemberIndustryLabels([normalizedSlug]);
+  const industryLabels = industryBySlug.get(normalizedSlug) ?? [];
+
   const profile: MemberProfile | null = profileRow
     ? {
         slug: normalizedSlug,
@@ -131,6 +143,7 @@ export async function fetchMemberPage(
             ? profileRow.chamber
             : null,
         state: profileRow.state,
+        industryLabels,
       }
     : null;
 
@@ -140,18 +153,26 @@ export async function fetchMemberPage(
       trades: [],
       holdings: [],
       totalTradeCount: 0,
+      sectorOverlaps: {},
       configured: true,
       error: null,
     };
   }
 
+  const trades = (tradesResult.data ?? []) as unknown as CongressTrade[];
+  const sectorOverlaps = await computeTradeSectorOverlaps(
+    trades,
+    industryBySlug,
+  );
+
   return {
     profile,
-    trades: (tradesResult.data ?? []) as unknown as CongressTrade[],
+    trades,
     holdings: (holdingsResult.error
       ? []
       : ((holdingsResult.data ?? []) as unknown as MemberHolding[])),
     totalTradeCount: tradesResult.count ?? 0,
+    sectorOverlaps,
     configured: true,
     error: holdingsResult.error ? holdingsResult.error.message : null,
   };
