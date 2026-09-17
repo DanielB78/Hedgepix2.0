@@ -42,6 +42,13 @@ import {
   type TradeFilterContext,
 } from "@/lib/advancedTradeFilters";
 import { rankTrending } from "@/lib/trending";
+import {
+  overlapActivityAsTrending,
+  rankSectorOverlapActivity,
+  type OverlapPurchaseOccasion,
+  type SectorOverlapActivityRow,
+} from "@/lib/sectorOverlapActivity";
+import type { SectorOverlapResult } from "@/lib/sectorOverlap";
 
 type Props = {
   view: FeedView;
@@ -447,6 +454,17 @@ export function FeedBoard({
     [payload.topPerformers, q],
   );
 
+  /** Sector-Overlap Activity: always purchase-only; uses filtered chamber trades. */
+  const sectorOverlapActivity = useMemo(() => {
+    if (view !== "house" && view !== "senate") return [];
+    const trades = view === "house" ? houseTrades : senateTrades;
+    return rankSectorOverlapActivity(
+      trades,
+      payload.tradeSectorOverlaps ?? {},
+      25,
+    );
+  }, [houseTrades, payload.tradeSectorOverlaps, senateTrades, view]);
+
   const chamberLabelForTabs =
     view === "senate"
       ? "Senate"
@@ -510,6 +528,25 @@ export function FeedBoard({
             view={view}
             sectorByTicker={payload.tickerSectors}
           />
+          {view === "house" || view === "senate" ? (
+            <SectorOverlapActivitySection
+              chamberLabel={chamberLabelForTabs}
+              rows={sectorOverlapActivity}
+              sectorByTicker={payload.tickerSectors}
+              stockPanel={stockPanel}
+              onOpenTicker={(ticker) =>
+                void openStock(
+                  ticker,
+                  view === "senate" ? "senate" : "house",
+                )
+              }
+              onCloseStock={() => setStockPanel(null)}
+              onTradeSource={(s) =>
+                stockPanel ? void openStock(stockPanel.ticker, s) : undefined
+              }
+              onOpenMember={(slug) => toggleMember(slug)}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -657,13 +694,25 @@ function TickerCard({
   active,
   onOpen,
   sectorLabel,
+  metric = "trending",
 }: {
   rank: number;
   row: TrendingTicker;
   active: boolean;
   onOpen: () => void;
   sectorLabel?: string | null;
+  /** trending = members/trades; overlapBuys = overlap buys/members */
+  metric?: "trending" | "overlapBuys";
 }) {
+  const primary =
+    metric === "overlapBuys"
+      ? `${row.totalTrades} overlap buy${row.totalTrades === 1 ? "" : "s"}`
+      : `${row.uniqueMembers} member${row.uniqueMembers === 1 ? "" : "s"}`;
+  const secondary =
+    metric === "overlapBuys"
+      ? `${row.uniqueMembers} member${row.uniqueMembers === 1 ? "" : "s"}`
+      : `${row.totalTrades} trade${row.totalTrades === 1 ? "" : "s"}`;
+
   return (
     <button
       type="button"
@@ -693,10 +742,8 @@ function TickerCard({
         ) : null}
       </div>
       <div className="shrink-0 text-right text-sm text-[color:var(--fog-dim)]">
-        <p className="text-[color:var(--mint)]">
-          {row.uniqueMembers} member{row.uniqueMembers === 1 ? "" : "s"}
-        </p>
-        <p>{row.totalTrades} trades</p>
+        <p className="text-[color:var(--mint)]">{primary}</p>
+        <p>{secondary}</p>
       </div>
     </button>
   );
@@ -1116,6 +1163,145 @@ function PortfolioGrowthBanner({
             : ""}
         </p>
       </div>
+    </div>
+  );
+}
+
+function overlapMatchCaption(overlap: SectorOverlapResult): string {
+  if (overlap.match_type === "direct") return "Direct match";
+  if (overlap.match_type === "embedding") {
+    const sim =
+      typeof overlap.similarity === "number"
+        ? overlap.similarity.toFixed(3)
+        : null;
+    return sim ? `Semantic · ${sim}` : "Semantic";
+  }
+  return "Overlap";
+}
+
+function SectorOverlapActivitySection({
+  chamberLabel,
+  rows,
+  sectorByTicker,
+  stockPanel,
+  onOpenTicker,
+  onCloseStock,
+  onTradeSource,
+  onOpenMember,
+}: {
+  chamberLabel: string;
+  rows: SectorOverlapActivityRow[];
+  sectorByTicker?: Record<string, string>;
+  stockPanel: StockPanelState | null;
+  onOpenTicker: (ticker: string) => void;
+  onCloseStock: () => void;
+  onTradeSource: (source: ChartTradeSource) => void;
+  onOpenMember: (slug: string) => void;
+}) {
+  return (
+    <section className="animate-rise space-y-4">
+      <SectionTitle
+        title={`Sector-Overlap Activity · ${chamberLabel}`}
+        subtitle="Tickers with the most qualifying overlap purchases — member industry labels match or are highly similar to the ticker’s industries (buys only)"
+      />
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <Empty text="No overlap buy activity matches the current filters." />
+        ) : (
+          rows.map((row, i) => {
+            const active = stockPanel?.ticker === row.ticker;
+            const trendingRow = overlapActivityAsTrending(row);
+            return (
+              <div key={row.ticker} className="space-y-3">
+                <TickerCard
+                  rank={i + 1}
+                  row={trendingRow}
+                  active={active}
+                  sectorLabel={sectorByTicker?.[row.ticker] ?? null}
+                  metric="overlapBuys"
+                  onOpen={() => onOpenTicker(row.ticker)}
+                />
+                {active ? (
+                  <div className="space-y-3">
+                    <OverlapBuysPanel
+                      occasions={row.occasions}
+                      onOpenMember={onOpenMember}
+                    />
+                    {stockPanel ? (
+                      <StockPanel
+                        state={stockPanel}
+                        onClose={onCloseStock}
+                        onTradeSource={onTradeSource}
+                        onOpenMember={onOpenMember}
+                        preferredSources={
+                          chamberLabel === "Senate"
+                            ? ["senate", "congress", "ceo"]
+                            : ["house", "congress", "ceo"]
+                        }
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OverlapBuysPanel({
+  occasions,
+  onOpenMember,
+}: {
+  occasions: OverlapPurchaseOccasion[];
+  onOpenMember: (slug: string) => void;
+}) {
+  return (
+    <div className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)]">
+      <div className="border-b border-[color:var(--line)] px-4 py-2.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+          Qualifying overlap purchases · {occasions.length}
+        </p>
+      </div>
+      <ul className="divide-y divide-[color:var(--line)]">
+        {occasions.map((occ) => (
+          <li key={occ.key} className="px-4 py-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              {occ.memberSlug ? (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-[color:var(--mint)] hover:opacity-80"
+                  onClick={() => onOpenMember(occ.memberSlug!)}
+                >
+                  {occ.member ?? occ.memberSlug}
+                </button>
+              ) : (
+                <p className="text-sm font-medium text-[color:var(--fog)]">
+                  {occ.member ?? "Unknown member"}
+                </p>
+              )}
+              <p className="hx-meta">
+                {formatShortDate(occ.transactionDate ?? occ.disclosureDate)}
+                {occ.amountRange ? ` · ${occ.amountRange}` : ""}
+              </p>
+            </div>
+            <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">
+              Purchase
+              {occ.overlap.member_label
+                ? ` · Member sector: ${occ.overlap.member_label}`
+                : ""}
+              {occ.overlap.ticker_label
+                ? ` · Ticker sector: ${occ.overlap.ticker_label}`
+                : ""}
+            </p>
+            <p className="mt-0.5 text-[11px] text-[color:var(--fog-mute)]">
+              {overlapMatchCaption(occ.overlap)}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

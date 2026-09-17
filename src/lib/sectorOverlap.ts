@@ -2,7 +2,7 @@
  * Member industry labels ↔ ticker industry labels overlap detection.
  *
  * Stage 1: normalized exact match
- * Stage 2: BGE cosine similarity >= 0.95 (precomputed embeddings)
+ * Stage 2: BGE cosine similarity >= SECTOR_OVERLAP_THRESHOLD (precomputed embeddings)
  *
  * policy_topics are never used for matching.
  */
@@ -17,7 +17,8 @@ export type SectorOverlapResult = {
   similarity: number | null;
 };
 
-export const SECTOR_OVERLAP_THRESHOLD = 0.95;
+/** Inclusive cosine cutoff for semantic member↔ticker sector overlap. */
+export const SECTOR_OVERLAP_THRESHOLD = 0.85;
 export const SECTOR_EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5";
 
 export function normalizeSectorLabel(label: string | null | undefined): string {

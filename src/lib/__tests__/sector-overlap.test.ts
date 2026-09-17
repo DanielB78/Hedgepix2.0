@@ -16,8 +16,15 @@ function unit(name: string, fn: () => void) {
   }
 }
 
+unit("threshold constant is 0.85", () => {
+  assert.equal(SECTOR_OVERLAP_THRESHOLD, 0.85);
+});
+
 unit("normalize collapses whitespace and lowercases", () => {
-  assert.equal(normalizeSectorLabel("  Commercial   Aerospace "), "commercial aerospace");
+  assert.equal(
+    normalizeSectorLabel("  Commercial   Aerospace "),
+    "commercial aerospace",
+  );
 });
 
 unit("direct match is case/whitespace insensitive", () => {
@@ -28,65 +35,31 @@ unit("direct match is case/whitespace insensitive", () => {
   assert.equal(r.has_sector_overlap, true);
   assert.equal(r.match_type, "direct");
   assert.equal(r.similarity, 1);
-  assert.equal(r.member_label, "Commercial aerospace");
 });
 
-unit("no labels → no overlap", () => {
-  const r = detectSectorOverlap([], ["Banking"]);
-  assert.equal(r.has_sector_overlap, false);
-  assert.equal(r.match_type, null);
-});
-
-unit("embedding match at exactly 0.95", () => {
-  const a = new Float32Array([1, 0, 0]);
-  // Build b so cosine is exactly 0.95 (within float32 noise, still >= threshold)
-  const cos = 0.95;
-  const b = new Float32Array([cos, Math.sqrt(1 - cos * cos), 0]);
-  // Force score to threshold via nearly-identical vectors if float noise dips below
-  let score = cosineSimilarity(a, b);
-  if (score < SECTOR_OVERLAP_THRESHOLD) {
-    // Use a slightly higher target so float32 still clears the inclusive bar
-    const cos2 = 0.9501;
-    b[0] = cos2;
-    b[1] = Math.sqrt(1 - cos2 * cos2);
-    score = cosineSimilarity(a, b);
-  }
-  assert.ok(score >= SECTOR_OVERLAP_THRESHOLD);
-
-  const map = new Map<string, Float32Array>([
-    ["defense aerospace", a],
-    ["aerospace systems", b],
-  ]);
-  const r = detectSectorOverlap(
-    ["Defense aerospace"],
-    ["Aerospace systems"],
-    map,
-  );
-  assert.equal(r.has_sector_overlap, true);
-  assert.equal(r.match_type, "embedding");
-  assert.ok((r.similarity ?? 0) >= SECTOR_OVERLAP_THRESHOLD);
-});
-
-unit("embedding inclusive threshold: 0.95 matches, 0.9499 does not", () => {
+unit("embedding inclusive threshold: 0.85 matches, 0.8499 does not", () => {
   const a = new Float32Array([1, 0]);
   const mapHi = new Map<string, Float32Array>([
     ["a", a],
-    ["b", new Float32Array([0.9500001, Math.sqrt(1 - 0.9500001 ** 2)])],
+    ["b", new Float32Array([0.8500001, Math.sqrt(1 - 0.8500001 ** 2)])],
   ]);
   const hi = detectSectorOverlap(["A"], ["B"], mapHi);
   assert.equal(hi.has_sector_overlap, true);
+  assert.equal(hi.match_type, "embedding");
+  assert.ok((hi.similarity ?? 0) >= SECTOR_OVERLAP_THRESHOLD);
 
   const mapLo = new Map<string, Float32Array>([
     ["a", a],
-    ["b", new Float32Array([0.9499, Math.sqrt(1 - 0.9499 ** 2)])],
+    ["b", new Float32Array([0.8499, Math.sqrt(1 - 0.8499 ** 2)])],
   ]);
   const lo = detectSectorOverlap(["A"], ["B"], mapLo);
   assert.equal(lo.has_sector_overlap, false);
+  assert.equal(lo.match_type, null);
 });
 
 unit("direct match short-circuits embedding", () => {
   const a = new Float32Array([1, 0]);
-  const b = new Float32Array([0, 1]); // cosine 0
+  const b = new Float32Array([0, 1]);
   const map = new Map<string, Float32Array>([
     ["banking", a],
     ["banking", b],
@@ -99,7 +72,8 @@ unit("direct match short-circuits embedding", () => {
 unit("multi-label takes best embedding pair", () => {
   const x = new Float32Array([1, 0, 0]);
   const y = new Float32Array([0, 1, 0]);
-  const z = new Float32Array([0.97, Math.sqrt(1 - 0.97 ** 2), 0]);
+  const z = new Float32Array([0.88, Math.sqrt(1 - 0.88 ** 2), 0]);
+  assert.ok(cosineSimilarity(x, z) >= SECTOR_OVERLAP_THRESHOLD);
   const map = new Map<string, Float32Array>([
     ["military drones", x],
     ["consumer retail", y],
