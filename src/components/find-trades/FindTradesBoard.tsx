@@ -87,11 +87,28 @@ function AddFilterMenu({
 
   useEffect(() => {
     if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    const cleanups: Array<() => void> = [];
+    const timer = window.setTimeout(() => {
+      function onDoc(e: MouseEvent) {
+        const target = e.target as Node | null;
+        if (target && ref.current && !ref.current.contains(target)) {
+          setOpen(false);
+        }
+      }
+      function onKey(e: KeyboardEvent) {
+        if (e.key === "Escape") setOpen(false);
+      }
+      document.addEventListener("pointerdown", onDoc, true);
+      document.addEventListener("keydown", onKey);
+      cleanups.push(() => {
+        document.removeEventListener("pointerdown", onDoc, true);
+        document.removeEventListener("keydown", onKey);
+      });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      for (const c of cleanups) c();
+    };
   }, [open]);
 
   const fields = useMemo(() => searchFilterFields(q), [q]);
@@ -106,25 +123,45 @@ function AddFilterMenu({
     return map;
   }, [fields]);
 
+  function pick(field: FilterFieldDef) {
+    onAdd(field);
+    setOpen(false);
+    setQ("");
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
+        data-testid="find-trades-add-filter"
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="hx-btn inline-flex items-center gap-1.5 text-[13px]"
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
       >
         <Plus className="h-3.5 w-3.5" strokeWidth={2} />
         Add filter
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1 w-[min(100vw-2rem,22rem)] rounded-md border border-[var(--line)] bg-[var(--panel)] shadow-lg">
+        <div
+          role="listbox"
+          data-testid="find-trades-filter-menu"
+          className="absolute right-0 top-full z-50 mt-1 w-[min(100vw-2rem,22rem)] rounded-md border border-[var(--line)] bg-[var(--panel)] shadow-lg"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-2 border-b border-[var(--line)] px-2.5 py-2">
-            <Search className="h-3.5 w-3.5 text-[var(--fog-mute)]" />
+            <Search className="h-3.5 w-3.5 shrink-0 text-[var(--fog-mute)]" />
             <input
               id={inputId}
               autoFocus
+              data-testid="find-trades-filter-search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
               placeholder="Search filters…"
               className="w-full bg-transparent text-[13px] outline-none placeholder:text-[var(--fog-mute)]"
             />
@@ -142,11 +179,14 @@ function AddFilterMenu({
                     <button
                       key={f.id}
                       type="button"
+                      role="option"
+                      data-testid={`find-trades-field-${f.id}`}
                       className="flex w-full items-start rounded px-2 py-1.5 text-left text-[13px] text-[var(--ink)] hover:bg-[var(--panel-muted)]"
-                      onClick={() => {
-                        onAdd(f);
-                        setOpen(false);
-                        setQ("");
+                      onMouseDown={(e) => {
+                        // Prefer mousedown so the choice registers before blur/outside handlers.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        pick(f);
                       }}
                     >
                       <span className="flex-1">{f.label}</span>
@@ -165,10 +205,13 @@ function AddFilterMenu({
             <button
               type="button"
               className="w-full rounded px-2 py-1.5 text-left text-[12px] text-[var(--fog-dim)] hover:bg-[var(--panel-muted)] hover:text-[var(--ink)]"
-              onClick={() => {
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const ticker = FILTER_FIELD_BY_ID.get("ticker");
                 if (ticker) onAddOrGroup([ticker, ticker]);
                 setOpen(false);
+                setQ("");
               }}
             >
               + OR group (e.g. Ticker A OR Ticker B)
@@ -751,6 +794,7 @@ export function FindTradesBoard({
             {nodes.length > 0 ? (
               <button
                 type="button"
+                data-testid="find-trades-clear-all"
                 className="text-[12px] text-[var(--fog-dim)] hover:text-[var(--ink)]"
                 onClick={() => setNodes([])}
               >
@@ -862,7 +906,10 @@ export function FindTradesBoard({
 
       <div>
         <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 className="text-[13px] font-semibold text-[var(--ink)]">
+          <h2
+            data-testid="find-trades-result-count"
+            className="text-[13px] font-semibold text-[var(--ink)]"
+          >
             {matched.length.toLocaleString()} matching trade
             {matched.length === 1 ? "" : "s"}
           </h2>
