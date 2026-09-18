@@ -7,6 +7,7 @@ import {
   Building2,
   Landmark,
   Menu,
+  Search,
   TrendingUp,
   Users,
   X,
@@ -19,6 +20,7 @@ export type ChromeNavKey =
   | "house"
   | "senate"
   | "insiders"
+  | "find-trades"
   | "ceo-buys"
   | "investors"
   | "filings"
@@ -51,6 +53,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Trending",
     icon: TrendingUp,
   },
+  {
+    key: "find-trades",
+    href: "/find-trades",
+    label: "Find Trades",
+    icon: Search,
+  },
 ];
 
 function resolveActive(
@@ -58,6 +66,7 @@ function resolveActive(
   view: string | null,
   fallback?: ChromeNavKey,
 ): ChromeNavKey {
+  if (pathname.startsWith("/find-trades")) return "find-trades";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
   if (pathname.startsWith("/ceo-buys")) return "insiders";
