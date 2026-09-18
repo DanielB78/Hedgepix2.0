@@ -4,14 +4,9 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import {
-  Briefcase,
   Building2,
-  FileText,
   Landmark,
-  LineChart,
   Menu,
-  Newspaper,
-  PieChart,
   TrendingUp,
   Users,
   X,
@@ -23,6 +18,7 @@ export type ChromeNavKey =
   | "trending"
   | "house"
   | "senate"
+  | "insiders"
   | "ceo-buys"
   | "investors"
   | "filings"
@@ -36,18 +32,19 @@ type NavItem = {
   key: ChromeNavKey;
   href: string;
   label: string;
-  icon: typeof LineChart;
+  icon: typeof TrendingUp;
 };
 
+/** House / Senate / Insiders focused navigation. */
 const NAV_ITEMS: NavItem[] = [
-  { key: "feed", href: "/app", label: "Overview", icon: LineChart },
-  { key: "news", href: "/news", label: "News", icon: Newspaper },
   { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
   { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
-  { key: "ceo-buys", href: "/ceo-buys", label: "Insiders", icon: Users },
-  { key: "investors", href: "/investors", label: "Investors", icon: Briefcase },
-  { key: "filings", href: "/filings", label: "Filings", icon: FileText },
-  { key: "funds", href: "/funds", label: "Funds", icon: PieChart },
+  {
+    key: "insiders",
+    href: "/app?view=insiders",
+    label: "Insiders",
+    icon: Users,
+  },
   {
     key: "trending",
     href: "/app?view=trending",
@@ -61,25 +58,22 @@ function resolveActive(
   view: string | null,
   fallback?: ChromeNavKey,
 ): ChromeNavKey {
-  if (pathname.startsWith("/news")) return "news";
-  if (pathname.startsWith("/ceo-buys")) return "ceo-buys";
-  if (pathname.startsWith("/investors")) return "investors";
-  if (pathname.startsWith("/filings")) return "filings";
-  if (pathname.startsWith("/funds")) return "funds";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
+  if (pathname.startsWith("/ceo-buys")) return "insiders";
   if (pathname === "/app" || pathname.startsWith("/app")) {
     if (view === "trending") return "trending";
-    if (view === "house") return "house";
     if (view === "senate") return "senate";
-    return "feed";
+    if (view === "insiders" || view === "ceo") return "insiders";
+    if (view === "house" || view === "feed" || !view) return "house";
+    return "house";
   }
-  return fallback ?? "feed";
+  return fallback ?? "house";
 }
 
 function SidebarBrand() {
   return (
-    <Link href="/app" className="flex items-center gap-2.5 px-3 py-1 no-underline">
+    <Link href="/app?view=house" className="flex items-center gap-2.5 px-3 py-1 no-underline">
       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[11px] font-semibold tracking-wide text-white">
         HX
       </span>
@@ -261,7 +255,7 @@ export function AppShell({
     <Suspense
       fallback={
         <AppShellFrame
-          active={active ?? "feed"}
+          active={active ?? "house"}
           title={title}
           description={description}
           actions={actions}

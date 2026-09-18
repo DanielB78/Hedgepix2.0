@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-import { isCeoOfficerTitle, isPublicStockSecurityTitle } from "./ceoFilter.js";
+import { isNamedOfficerTitle, isPublicStockSecurityTitle } from "./ceoFilter.js";
 import type { CeoStockPurchase } from "./types.js";
 
 export type TsvRow = Record<string, string>;
@@ -177,7 +177,7 @@ export async function extractCeoPurchasesFromDir(
     stats.form4 += 1;
 
     const owners = (ownersByAcc.get(acc) ?? []).filter((o) =>
-      isCeoOfficerTitle(o.RPTOWNER_TITLE, o.RPTOWNER_RELATIONSHIP),
+      isNamedOfficerTitle(o.RPTOWNER_TITLE, o.RPTOWNER_RELATIONSHIP),
     );
     if (owners.length === 0) {
       stats.skippedNotCeo += 1;

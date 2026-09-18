@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { DisclosureDayCard } from "@/components/DisclosureDayCard";
+import { PerformerExpandCard } from "@/components/PerformerExpandCard";
 import { PriceChart } from "@/components/PriceChart";
-import { FollowingFeed } from "@/components/FollowingFeed";
-import { useAuth } from "@/components/AuthProvider";
+import { SectorShareChart } from "@/components/SectorShareChart";
+import { TradeFiltersBar } from "@/components/TradeFiltersBar";
 import type {
   FeedPayload,
   FeedView,
   MemberPreviewPayload,
   MemberStockPreviewPayload,
-  PopularMember,
   StockPreviewPayload,
 } from "@/lib/feed";
 import {
@@ -19,9 +21,12 @@ import {
   formatShortDate,
   tradeVerb,
 } from "@/lib/format";
-import type { CeoActivityCard } from "@/lib/ceoAggregate";
-import type { Chamber, CongressTrade, TrendingTicker } from "@/lib/types";
-import { TickerLink } from "@/components/TickerLink";
+import { groupTradesByDisclosure } from "@/lib/groupTrades";
+import type { CongressTrade, TrendingTicker } from "@/lib/types";
+import {
+  type ChartTrade,
+  type ChartTradeSource,
+} from "@/lib/chartTrades";
 import {
   PERFORMER_PERIODS,
   performerPeriodHref,
@@ -31,9 +36,19 @@ import {
   type TopPerformer,
 } from "@/lib/topPerformers";
 import {
-  type ChartTrade,
-  type ChartTradeSource,
-} from "@/lib/chartTrades";
+  filterTrades,
+  parseAdvancedTradeFilters,
+  type AdvancedTradeFilters,
+  type TradeFilterContext,
+} from "@/lib/advancedTradeFilters";
+import { rankTrending } from "@/lib/trending";
+import {
+  overlapActivityAsTrending,
+  rankSectorOverlapActivity,
+  type OverlapPurchaseOccasion,
+  type SectorOverlapActivityRow,
+} from "@/lib/sectorOverlapActivity";
+import type { SectorOverlapResult } from "@/lib/sectorOverlap";
 
 type Props = {
   view: FeedView;
@@ -41,6 +56,9 @@ type Props = {
   query?: string;
   housePage?: number;
   senatePage?: number;
+  insiderPage?: number;
+  /** activity (default) | performers | sectors | overlap */
+  tab?: "activity" | "performers" | "sectors" | "overlap";
 };
 
 type StockPanelState = {
@@ -72,17 +90,44 @@ async function loadJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-function TradeRow({ trade }: { trade: ChartTrade | CongressTrade }) {
+function TradeRow({
+  trade,
+  onOpenMember,
+}: {
+  trade: ChartTrade | CongressTrade;
+  onOpenMember?: (slug: string) => void;
+}) {
   const buy = trade.transaction_type === "purchase";
+  const slug =
+    "member_slug" in trade && trade.member_slug
+      ? trade.member_slug
+      : null;
+  const memberClickable = !!slug && !!onOpenMember;
+
   return (
     <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] py-2.5 last:border-0">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[color:var(--fog)]">
-          {trade.member ?? "Unknown"}
-        </p>
+        {memberClickable ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenMember(slug!);
+            }}
+            className="truncate text-left text-sm font-semibold text-[color:var(--mint)] hover:opacity-80"
+          >
+            {trade.member ?? "Unknown"}
+          </button>
+        ) : (
+          <p className="truncate text-sm font-semibold text-[color:var(--fog)]">
+            {trade.member ?? "Unknown"}
+          </p>
+        )}
         <p className="text-xs text-[color:var(--fog-dim)]">
-          {("source" in trade && trade.source === "ceo") ? "CEO" : chamberLabel(trade.chamber)} ·{" "}
-          {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
+          {("source" in trade && trade.source === "ceo")
+            ? (trade.state?.trim() || "Insider")
+            : chamberLabel(trade.chamber)}{" "}
+          · {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
         </p>
       </div>
       <div className="shrink-0 text-right">
@@ -120,26 +165,46 @@ export function FeedBoard({
   query,
   housePage = 1,
   senatePage = 1,
+  insiderPage = 1,
+  tab = "activity",
 }: Props) {
   const [stockPanel, setStockPanel] = useState<StockPanelState | null>(null);
   const [memberPanel, setMemberPanel] = useState<MemberPanelState | null>(null);
   const requestId = useRef(0);
   const q = query?.trim().toLowerCase() ?? "";
-  const { user, loading: authLoading } = useAuth();
-  const personalFeed = view === "feed" && !!user;
+  const searchParams = useSearchParams();
+  const advancedFilters: AdvancedTradeFilters = useMemo(
+    () => parseAdvancedTradeFilters(searchParams),
+    [searchParams],
+  );
+  const allowMemberSectors = view !== "insiders";
+  const filterCtx: TradeFilterContext = useMemo(
+    () => ({
+      memberSectors: payload.memberSectors ?? {},
+      tradeSectorOverlaps: payload.tradeSectorOverlaps ?? {},
+      allowMemberSectors,
+    }),
+    [
+      allowMemberSectors,
+      payload.memberSectors,
+      payload.tradeSectorOverlaps,
+    ],
+  );
 
   const filterTrade = useCallback(
     (trade: CongressTrade) => {
-      if (!q) return true;
-      const ticker = (trade.ticker ?? "").toLowerCase();
-      const member = (trade.member ?? "").toLowerCase();
-      const asset = (trade.asset ?? "").toLowerCase();
-      return (
-        ticker.includes(q) ||
-        member.includes(q) ||
-        asset.includes(q) ||
-        ticker === q.toUpperCase().toLowerCase()
-      );
+      if (q) {
+        const ticker = (trade.ticker ?? "").toLowerCase();
+        const member = (trade.member ?? "").toLowerCase();
+        const asset = (trade.asset ?? "").toLowerCase();
+        const textOk =
+          ticker.includes(q) ||
+          member.includes(q) ||
+          asset.includes(q) ||
+          ticker === q.toUpperCase().toLowerCase();
+        if (!textOk) return false;
+      }
+      return true;
     },
     [q],
   );
@@ -193,14 +258,14 @@ export function FeedBoard({
   );
 
   const toggleStock = useCallback(
-    (ticker: string) => {
-      if (stockPanel?.ticker === ticker) {
+    (ticker: string, tradeSource: ChartTradeSource = "congress") => {
+      if (stockPanel?.ticker === ticker && stockPanel.tradeSource === tradeSource) {
         setStockPanel(null);
         return;
       }
-      void openStock(ticker);
+      void openStock(ticker, tradeSource);
     },
-    [openStock, stockPanel?.ticker],
+    [openStock, stockPanel?.ticker, stockPanel?.tradeSource],
   );
 
   const openMember = useCallback(async (slug: string) => {
@@ -291,43 +356,93 @@ export function FeedBoard({
     }
   }, []);
 
-  const showFeedDigest = view === "feed" && (!authLoading || !user);
   const showTrending = view === "trending";
-  const showHouse = view === "house";
-  const showSenate = view === "senate";
-  const trendingLimit = 20;
-  const trendingRows = useMemo(
-    () => payload.trending.filter(filterTicker),
-    [filterTicker, payload.trending],
-  );
-  const houseTrades = useMemo(
-    () => payload.recentHouse.filter(filterTrade),
-    [filterTrade, payload.recentHouse],
-  );
-  const senateTrades = useMemo(
-    () => payload.recentSenate.filter(filterTrade),
-    [filterTrade, payload.recentSenate],
-  );
-  const houseBuys = useMemo(
-    () => payload.recentHouseBuys.filter(filterTrade),
-    [filterTrade, payload.recentHouseBuys],
-  );
-  const senateBuys = useMemo(
-    () => payload.recentSenateBuys.filter(filterTrade),
-    [filterTrade, payload.recentSenateBuys],
-  );
-  const ceoBuys = useMemo(
-    () =>
-      payload.recentCeoBuys.filter((card) => {
-        if (!q) return true;
-        return (
-          card.ceo_name.toLowerCase().includes(q) ||
-          (card.ticker ?? "").toLowerCase().includes(q) ||
-          (card.issuer_name ?? "").toLowerCase().includes(q)
-        );
-      }),
-    [payload.recentCeoBuys, q],
-  );
+  const showHouse = view === "house" || view === "feed";
+  const showSenate = view === "senate" || view === "feed";
+  const showInsiders = view === "insiders";
+  const showPerformers = tab === "performers";
+  const showSectors = tab === "sectors";
+  const showOverlap = tab === "overlap";
+  const showActivity = tab === "activity";
+  const trendingLimit = 40;
+
+  const houseTrades = useMemo(() => {
+    const base = payload.recentHouse.filter(filterTrade);
+    return filterTrades(base, advancedFilters, filterCtx);
+  }, [advancedFilters, filterCtx, filterTrade, payload.recentHouse]);
+
+  const senateTrades = useMemo(() => {
+    const base = payload.recentSenate.filter(filterTrade);
+    return filterTrades(base, advancedFilters, filterCtx);
+  }, [advancedFilters, filterCtx, filterTrade, payload.recentSenate]);
+
+  const insiderTrades = useMemo(() => {
+    const rows = payload.recentInsider ?? [];
+    const textFiltered = !q
+      ? rows
+      : rows.filter((trade) => {
+          const ticker = (trade.ticker ?? "").toLowerCase();
+          const member = (trade.member ?? "").toLowerCase();
+          const title = (trade.state ?? "").toLowerCase();
+          const asset = (trade.asset ?? "").toLowerCase();
+          return (
+            ticker.includes(q) ||
+            member.includes(q) ||
+            title.includes(q) ||
+            asset.includes(q)
+          );
+        });
+    // Insiders: ticker sectors only; member sector source disabled in ctx
+    return filterTrades(textFiltered, advancedFilters, {
+      ...filterCtx,
+      allowMemberSectors: false,
+    });
+  }, [advancedFilters, filterCtx, payload.recentInsider, q]);
+
+  /** Recalculate trending from filtered underlying congress trades (not post-hide). */
+  const trendingRows = useMemo(() => {
+    if (view !== "trending") {
+      return payload.trending.filter(filterTicker);
+    }
+    const underlying = filterTrades(
+      [...payload.recentHouse, ...payload.recentSenate].filter(filterTrade),
+      advancedFilters,
+      filterCtx,
+    );
+    return rankTrending(
+      underlying.map((t) => ({
+        ticker: t.ticker,
+        asset: t.asset,
+        transaction_type: t.transaction_type,
+        member_slug: t.member_slug,
+        disclosure_date: t.disclosure_date,
+      })),
+    ).filter(filterTicker);
+  }, [
+    advancedFilters,
+    filterCtx,
+    filterTicker,
+    filterTrade,
+    payload.recentHouse,
+    payload.recentSenate,
+    payload.trending,
+    view,
+  ]);
+
+  const resultCount = useMemo(() => {
+    if (view === "house") return houseTrades.length;
+    if (view === "senate") return senateTrades.length;
+    if (view === "insiders") return insiderTrades.length;
+    if (view === "trending") return trendingRows.length;
+    return houseTrades.length + senateTrades.length;
+  }, [
+    houseTrades.length,
+    insiderTrades.length,
+    senateTrades.length,
+    trendingRows.length,
+    view,
+  ]);
+
   const topPerformers = useMemo(
     () =>
       (payload.topPerformers ?? []).filter((row) => {
@@ -339,23 +454,34 @@ export function FeedBoard({
       }),
     [payload.topPerformers, q],
   );
-  const houseMembers = useMemo(
-    () =>
-      payload.houseMembers.filter((member) =>
-        q ? member.name.toLowerCase().includes(q) : true,
-      ),
-    [payload.houseMembers, q],
-  );
-  const senateMembers = useMemo(
-    () =>
-      payload.senateMembers.filter((member) =>
-        q ? member.name.toLowerCase().includes(q) : true,
-      ),
-    [payload.senateMembers, q],
-  );
+
+  /** Sector-Overlap Activity: always purchase-only; uses filtered chamber trades. */
+  const sectorOverlapActivity = useMemo(() => {
+    if (view !== "house" && view !== "senate") return [];
+    const trades = view === "house" ? houseTrades : senateTrades;
+    return rankSectorOverlapActivity(
+      trades,
+      payload.tradeSectorOverlaps ?? {},
+      25,
+    );
+  }, [houseTrades, payload.tradeSectorOverlaps, senateTrades, view]);
+
+  const chamberLabelForTabs =
+    view === "senate"
+      ? "Senate"
+      : view === "insiders"
+        ? "Insiders"
+        : view === "trending"
+          ? "Trending"
+          : "House";
+
+  const sectorsTabSubtitle =
+    view === "insiders"
+      ? "Market-share style breakdown of sectors being traded by officers"
+      : "Market-share style breakdown of sectors being traded by this chamber";
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {payload.error ? (
         <div className="rounded-md border border-[color:var(--coral)]/40 bg-[color:var(--panel-elevated)] px-4 py-3 text-sm text-[color:var(--coral)]">
           {payload.error}
@@ -366,197 +492,60 @@ export function FeedBoard({
         <p className="text-center text-sm text-[color:var(--fog-dim)]">
           Showing results for{" "}
           <span className="font-semibold text-[color:var(--fog)]">{query}</span>
-          .{" "}
-          <Link
-            href={`/ceo-buys?q=${encodeURIComponent(query ?? "")}`}
-            className="text-[color:var(--mint)] hover:opacity-80"
-          >
-            Search CEO activity →
-          </Link>
         </p>
       ) : null}
 
-      {personalFeed ? (
-        <section className="animate-rise space-y-4">
-          <SectionTitle
-            title="Following"
-            subtitle="Stocks and people you follow"
-          />
-          <FollowingFeed
-            onOpenTicker={(ticker) => toggleStock(ticker)}
-            onOpenMember={(slug) => toggleMember(slug)}
-          />
-          {stockPanel ? (
-            <StockPanel
-              state={stockPanel}
-              onClose={() => setStockPanel(null)}
-              onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
-            />
-          ) : null}
-          {memberPanel ? (
-            <MemberPanel
-              state={memberPanel}
-              onClose={() => setMemberPanel(null)}
-              onOpenTicker={(ticker) =>
-                void openMemberStock(memberPanel.slug, ticker)
-              }
-              onBackNested={() =>
-                setMemberPanel((p) =>
-                  p
-                    ? {
-                        ...p,
-                        nestedTicker: null,
-                        nested: null,
-                        nestedLoading: false,
-                      }
-                    : p,
-                )
-              }
-            />
-          ) : null}
-        </section>
+      <TradeFiltersBar
+        allowMemberSectors={allowMemberSectors}
+        resultCount={resultCount}
+        resultLabel={view === "trending" ? "trending tickers" : "trades"}
+      />
+
+      <ViewTabs view={view} tab={tab} query={query} />
+
+      {showPerformers ? (
+        <TopPerformersSection
+          title={`Top performers · ${chamberLabelForTabs}`}
+          subtitle={
+            view === "insiders"
+              ? "Highest average return on stocks bought by officers in the selected period — expand for buys, returns, and charts"
+              : "Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+          }
+          rows={topPerformers}
+          portfolio={payload.portfolioGrowth}
+          period={payload.performerPeriod}
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+        />
       ) : null}
 
-      {view === "feed" && authLoading && !user ? (
-        <p className="text-sm text-[color:var(--fog-dim)]">Loading feed…</p>
+      {showSectors ? (
+        <SectorShareChart
+          title={`Sector mix · ${payload.sectorShareScope}`}
+          subtitle={sectorsTabSubtitle}
+          slices={payload.sectorShare}
+        />
       ) : null}
 
-      {showFeedDigest ? (
-        <>
-          <section className="animate-rise space-y-4">
-            <SectionTitle
-              title="Top performers"
-              subtitle="Highest average return on stocks bought in the selected period"
-            />
-            <PerformerPeriodChips
-              period={payload.performerPeriod}
-              query={query}
-            />
-            {payload.portfolioGrowth ? (
-              <PortfolioGrowthBanner
-                portfolio={payload.portfolioGrowth}
-                period={payload.performerPeriod}
-              />
-            ) : null}
-            <div className="space-y-3">
-              {topPerformers.length === 0 ? (
-                <Empty text="No priced purchases in this period yet." />
-              ) : (
-                topPerformers.map((row, i) => (
-                  <PerformerCard
-                    key={row.key}
-                    rank={i + 1}
-                    row={row}
-                    onOpenMember={(slug) => toggleMember(slug)}
-                    onOpenTicker={(ticker) => toggleStock(ticker)}
-                  />
-                ))
-              )}
-            </div>
-            {memberPanel ? (
-              <MemberPanel
-                state={memberPanel}
-                onClose={() => setMemberPanel(null)}
-                onOpenTicker={(ticker) =>
-                  void openMemberStock(memberPanel.slug, ticker)
-                }
-                onBackNested={() =>
-                  setMemberPanel((p) =>
-                    p
-                      ? {
-                          ...p,
-                          nestedTicker: null,
-                          nested: null,
-                          nestedLoading: false,
-                        }
-                      : p,
-                  )
-                }
-              />
-            ) : null}
-            {stockPanel ? (
-              <StockPanel
-                state={stockPanel}
-                onClose={() => setStockPanel(null)}
-                onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
-              />
-            ) : null}
-          </section>
-
-          <section className="animate-rise space-y-4">
-            <SectionTitle
-              title="Top trending"
-              subtitle="Three tickers with the most congressional attention"
-            />
-            <div className="space-y-3">
-              {trendingRows.length === 0 ? (
-                <Empty text="No trending tickers match this search." />
-              ) : (
-                trendingRows.slice(0, 3).map((row, i) => {
-                  const active = stockPanel?.ticker === row.ticker;
-                  return (
-                    <div key={row.ticker} className="space-y-3">
-                      <TickerCard
-                        rank={i + 1}
-                        row={row}
-                        active={active}
-                        onOpen={() => toggleStock(row.ticker)}
-                      />
-                      {active && stockPanel ? (
-                        <StockPanel
-                          state={stockPanel}
-                          onClose={() => setStockPanel(null)}
-                          onTradeSource={(c) =>
-                            void openStock(stockPanel.ticker, c)
-                          }
-                        />
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            <p className="text-sm text-[color:var(--fog-dim)]">
-              <Link
-                href="/app?view=trending"
-                className="text-[color:var(--mint)] hover:opacity-80"
-              >
-                See full trending →
-              </Link>
-            </p>
-          </section>
-
-          <DigestBuysBlock
-            title="Latest House buys"
-            subtitle="Most recent House purchases"
-            trades={houseBuys}
-            emptyText="No recent House buys."
-            moreHref="/app?view=house"
-            moreLabel="More House activity →"
-            stockPanel={stockPanel}
-            onOpenTicker={(ticker) => toggleStock(ticker)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-
-          <DigestBuysBlock
-            title="Latest Senate buys"
-            subtitle="Most recent Senate purchases"
-            trades={senateBuys}
-            emptyText="No recent Senate buys."
-            moreHref="/app?view=senate"
-            moreLabel="More Senate activity →"
-            stockPanel={stockPanel}
-            onOpenTicker={(ticker) => toggleStock(ticker)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-
-          <CeoDigestBlock cards={ceoBuys} />
-        </>
+      {showOverlap && (view === "house" || view === "senate") ? (
+        <SectorOverlapActivitySection
+          chamberLabel={chamberLabelForTabs}
+          rows={sectorOverlapActivity}
+          sectorByTicker={payload.tickerSectors}
+          stockPanel={stockPanel}
+          onOpenTicker={(ticker) =>
+            void openStock(ticker, view === "senate" ? "senate" : "house")
+          }
+          onCloseStock={() => setStockPanel(null)}
+          onTradeSource={(s) =>
+            stockPanel ? void openStock(stockPanel.ticker, s) : undefined
+          }
+          onOpenMember={(slug) => toggleMember(slug)}
+        />
       ) : null}
 
-      {showTrending ? (
+      {showActivity && showTrending ? (
         <section className="animate-rise space-y-4">
           <SectionTitle
             title="Trending"
@@ -574,6 +563,7 @@ export function FeedBoard({
                       rank={i + 1}
                       row={row}
                       active={active}
+                      sectorLabel={payload.tickerSectors[row.ticker] ?? null}
                       onOpen={() => toggleStock(row.ticker)}
                     />
                     {active && stockPanel ? (
@@ -581,6 +571,7 @@ export function FeedBoard({
                         state={stockPanel}
                         onClose={() => setStockPanel(null)}
                         onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
+                        onOpenMember={(slug) => toggleMember(slug)}
                       />
                     ) : null}
                   </div>
@@ -591,82 +582,69 @@ export function FeedBoard({
         </section>
       ) : null}
 
-      {showHouse ? (
-        <>
-          <TradeActivityBlock
-            title="House"
-            subtitle="Recent buys and sales"
-            trades={houseTrades}
-            page={housePage}
-            pageParam="housePage"
-            query={query}
-            view={view}
-            stockPanel={stockPanel}
-            onOpenTicker={(ticker) => toggleStock(ticker)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-          <MemberBlock
-            title="House members"
-            subtitle="Popular representatives"
-            members={houseMembers}
-            panel={memberPanel}
-            onToggle={(slug) => toggleMember(slug)}
-            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-            onClose={() => setMemberPanel(null)}
-            onBackNested={() =>
-              setMemberPanel((p) =>
-                p
-                  ? {
-                      ...p,
-                      nestedTicker: null,
-                      nested: null,
-                      nestedLoading: false,
-                    }
-                  : p,
-              )
-            }
-          />
-        </>
+      {showActivity && showHouse ? (
+        <DisclosureDayList
+          title="House"
+          subtitle="Same-day disclosures — expand for buys and charts"
+          trades={houseTrades}
+          page={housePage}
+          pageParam="housePage"
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+          memberSectors={payload.memberSectors}
+          sectorOverlaps={payload.tradeSectorOverlaps}
+        />
       ) : null}
 
-      {showSenate ? (
-        <>
-          <TradeActivityBlock
-            title="Senate"
-            subtitle="Recent buys and sales"
-            trades={senateTrades}
-            page={senatePage}
-            pageParam="senatePage"
-            query={query}
-            view={view}
-            stockPanel={stockPanel}
-            onOpenTicker={(ticker) => toggleStock(ticker)}
-            onCloseStock={() => setStockPanel(null)}
-            onTradeSource={(ticker, s) => void openStock(ticker, s)}
-          />
-          <MemberBlock
-            title="Senate members"
-            subtitle="Popular senators"
-            members={senateMembers}
-            panel={memberPanel}
-            onToggle={(slug) => toggleMember(slug)}
-            onOpenStock={(slug, ticker) => void openMemberStock(slug, ticker)}
-            onClose={() => setMemberPanel(null)}
-            onBackNested={() =>
-              setMemberPanel((p) =>
-                p
-                  ? {
-                      ...p,
-                      nestedTicker: null,
-                      nested: null,
-                      nestedLoading: false,
-                    }
-                  : p,
-              )
-            }
-          />
-        </>
+      {showActivity && showSenate ? (
+        <DisclosureDayList
+          title="Senate"
+          subtitle="Same-day disclosures — expand for buys and charts"
+          trades={senateTrades}
+          page={senatePage}
+          pageParam="senatePage"
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+          memberSectors={payload.memberSectors}
+          sectorOverlaps={payload.tradeSectorOverlaps}
+        />
+      ) : null}
+
+      {showActivity && showInsiders ? (
+        <DisclosureDayList
+          title="Insiders"
+          subtitle="Form 4 officer filings (CEO, CFO, and other named officers) — expand for buys and charts"
+          trades={insiderTrades}
+          page={insiderPage}
+          pageParam="insiderPage"
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+        />
+      ) : null}
+
+      {showActivity && memberPanel ? (
+        <MemberPanel
+          state={memberPanel}
+          onClose={() => setMemberPanel(null)}
+          onOpenTicker={(ticker) =>
+            void openMemberStock(memberPanel.slug, ticker)
+          }
+          onBackNested={() =>
+            setMemberPanel((p) =>
+              p
+                ? {
+                    ...p,
+                    nestedTicker: null,
+                    nested: null,
+                    nestedLoading: false,
+                  }
+                : p,
+            )
+          }
+        />
       ) : null}
     </div>
   );
@@ -689,12 +667,468 @@ function SectionTitle({
   );
 }
 
-function performerChipClass(active: boolean) {
-  return active
-    ? "hx-chip hx-chip-accent"
-    : "hx-chip";
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
+      {text}
+    </div>
+  );
 }
 
+function TickerCard({
+  rank,
+  row,
+  active,
+  onOpen,
+  sectorLabel,
+  metric = "trending",
+}: {
+  rank: number;
+  row: TrendingTicker;
+  active: boolean;
+  onOpen: () => void;
+  sectorLabel?: string | null;
+  /** trending = members/trades; overlapBuys = overlap buys/members */
+  metric?: "trending" | "overlapBuys";
+}) {
+  const primary =
+    metric === "overlapBuys"
+      ? `${row.totalTrades} overlap buy${row.totalTrades === 1 ? "" : "s"}`
+      : `${row.uniqueMembers} member${row.uniqueMembers === 1 ? "" : "s"}`;
+  const secondary =
+    metric === "overlapBuys"
+      ? `${row.uniqueMembers} member${row.uniqueMembers === 1 ? "" : "s"}`
+      : `${row.totalTrades} trade${row.totalTrades === 1 ? "" : "s"}`;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`flex w-full items-center gap-4 rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
+        active
+          ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
+          : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
+      }`}
+    >
+      <span className="w-8 text-sm tabular-nums text-[color:var(--fog-dim)]">
+        {String(rank).padStart(2, "0")}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-center gap-1.5 font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[color:var(--fog)]">
+          <span>{row.ticker}</span>
+          {sectorLabel ? (
+            <span className="rounded bg-[color:var(--panel-elevated)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[color:var(--fog-dim)]">
+              {sectorLabel}
+            </span>
+          ) : null}
+        </p>
+        {row.asset ? (
+          <p className="truncate text-sm text-[color:var(--fog-dim)]">
+            {row.asset}
+          </p>
+        ) : null}
+      </div>
+      <div className="shrink-0 text-right text-sm text-[color:var(--fog-dim)]">
+        <p className="text-[color:var(--mint)]">{primary}</p>
+        <p>{secondary}</p>
+      </div>
+    </button>
+  );
+}
+
+function StockPanel({
+  state,
+  onClose,
+  onTradeSource,
+  onOpenMember,
+  preferredSources = ["congress", "house", "senate", "ceo"],
+}: {
+  state: StockPanelState;
+  onClose: () => void;
+  onTradeSource: (source: ChartTradeSource) => void;
+  onOpenMember?: (slug: string) => void;
+  preferredSources?: ChartTradeSource[];
+}) {
+  const ref = useScrollIntoView(true);
+  const sources = preferredSources.filter(
+    (s) =>
+      s === "congress" ||
+      s === "house" ||
+      s === "senate" ||
+      s === "ceo" ||
+      s === "both",
+  );
+
+  return (
+    <div
+      ref={ref}
+      className="animate-expand overflow-hidden rounded-md border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-4 py-2.5">
+        <div>
+          <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
+            {state.ticker}
+          </p>
+          <p className="text-sm text-[color:var(--fog-dim)]">
+            {state.data?.asset ?? "Trade activity"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
+        >
+          Close
+        </button>
+      </div>
+
+      <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+        <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
+          <div className="shrink-0 space-y-3 p-5 pb-3">
+            <div className="hx-toolbar gap-3">
+              {sources.map((value) => {
+                const label =
+                  value === "congress"
+                    ? "Congress"
+                    : value === "house"
+                      ? "House"
+                      : value === "senate"
+                        ? "Senate"
+                        : value === "both"
+                          ? "All"
+                          : "Insiders";
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onTradeSource(value);
+                    }}
+                    className="hx-tab"
+                    data-active={state.tradeSource === value ? "true" : "false"}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+              Trades
+              {state.data?.topTrades.length
+                ? ` · ${state.data.topTrades.length}`
+                : ""}
+            </p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5">
+            {state.loading ? (
+              <p className="text-sm text-[color:var(--fog-dim)]">Loading…</p>
+            ) : state.error ? (
+              <p className="text-sm text-[color:var(--coral)]">{state.error}</p>
+            ) : state.data?.topTrades.length ? (
+              state.data.topTrades.map((trade) => (
+                <TradeRow
+                  key={trade.id}
+                  trade={trade}
+                  onOpenMember={onOpenMember}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-[color:var(--fog-dim)]">
+                No matching trades.
+              </p>
+            )}
+          </div>
+          <div className="shrink-0 p-5 pt-3">
+            <Link
+              href={`/stocks/${encodeURIComponent(state.ticker)}?source=${encodeURIComponent(state.tradeSource)}`}
+              className="inline-flex w-full items-center justify-center rounded-md border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
+            >
+              Open full view
+            </Link>
+          </div>
+        </aside>
+
+        <div className="p-4 sm:p-5">
+          {state.loading ? (
+            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
+              Loading chart…
+            </div>
+          ) : state.data?.bars.length ? (
+            <PriceChart
+              key={`${state.ticker}-${state.tradeSource}`}
+              bars={state.data.bars}
+              trades={state.data.topTrades}
+              interactive
+            />
+          ) : (
+            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
+              No price history yet for this ticker.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const FILTER_PARAM_KEYS = [
+  "tx",
+  "sectors",
+  "sectorSrc",
+  "overlap",
+  "members",
+  "tickers",
+] as const;
+
+function copyFilterParams(
+  target: URLSearchParams,
+  source: URLSearchParams | null | undefined,
+) {
+  if (!source) return;
+  for (const key of FILTER_PARAM_KEYS) {
+    const value = source.get(key);
+    if (value) target.set(key, value);
+  }
+}
+
+function tradePageHref(opts: {
+  page: number;
+  pageParam: "housePage" | "senatePage" | "insiderPage";
+  query?: string;
+  view: FeedView;
+  filterParams?: URLSearchParams | null;
+}): string {
+  const params = new URLSearchParams();
+  if (opts.view && opts.view !== "feed") params.set("view", opts.view);
+  if (opts.query) params.set("q", opts.query);
+  copyFilterParams(params, opts.filterParams);
+  if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
+  const qs = params.toString();
+  return qs ? `/app?${qs}` : "/app";
+}
+
+
+function ViewTabs({
+  view,
+  tab,
+  query,
+}: {
+  view: FeedView;
+  tab: "activity" | "performers" | "sectors" | "overlap";
+  query?: string;
+}) {
+  const searchParams = useSearchParams();
+  if (
+    view !== "house" &&
+    view !== "senate" &&
+    view !== "trending" &&
+    view !== "insiders"
+  ) {
+    return null;
+  }
+  const activityLabel = view === "trending" ? "Tickers" : "Activity";
+  const showOverlapTab = view === "house" || view === "senate";
+  function href(next: "activity" | "performers" | "sectors" | "overlap") {
+    const params = new URLSearchParams();
+    params.set("view", view);
+    if (next === "performers") params.set("tab", "performers");
+    if (next === "sectors") params.set("tab", "sectors");
+    if (next === "overlap") params.set("tab", "overlap");
+    if (query) params.set("q", query);
+    copyFilterParams(params, searchParams);
+    return `/app?${params.toString()}`;
+  }
+  return (
+    <div className="hx-toolbar">
+      <Link
+        href={href("activity")}
+        className="hx-tab"
+        data-active={tab === "activity" ? "true" : "false"}
+      >
+        {activityLabel}
+      </Link>
+      <Link
+        href={href("performers")}
+        className="hx-tab"
+        data-active={tab === "performers" ? "true" : "false"}
+      >
+        Top performers
+      </Link>
+      <Link
+        href={href("sectors")}
+        className="hx-tab"
+        data-active={tab === "sectors" ? "true" : "false"}
+      >
+        Sectors
+      </Link>
+      {showOverlapTab ? (
+        <Link
+          href={href("overlap")}
+          className="hx-tab"
+          data-active={tab === "overlap" ? "true" : "false"}
+        >
+          Sector overlap
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function DisclosureDayList({
+  title,
+  subtitle,
+  trades,
+  page,
+  pageParam,
+  query,
+  view,
+  sectorByTicker,
+  memberSectors,
+  sectorOverlaps,
+}: {
+  title: string;
+  subtitle: string;
+  trades: CongressTrade[];
+  page: number;
+  pageParam: "housePage" | "senatePage" | "insiderPage";
+  query?: string;
+  view: FeedView;
+  sectorByTicker?: Record<string, string>;
+  memberSectors?: Record<string, string[]>;
+  sectorOverlaps?: Record<string, import("@/lib/sectorOverlap").SectorOverlapResult>;
+}) {
+  const groups = useMemo(() => groupTradesByDisclosure(trades), [trades]);
+  const pageSize = 8;
+  const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const slice = groups.slice(
+    (safePage - 1) * pageSize,
+    (safePage - 1) * pageSize + pageSize,
+  );
+  const filterParams = useSearchParams();
+
+  return (
+    <section className="animate-rise space-y-3">
+      <SectionTitle title={title} subtitle={subtitle} />
+      {groups.length === 0 ? (
+        <Empty text={`No ${title.toLowerCase()} disclosures match.`} />
+      ) : (
+        <>
+          <div className="space-y-3">
+            {slice.map((group) => (
+              <DisclosureDayCard
+                key={group.key}
+                group={group}
+                defaultOpen={false}
+                sectorByTicker={sectorByTicker}
+                memberSectors={
+                  group.memberSlug
+                    ? memberSectors?.[group.memberSlug] ??
+                      memberSectors?.[group.memberSlug.toLowerCase()]
+                    : undefined
+                }
+                sectorOverlaps={sectorOverlaps}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
+            <p>
+              {(safePage - 1) * pageSize + 1}–
+              {Math.min(safePage * pageSize, groups.length)} of {groups.length}{" "}
+              disclosures
+              {" · "}
+              {trades.length} trade{trades.length === 1 ? "" : "s"}
+            </p>
+            <div className="flex items-center gap-2">
+              {safePage > 1 ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage - 1,
+                    pageParam,
+                    query,
+                    view,
+                    filterParams,
+                  })}
+                  className="hx-btn hx-btn-ghost"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="hx-btn hx-btn-ghost opacity-40">Previous</span>
+              )}
+              <span>
+                {safePage} / {totalPages}
+              </span>
+              {safePage < totalPages ? (
+                <Link
+                  href={tradePageHref({
+                    page: safePage + 1,
+                    pageParam,
+                    query,
+                    view,
+                    filterParams,
+                  })}
+                  className="hx-btn hx-btn-ghost"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="hx-btn hx-btn-ghost opacity-40">Next</span>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function performerChipClass(active: boolean) {
+  return active ? "hx-chip hx-chip-accent" : "hx-chip";
+}
+
+function formatReturnPct(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  const sign = rounded > 0 ? "+" : "";
+  return `${sign}${rounded.toFixed(1)}%`;
+}
+
+function PerformerPeriodChips({
+  period,
+  query,
+  view,
+}: {
+  period: PerformerPeriod;
+  query?: string;
+  view: FeedView;
+}) {
+  const searchParams = useSearchParams();
+  const filterExtras: Record<string, string | undefined> = {};
+  for (const key of FILTER_PARAM_KEYS) {
+    const value = searchParams.get(key);
+    if (value) filterExtras[key] = value;
+  }
+  return (
+    <div className="hx-toolbar">
+      {PERFORMER_PERIODS.map((value) => (
+        <Link
+          key={value}
+          href={performerPeriodHref(value, {
+            q: query,
+            view: view === "feed" ? undefined : view,
+            tab: "performers",
+            ...filterExtras,
+          })}
+          className={performerChipClass(period === value)}
+          aria-current={period === value ? "page" : undefined}
+        >
+          {performerPeriodLabel(value)}
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 function PortfolioGrowthBanner({
   portfolio,
@@ -721,752 +1155,205 @@ function PortfolioGrowthBanner({
           Equal-weighted avg across {portfolio.pricedBuyCount} priced buy
           {portfolio.pricedBuyCount === 1 ? "" : "s"}
           {" · "}
-          {portfolio.congressPricedCount} congress · {portfolio.ceoPricedCount}{" "}
-          CEO
+          {portfolio.congressPricedCount} congress
+          {portfolio.ceoPricedCount
+            ? ` · ${portfolio.ceoPricedCount} officer`
+            : ""}
         </p>
       </div>
     </div>
   );
 }
 
-function PerformerPeriodChips({
-  period,
-  query,
-}: {
-  period: PerformerPeriod;
-  query?: string;
-}) {
-  return (
-    <div className="hx-toolbar">
-      {PERFORMER_PERIODS.map((value) => (
-        <Link
-          key={value}
-          href={performerPeriodHref(value, { q: query })}
-          className={performerChipClass(period === value)}
-          aria-current={period === value ? "page" : undefined}
-        >
-          {performerPeriodLabel(value)}
-        </Link>
-      ))}
-    </div>
-  );
+function overlapMatchCaption(overlap: SectorOverlapResult): string {
+  if (overlap.match_type === "direct") return "Direct match";
+  if (overlap.match_type === "embedding") {
+    const sim =
+      typeof overlap.similarity === "number"
+        ? overlap.similarity.toFixed(3)
+        : null;
+    return sim ? `Semantic · ${sim}` : "Semantic";
+  }
+  return "Overlap";
 }
 
-function performerKindLabel(kind: TopPerformer["kind"]): string {
-  if (kind === "ceo") return "CEO";
-  if (kind === "house") return "House";
-  return "Senate";
-}
-
-function formatReturnPct(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  const sign = rounded > 0 ? "+": "";
-  return `${sign}${rounded.toFixed(1)}%`;
-}
-
-function PerformerCard({
-  rank,
-  row,
-  onOpenMember,
-  onOpenTicker,
-}: {
-  rank: number;
-  row: TopPerformer;
-  onOpenMember: (slug: string) => void;
-  onOpenTicker: (ticker: string) => void;
-}) {
-  const positive = row.avgReturnPct >= 0;
-  const clickableMember = !!row.memberSlug;
-  const clickableTicker = !!row.bestTicker;
-
-  return (
-    <div className="flex items-center gap-3 rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-3">
-      <span className="w-6 shrink-0 text-sm font-semibold text-[color:var(--fog-dim)]">
-        {rank}
-      </span>
-      <div className="min-w-0 flex-1">
-        {clickableMember ? (
-          <button
-            type="button"
-            onClick={() => onOpenMember(row.memberSlug!)}
-            className="truncate text-left font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-          >
-            {row.name}
-          </button>
-        ) : (
-          <Link
-            href={`/ceo-buys?q=${encodeURIComponent(row.name)}`}
-            className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-          >
-            {row.name}
-          </Link>
-        )}
-        <p className="text-xs text-[color:var(--fog-dim)]">
-          {performerKindLabel(row.kind)} · {row.pricedBuyCount} priced buy
-          {row.pricedBuyCount === 1 ? "" : "s"}
-          {row.bestTicker ? (
-            <>
-              {" "}
-              · best{" "}
-              {clickableTicker ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenTicker(row.bestTicker!)}
-                  className="font-semibold text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-                >
-                  {row.bestTicker}
-                </button>
-              ) : (
-                row.bestTicker
-              )}
-              {row.bestReturnPct != null
-                ? ` (${formatReturnPct(row.bestReturnPct)})`
-                : null}
-            </>
-          ) : null}
-        </p>
-      </div>
-      <span
-        className={`shrink-0 font-[family-name:var(--font-display)] text-base font-semibold tracking-tight ${
-          positive ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
-        }`}
-      >
-        {formatReturnPct(row.avgReturnPct)}
-      </span>
-    </div>
-  );
-}
-
-function DigestBuysBlock({
-  title,
-  subtitle,
-  trades,
-  emptyText,
-  moreHref,
-  moreLabel,
+function SectorOverlapActivitySection({
+  chamberLabel,
+  rows,
+  sectorByTicker,
   stockPanel,
   onOpenTicker,
   onCloseStock,
   onTradeSource,
+  onOpenMember,
 }: {
-  title: string;
-  subtitle: string;
-  trades: CongressTrade[];
-  emptyText: string;
-  moreHref: string;
-  moreLabel: string;
+  chamberLabel: string;
+  rows: SectorOverlapActivityRow[];
+  sectorByTicker?: Record<string, string>;
   stockPanel: StockPanelState | null;
   onOpenTicker: (ticker: string) => void;
   onCloseStock: () => void;
-  onTradeSource: (ticker: string, source: ChartTradeSource) => void;
+  onTradeSource: (source: ChartTradeSource) => void;
+  onOpenMember: (slug: string) => void;
 }) {
-  return (
-    <section className="animate-rise space-y-4">
-      <SectionTitle title={title} subtitle={subtitle} />
-      {trades.length === 0 ? (
-        <Empty text={emptyText} />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {trades.map((trade) => {
-            const ticker = (trade.ticker ?? "").toUpperCase();
-            const expanded =
-              !!stockPanel && stockPanel.ticker === ticker;
-            return (
-              <div key={trade.id} className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!ticker) return;
-                    onOpenTicker(ticker);
-                  }}
-                  className={`w-full rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
-                    expanded
-                      ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
-                      : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
-                        {trade.member ?? "Unknown"}
-                      </p>
-                      <p className="mt-1 text-sm text-[color:var(--fog-dim)]">
-                        {chamberLabel(trade.chamber)}
-                        {trade.state ? ` · ${trade.state}` : ""}
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)]">
-                      {ticker || "—"}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                    <span className="font-semibold uppercase tracking-wide text-[color:var(--mint)]">
-                      {tradeVerb(trade.transaction_type)}
-                    </span>
-                    <span className="text-[color:var(--fog-dim)]">
-                      {formatAmountRange(
-                        trade.amount_low,
-                        trade.amount_high,
-                        trade.amount_range,
-                      )}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
-                    {formatShortDate(
-                      trade.disclosure_date ?? trade.transaction_date,
-                    )}
-                  </p>
-                </button>
-                {expanded && stockPanel ? (
-                  <StockPanel
-                    state={stockPanel}
-                    onClose={onCloseStock}
-                    onTradeSource={(s) => onTradeSource(ticker, s)}
-                  />
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <p className="text-sm text-[color:var(--fog-dim)]">
-        <Link
-          href={moreHref}
-          className="text-[color:var(--mint)] hover:opacity-80"
-        >
-          {moreLabel}
-        </Link>
-      </p>
-    </section>
-  );
-}
-
-function CeoDigestBlock({ cards }: { cards: CeoActivityCard[] }) {
   return (
     <section className="animate-rise space-y-4">
       <SectionTitle
-        title="Latest CEO buys"
-        subtitle="Most recent Form 4 purchases"
+        title={`Sector-Overlap Activity · ${chamberLabel}`}
+        subtitle="Tickers with the most qualifying overlap purchases — member industry labels match or are highly similar to the ticker’s industries (buys only)"
       />
-      {cards.length === 0 ? (
-        <Empty text="No recent CEO buys." />
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-3">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-2.5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-[family-name:var(--font-display)] text-sm font-semibold text-[color:var(--fog)]">
-                    {card.ceo_name}
-                  </p>
-                  <p className="mt-1 truncate text-sm text-[color:var(--fog-dim)]">
-                    {card.issuer_name ?? "Issuer"}
-                  </p>
-                </div>
-                {card.ticker ? (
-                  <TickerLink
-                    ticker={card.ticker}
-                    className="shrink-0 font-semibold tracking-tight text-[color:var(--fog)] hover:text-[color:var(--mint)]"
-                  />
-                ) : (
-                  <span className="text-[color:var(--fog-dim)]">—</span>
-                )}
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <Empty text="No overlap buy activity matches the current filters." />
+        ) : (
+          rows.map((row, i) => {
+            const active = stockPanel?.ticker === row.ticker;
+            const trendingRow = overlapActivityAsTrending(row);
+            return (
+              <div key={row.ticker} className="space-y-3">
+                <TickerCard
+                  rank={i + 1}
+                  row={trendingRow}
+                  active={active}
+                  sectorLabel={sectorByTicker?.[row.ticker] ?? null}
+                  metric="overlapBuys"
+                  onOpen={() => onOpenTicker(row.ticker)}
+                />
+                {active ? (
+                  <div className="space-y-3">
+                    <OverlapBuysPanel
+                      occasions={row.occasions}
+                      onOpenMember={onOpenMember}
+                    />
+                    {stockPanel ? (
+                      <StockPanel
+                        state={stockPanel}
+                        onClose={onCloseStock}
+                        onTradeSource={onTradeSource}
+                        onOpenMember={onOpenMember}
+                        preferredSources={
+                          chamberLabel === "Senate"
+                            ? ["senate", "congress", "ceo"]
+                            : ["house", "congress", "ceo"]
+                        }
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="font-semibold uppercase tracking-wide text-[color:var(--mint)]">
-                  Bought
-                </span>
-                <span className="text-[color:var(--fog)]">
-                  {card.shares != null
-                    ? `${new Intl.NumberFormat("en-US", {
-                        maximumFractionDigits: 2,
-                      }).format(card.shares)} shares`
-                    : "—"}
-                </span>
-              </div>
-              <p className="mt-2 text-xs text-[color:var(--fog-dim)]">
-                {formatShortDate(card.transaction_date ?? card.filing_date)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-      <p className="text-sm text-[color:var(--fog-dim)]">
-        <Link
-          href="/ceo-buys"
-          className="text-[color:var(--mint)] hover:opacity-80"
-        >
-          More CEO buys →
-        </Link>
-      </p>
+            );
+          })
+        )}
+      </div>
     </section>
   );
 }
 
-function Empty({ text }: { text: string }) {
-  return (
-    <div className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-6 text-center text-sm text-[color:var(--fog-dim)]">
-      {text}
-    </div>
-  );
-}
-
-function TickerCard({
-  rank,
-  row,
-  active,
-  onOpen,
+function OverlapBuysPanel({
+  occasions,
+  onOpenMember,
 }: {
-  rank: number;
-  row: TrendingTicker;
-  active: boolean;
-  onOpen: () => void;
+  occasions: OverlapPurchaseOccasion[];
+  onOpenMember: (slug: string) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`flex w-full items-center gap-4 rounded-md border px-4 py-2.5 text-left transition-all duration-300 ${
-        active
-          ? "border-[color:var(--mint)]/50 bg-[color:var(--panel-elevated)]"
-          : "border-[color:var(--line)] bg-[color:var(--panel)] hover:border-[color:var(--mint)]/30 hover:bg-[color:var(--panel-elevated)]"
-      }`}
-    >
-      <span className="w-8 text-sm tabular-nums text-[color:var(--fog-dim)]">
-        {String(rank).padStart(2, "0")}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-[family-name:var(--font-display)] text-sm font-semibold tracking-tight text-[color:var(--fog)]">
-          {row.ticker}
+    <div className="rounded-md border border-[color:var(--line)] bg-[color:var(--panel)]">
+      <div className="border-b border-[color:var(--line)] px-4 py-2.5">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
+          Qualifying overlap purchases · {occasions.length}
         </p>
-        {row.asset ? (
-          <p className="truncate text-sm text-[color:var(--fog-dim)]">
-            {row.asset}
-          </p>
-        ) : null}
       </div>
-      <div className="shrink-0 text-right text-sm text-[color:var(--fog-dim)]">
-        <p className="text-[color:var(--mint)]">
-          {row.uniqueMembers} member{row.uniqueMembers === 1 ? "" : "s"}
-        </p>
-        <p>{row.totalTrades} trades</p>
-      </div>
-    </button>
-  );
-}
-
-function StockPanel({
-  state,
-  onClose,
-  onTradeSource,
-}: {
-  state: StockPanelState;
-  onClose: () => void;
-  onTradeSource: (source: ChartTradeSource) => void;
-}) {
-  const ref = useScrollIntoView(true);
-
-  return (
-    <div
-      ref={ref}
-      className="animate-expand overflow-hidden rounded-md border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-4 py-2.5">
-        <div>
-          <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
-            {state.ticker}
-          </p>
-          <p className="text-sm text-[color:var(--fog-dim)]">
-            {state.data?.asset ?? "Congressional activity"}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
-        <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
-          <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="hx-toolbar gap-3">
-              {(
-                [
-                  ["congress", "Congress"],
-                  ["house", "House"],
-                  ["senate", "Senate"],
-                  ["ceo", "CEO"],
-                  ["both", "Both"],
-                ] as const
-              ).map(([value, label]) => (
+      <ul className="divide-y divide-[color:var(--line)]">
+        {occasions.map((occ) => (
+          <li key={occ.key} className="px-4 py-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              {occ.memberSlug ? (
                 <button
-                  key={value}
                   type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onTradeSource(value);
-                  }}
-                  className="hx-tab"
-                  data-active={state.tradeSource === value ? "true" : "false"}
+                  className="text-sm font-medium text-[color:var(--mint)] hover:opacity-80"
+                  onClick={() => onOpenMember(occ.memberSlug!)}
                 >
-                  {label}
+                  {occ.member ?? occ.memberSlug}
                 </button>
-              ))}
+              ) : (
+                <p className="text-sm font-medium text-[color:var(--fog)]">
+                  {occ.member ?? "Unknown member"}
+                </p>
+              )}
+              <p className="hx-meta">
+                {formatShortDate(occ.transactionDate ?? occ.disclosureDate)}
+                {occ.amountRange ? ` · ${occ.amountRange}` : ""}
+              </p>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-              Trades
-              {state.data?.topTrades.length
-                ? ` · ${state.data.topTrades.length}`
+            <p className="mt-0.5 text-sm text-[color:var(--fog-dim)]">
+              Purchase
+              {occ.overlap.member_label
+                ? ` · Member sector: ${occ.overlap.member_label}`
+                : ""}
+              {occ.overlap.ticker_label
+                ? ` · Ticker sector: ${occ.overlap.ticker_label}`
                 : ""}
             </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5">
-            {state.loading ? (
-              <p className="text-sm text-[color:var(--fog-dim)]">Loading…</p>
-            ) : state.error ? (
-              <p className="text-sm text-[color:var(--coral)]">{state.error}</p>
-            ) : state.data?.topTrades.length ? (
-              state.data.topTrades.map((trade) => (
-                <TradeRow key={trade.id} trade={trade} />
-              ))
-            ) : (
-              <p className="text-sm text-[color:var(--fog-dim)]">
-                No matching trades.
-              </p>
-            )}
-          </div>
-          <div className="shrink-0 p-5 pt-3">
-            <Link
-              href={`/stocks/${encodeURIComponent(state.ticker)}`}
-              className="inline-flex w-full items-center justify-center rounded-md border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
-            >
-              Open full view
-            </Link>
-          </div>
-        </aside>
-
-        <div className="p-4 sm:p-5">
-          {state.loading ? (
-            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
-              Loading chart…
-            </div>
-          ) : state.data?.bars.length ? (
-            <PriceChart bars={state.data.bars} trades={state.data.topTrades} />
-          ) : (
-            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
-              No price history yet for this ticker.
-            </div>
-          )}
-        </div>
-      </div>
+            <p className="mt-0.5 text-[11px] text-[color:var(--fog-mute)]">
+              {overlapMatchCaption(occ.overlap)}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-function tradePageHref(opts: {
-  page: number;
-  pageParam: "housePage" | "senatePage";
-  query?: string;
-  view: FeedView;
-}): string {
-  const params = new URLSearchParams();
-  if (opts.view && opts.view !== "feed") params.set("view", opts.view);
-  if (opts.query) params.set("q", opts.query);
-  if (opts.page > 1) params.set(opts.pageParam, String(opts.page));
-  const qs = params.toString();
-  return qs ? `/app?${qs}` : "/app";
-}
-
-function TradeActivityBlock({
+function TopPerformersSection({
   title,
   subtitle,
-  trades,
-  page,
-  pageParam,
+  rows,
+  portfolio,
+  period,
   query,
   view,
-  stockPanel,
-  onOpenTicker,
-  onCloseStock,
-  onTradeSource,
+  sectorByTicker,
 }: {
   title: string;
   subtitle: string;
-  trades: CongressTrade[];
-  page: number;
-  pageParam: "housePage" | "senatePage";
+  rows: TopPerformer[];
+  portfolio: PortfolioGrowth | null;
+  period: PerformerPeriod;
   query?: string;
   view: FeedView;
-  stockPanel: StockPanelState | null;
-  onOpenTicker: (ticker: string) => void;
-  onCloseStock: () => void;
-  onTradeSource: (ticker: string, source: ChartTradeSource) => void;
+  sectorByTicker?: Record<string, string>;
 }) {
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(trades.length / pageSize));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-  const slice = trades.slice(
-    (safePage - 1) * pageSize,
-    (safePage - 1) * pageSize + pageSize,
-  );
-  const activeTicker =
-    stockPanel &&
-    slice.some((t) => (t.ticker ?? "").toUpperCase() === stockPanel.ticker)
-      ? stockPanel
-      : null;
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   return (
-    <section className="animate-rise space-y-3">
+    <section className="animate-rise space-y-4">
       <SectionTitle title={title} subtitle={subtitle} />
-      {trades.length === 0 ? (
-        <Empty text={`No ${title.toLowerCase()} buys or sales match.`} />
-      ) : (
-        <>
-          <div className="hx-table-wrap">
-            <table className="hx-table">
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>Ticker</th>
-                  <th>Type</th>
-                  <th className="num">Amount</th>
-                  <th>Filed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {slice.map((trade) => {
-                  const ticker = (trade.ticker ?? "").toUpperCase();
-                  const buy = trade.transaction_type === "purchase";
-                  const expanded = activeTicker?.ticker === ticker;
-                  return (
-                    <tr
-                      key={trade.id}
-                      className={
-                        expanded
-                          ? "bg-[color:var(--accent-soft)] cursor-pointer"
-                          : "cursor-pointer"
-                      }
-                      onClick={() => {
-                        if (!ticker) return;
-                        onOpenTicker(ticker);
-                      }}
-                    >
-                      <td>
-                        <p className="font-medium text-[color:var(--fog)]">
-                          {trade.member ?? "Unknown"}
-                        </p>
-                        <p className="hx-meta">
-                          {chamberLabel(trade.chamber)}
-                          {trade.state ? ` · ${trade.state}` : ""}
-                        </p>
-                      </td>
-                      <td className="font-medium tracking-tight">
-                        {ticker || "—"}
-                      </td>
-                      <td>
-                        <span className={buy ? "hx-buy" : "hx-sell"}>
-                          {tradeVerb(trade.transaction_type)}
-                        </span>
-                      </td>
-                      <td className="num text-[color:var(--fog-dim)]">
-                        {formatAmountRange(
-                          trade.amount_low,
-                          trade.amount_high,
-                          trade.amount_range,
-                        )}
-                      </td>
-                      <td className="hx-meta whitespace-nowrap">
-                        {formatShortDate(
-                          trade.disclosure_date ?? trade.transaction_date,
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {activeTicker ? (
-            <StockPanel
-              state={activeTicker}
-              onClose={onCloseStock}
-              onTradeSource={(s) => onTradeSource(activeTicker.ticker, s)}
-            />
-          ) : null}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
-            <p>
-              {(safePage - 1) * pageSize + 1}–
-              {Math.min(safePage * pageSize, trades.length)} of {trades.length}
-            </p>
-            <div className="flex items-center gap-2">
-              {safePage > 1 ? (
-                <Link
-                  href={tradePageHref({
-                    page: safePage - 1,
-                    pageParam,
-                    query,
-                    view,
-                  })}
-                  className="hx-btn hx-btn-ghost"
-                >
-                  Previous
-                </Link>
-              ) : (
-                <span className="hx-btn hx-btn-ghost opacity-40">Previous</span>
-              )}
-              <span>
-                {safePage} / {totalPages}
-              </span>
-              {safePage < totalPages ? (
-                <Link
-                  href={tradePageHref({
-                    page: safePage + 1,
-                    pageParam,
-                    query,
-                    view,
-                  })}
-                  className="hx-btn hx-btn-ghost"
-                >
-                  Next
-                </Link>
-              ) : (
-                <span className="hx-btn hx-btn-ghost opacity-40">Next</span>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function MemberBlock({
-  title,
-  subtitle,
-  members,
-  panel,
-  onToggle,
-  onOpenStock,
-  onClose,
-  onBackNested,
-}: {
-  title: string;
-  subtitle: string;
-  members: PopularMember[];
-  panel: MemberPanelState | null;
-  onToggle: (slug: string) => void;
-  onOpenStock: (slug: string, ticker: string) => void;
-  onClose: () => void;
-  onBackNested: () => void;
-}) {
-  const pageSize = 10;
-  const [page, setPage] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(members.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
-  const pageMembers = members.slice(
-    safePage * pageSize,
-    safePage * pageSize + pageSize,
-  );
-  const active =
-    panel && pageMembers.some((m) => m.slug === panel.slug) ? panel : null;
-
-  useEffect(() => {
-    setPage(0);
-  }, [members.length, members[0]?.slug]);
-
-  return (
-    <section className="animate-rise space-y-3">
-      <SectionTitle title={title} subtitle={subtitle} />
-      {members.length === 0 ? (
-        <Empty text={`No active ${title.toLowerCase()} members yet.`} />
-      ) : (
-        <div className="hx-table-wrap">
-          <table className="hx-table">
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Chamber</th>
-                <th className="num">Trades</th>
-                <th className="num">Tickers</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageMembers.map((member) => {
-                const expanded = panel?.slug === member.slug;
-                return (
-                  <tr
-                    key={member.slug}
-                    className={
-                      expanded
-                        ? "bg-[color:var(--accent-soft)] cursor-pointer"
-                        : "cursor-pointer"
-                    }
-                    onClick={() => onToggle(member.slug)}
-                  >
-                    <td className="font-medium text-[color:var(--fog)]">
-                      {member.name}
-                    </td>
-                    <td className="hx-meta">
-                      {chamberLabel(member.chamber)}
-                      {member.state ? ` · ${member.state}` : ""}
-                    </td>
-                    <td className="num">{member.tradeCount}</td>
-                    <td className="num">{member.uniqueTickers}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {members.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-[color:var(--fog-dim)]">
-          <p>
-            {safePage * pageSize + 1}–
-            {Math.min((safePage + 1) * pageSize, members.length)} of{" "}
-            {members.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={safePage <= 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="hx-btn hx-btn-ghost disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <span>
-              {safePage + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={safePage >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="hx-btn hx-btn-ghost disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+      <PerformerPeriodChips period={period} query={query} view={view} />
+      {portfolio ? (
+        <PortfolioGrowthBanner portfolio={portfolio} period={period} />
       ) : null}
-
-      {active ? (
-        <MemberPanel
-          state={active}
-          onClose={onClose}
-          onOpenTicker={(ticker) => onOpenStock(active.slug, ticker)}
-          onBackNested={onBackNested}
-        />
-      ) : null}
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <Empty text="No priced purchases in this period yet." />
+        ) : (
+          rows.map((row, i) => {
+            const key = row.memberSlug ?? row.key;
+            return (
+              <PerformerExpandCard
+                key={row.key}
+                rank={i + 1}
+                row={row}
+                expanded={expandedKey === key}
+                defaultPeriod={period}
+                onToggle={() =>
+                  setExpandedKey((prev) => (prev === key ? null : key))
+                }
+                sectorByTicker={sectorByTicker}
+              />
+            );
+          })
+        )}
+      </div>
     </section>
   );
 }
@@ -1529,8 +1416,10 @@ function MemberPanel({
             </div>
           ) : state.nested?.bars.length ? (
             <PriceChart
+              key={`${state.slug}-${state.nestedTicker}`}
               bars={state.nested.bars}
               trades={state.nested.trades}
+              interactive
             />
           ) : (
             <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">

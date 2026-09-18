@@ -41,6 +41,8 @@ type Props = {
   /** Taller chart for the full ticker page. */
   tall?: boolean;
   initialRange?: ChartRange;
+  /** Auto-pin the marker nearest this transaction date when data loads. */
+  focusDate?: string | null;
 };
 
 const RANGES: { value: ChartRange; label: string }[] = [
@@ -124,6 +126,7 @@ export function PriceChart({
   interactive = false,
   tall = false,
   initialRange = "1y",
+  focusDate = null,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -266,6 +269,28 @@ export function PriceChart({
       end,
     };
   }, [filteredBars, filteredTrades, windowSpan, tall]);
+
+  useEffect(() => {
+    if (!focusDate || !chart?.markers.length) return;
+    const target = focusDate.slice(0, 10);
+    let best: (typeof chart.markers)[number] | null = null;
+    let bestDist = Infinity;
+    for (const marker of chart.markers) {
+      const dist = Math.abs(
+        Date.parse(`${marker.date}T00:00:00Z`) -
+          Date.parse(`${target}T00:00:00Z`),
+      );
+      if (!Number.isFinite(dist)) continue;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = marker;
+      }
+    }
+    if (best) {
+      setActiveMarker(best);
+      setPinnedMarker(true);
+    }
+  }, [focusDate, chart]);
 
   function addWhoFilter(event?: FormEvent) {
     event?.preventDefault();

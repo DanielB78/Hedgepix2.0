@@ -34,7 +34,7 @@ type BuyRow = {
   transactionDate: string;
 };
 
-export const PERFORMER_PERIODS: PerformerPeriod[] = ["2026", "6m", "3m", "1m"];
+export const PERFORMER_PERIODS: PerformerPeriod[] = ["1m", "3m", "6m", "2026"];
 
 const PAGE = 1000;
 const TICKER_CHUNK = 40;
@@ -47,6 +47,7 @@ const CEO_FETCH_CAP = 1200;
 
 export function parsePerformerPeriod(
   value: string | string[] | undefined,
+  fallback: PerformerPeriod = "1m",
 ): PerformerPeriod {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (raw === "2026" || raw === "ytd") return "2026";
@@ -55,7 +56,7 @@ export function parsePerformerPeriod(
   if (raw === "1m" || raw === "month" || raw === "1mo" || raw === "1") {
     return "1m";
   }
-  return "2026";
+  return fallback;
 }
 
 export function performerPeriodLabel(period: PerformerPeriod): string {
@@ -93,7 +94,8 @@ export function performerPeriodHref(
       if (val) params.set(key, val);
     }
   }
-  if (period !== "2026") params.set("perf", period);
+  // Default period is 1m (aligns with House/Senate/Trending activity windows).
+  if (period !== "1m") params.set("perf", period);
   const qs = params.toString();
   return qs ? `/app?${qs}` : "/app";
 }
@@ -228,24 +230,32 @@ export function computePortfolioGrowth(
   };
 }
 
-async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
+async function fetchRecentCongressBuys(
+  cutoff: string,
+  chamber?: Chamber,
+): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
   let from = 0;
 
   while (buys.length < MAX_CONGRESS_BUYS) {
     const end = Math.min(from + PAGE - 1, MAX_CONGRESS_BUYS - 1);
-    const { data, error } = await supabase
+    let query = supabase
       .from("congress_trades")
       .select(
-        "member, member_slug, chamber, ticker, transaction_date, is_listed_equity",
+        "member, member_slug, chamber, ticker, transaction_date, disclosure_date, is_listed_equity",
       )
       .eq("transaction_type", "purchase")
       .eq("is_listed_equity", true)
-      .gte("transaction_date", cutoff)
+      .gte("disclosure_date", cutoff)
       .not("ticker", "is", null)
-      .order("transaction_date", { ascending: false })
+      .order("disclosure_date", { ascending: false })
       .range(from, end);
+    if (chamber === "house" || chamber === "senate") {
+      query = query.eq("chamber", chamber);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     const rows = data ?? [];
@@ -256,20 +266,21 @@ async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
       const ticker = normalizeTicker(row.ticker as string | null);
       const name = String(row.member ?? "").trim();
       const slug = (row.member_slug as string | null)?.trim() || null;
-      const chamber = row.chamber as Chamber | null;
+      const rowChamber = row.chamber as Chamber | null;
       const tx = (row.transaction_date as string | null)?.slice(0, 10);
       if (
         !ticker ||
         !name ||
         !tx ||
-        (chamber !== "house" && chamber !== "senate")
+        (rowChamber !== "house" && rowChamber !== "senate")
       ) {
         continue;
       }
+      if (chamber && rowChamber !== chamber) continue;
       buys.push({
         key: `congress:${slug ?? name.toLowerCase()}`,
         name,
-        kind: chamber,
+        kind: rowChamber,
         memberSlug: slug,
         ticker,
         transactionDate: tx,
@@ -285,53 +296,91 @@ async function fetchRecentCongressBuys(cutoff: string): Promise<BuyRow[]> {
 
 async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
-  const buys: BuyRow[] = [];
-  let from = 0;
 
-  // Do not trust transaction_code alone — filter with raw_source.trans_code.
-  while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
-    const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
-    const { data, error } = await supabase
-      .from("ceo_stock_purchases")
-      .select("ceo_name, ticker, transaction_date, transaction_code, raw_source")
-      .gte("transaction_date", cutoff)
-      .not("ticker", "is", null)
-      .order("transaction_date", { ascending: false })
-      .range(from, end);
+  async function scan(fromDate: string): Promise<BuyRow[]> {
+    const buys: BuyRow[] = [];
+    let from = 0;
+    // Prefer transaction_code=P so sales-heavy Form 4 dumps do not exhaust the
+    // fetch cap before purchases are seen. Still verify via raw_source.
+    while (buys.length < MAX_CEO_BUYS && from < CEO_FETCH_CAP) {
+      const end = Math.min(from + PAGE - 1, CEO_FETCH_CAP - 1);
+      const { data, error } = await supabase
+        .from("ceo_stock_purchases")
+        .select(
+          "ceo_name, ticker, transaction_date, transaction_code, raw_source",
+        )
+        .eq("transaction_code", "P")
+        .gte("transaction_date", fromDate)
+        .not("ticker", "is", null)
+        .order("transaction_date", { ascending: false })
+        .range(from, end);
 
-    if (error) throw new Error(error.message);
-    const rows = data ?? [];
-    if (rows.length === 0) break;
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
 
-    for (const row of rows) {
-      if (buys.length >= MAX_CEO_BUYS) break;
-      if (
-        resolveCeoTransactionCode({
-          transaction_code: row.transaction_code as string | null,
-          raw_source: row.raw_source as Record<string, unknown> | null,
-        }) !== "P"
-      ) {
-        continue;
+      for (const row of rows) {
+        if (buys.length >= MAX_CEO_BUYS) break;
+        if (
+          resolveCeoTransactionCode({
+            transaction_code: row.transaction_code as string | null,
+            raw_source: row.raw_source as Record<string, unknown> | null,
+          }) !== "P"
+        ) {
+          continue;
+        }
+        const ticker = normalizeTicker(row.ticker as string | null);
+        const name = String(row.ceo_name ?? "").trim();
+        const tx = (row.transaction_date as string | null)?.slice(0, 10);
+        if (!ticker || !name || !tx) continue;
+        buys.push({
+          key: `ceo:${name.toLowerCase()}`,
+          name,
+          kind: "ceo",
+          memberSlug: null,
+          ticker,
+          transactionDate: tx,
+        });
       }
-      const ticker = normalizeTicker(row.ticker as string | null);
-      const name = String(row.ceo_name ?? "").trim();
-      const tx = (row.transaction_date as string | null)?.slice(0, 10);
-      if (!ticker || !name || !tx) continue;
-      buys.push({
-        key: `ceo:${name.toLowerCase()}`,
-        name,
-        kind: "ceo",
-        memberSlug: null,
-        ticker,
-        transactionDate: tx,
-      });
-    }
 
-    if (rows.length < end - from + 1) break;
-    from += PAGE;
+      if (rows.length < end - from + 1) break;
+      from += PAGE;
+    }
+    return buys;
   }
 
-  return buys;
+  let buys = await scan(cutoff);
+  if (buys.length > 0) return buys;
+
+  // Form 4 bulk ZIPs lag — fall back to the latest available transaction window.
+  const latest = await supabase
+    .from("ceo_stock_purchases")
+    .select("transaction_date")
+    .eq("transaction_code", "P")
+    .not("transaction_date", "is", null)
+    .order("transaction_date", { ascending: false })
+    .limit(1);
+  const maxDate = (latest.data?.[0]?.transaction_date as string | null)?.slice(
+    0,
+    10,
+  );
+  if (!maxDate) return [];
+
+  const today = new Date();
+  const todayUtc = Date.UTC(
+    today.getUTCFullYear(),
+    today.getUTCMonth(),
+    today.getUTCDate(),
+  );
+  const cutoffUtc = Date.parse(`${cutoff}T00:00:00Z`);
+  const windowDays = Math.max(
+    30,
+    Math.round((todayUtc - cutoffUtc) / (24 * 60 * 60 * 1000)),
+  );
+  const anchor = new Date(`${maxDate}T00:00:00Z`);
+  anchor.setUTCDate(anchor.getUTCDate() - windowDays);
+  const fallbackCutoff = anchor.toISOString().slice(0, 10);
+  return scan(fallbackCutoff < "2026-01-01" ? "2026-01-01" : fallbackCutoff);
 }
 
 async function loadPriceMaps(
@@ -420,9 +469,19 @@ async function loadPriceMaps(
   return { entryClose, latestClose };
 }
 
+export type TopPerformerOptions = {
+  /** Limit congress buys to one chamber. */
+  chamber?: Chamber;
+  /** Include Form 4 officer buys in the ranking (default true). */
+  includeCeo?: boolean;
+  /** Include congress buys (default true). Set false for Insiders-only. */
+  includeCongress?: boolean;
+};
+
 export async function fetchTopPerformers(
   period: PerformerPeriod,
   limit = 10,
+  options?: TopPerformerOptions,
 ): Promise<{
   rows: TopPerformer[];
   portfolio: PortfolioGrowth | null;
@@ -434,9 +493,13 @@ export async function fetchTopPerformers(
 
   try {
     const cutoff = performerCutoffDate(period);
+    const includeCeo = options?.includeCeo !== false;
+    const includeCongress = options?.includeCongress !== false;
     const [congress, ceos] = await Promise.all([
-      fetchRecentCongressBuys(cutoff),
-      fetchRecentCeoBuys(cutoff),
+      includeCongress
+        ? fetchRecentCongressBuys(cutoff, options?.chamber)
+        : Promise.resolve([] as BuyRow[]),
+      includeCeo ? fetchRecentCeoBuys(cutoff) : Promise.resolve([] as BuyRow[]),
     ]);
     const buys = [...congress, ...ceos];
     if (buys.length === 0) {
@@ -457,4 +520,333 @@ export async function fetchTopPerformers(
         err instanceof Error ? err.message : "Failed to load top performers",
     };
   }
+}
+
+export type MemberBuyPerformance = {
+  id: string;
+  ticker: string;
+  asset: string | null;
+  transactionDate: string;
+  disclosureDate: string | null;
+  amountLow: number | null;
+  amountHigh: number | null;
+  amountRange: string | null;
+  returnPct: number | null;
+  entryClose: number | null;
+  latestClose: number | null;
+};
+
+export type MemberBuysPayload = {
+  slug: string;
+  name: string;
+  chamber: Chamber | null;
+  state: string | null;
+  period: PerformerPeriod;
+  buys: MemberBuyPerformance[];
+};
+
+/** Purchases for one member in a period, each with % return since buy. */
+export async function fetchMemberBuysWithReturns(
+  slug: string,
+  period: PerformerPeriod,
+): Promise<MemberBuysPayload | null> {
+  if (!hasPublicSupabaseConfig()) return null;
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const cutoff = performerCutoffDate(period);
+  const supabase = createBrowserSupabase();
+  const { data, error } = await supabase
+    .from("congress_trades")
+    .select(
+      "id, member, member_slug, chamber, state, ticker, asset, transaction_date, disclosure_date, amount_low, amount_high, amount_range, is_listed_equity",
+    )
+    .eq("member_slug", normalized)
+    .eq("transaction_type", "purchase")
+    .eq("is_listed_equity", true)
+    .gte("disclosure_date", cutoff)
+    .not("ticker", "is", null)
+    .order("transaction_date", { ascending: false })
+    .limit(200);
+
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) {
+    return {
+      slug: normalized,
+      name: normalized,
+      chamber: null,
+      state: null,
+      period,
+      buys: [],
+    };
+  }
+
+  const buyRows: BuyRow[] = [];
+  const detail: Array<{
+    id: string;
+    ticker: string;
+    asset: string | null;
+    transactionDate: string;
+    disclosureDate: string | null;
+    amountLow: number | null;
+    amountHigh: number | null;
+    amountRange: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    const ticker = normalizeTicker(row.ticker as string | null);
+    const tx = (row.transaction_date as string | null)?.slice(0, 10);
+    if (!ticker || !tx) continue;
+    const id = String(row.id ?? `${ticker}|${tx}`);
+    buyRows.push({
+      key: id,
+      name: String(row.member ?? normalized),
+      kind: (row.chamber as Chamber) === "senate" ? "senate" : "house",
+      memberSlug: normalized,
+      ticker,
+      transactionDate: tx,
+    });
+    detail.push({
+      id,
+      ticker,
+      asset: (row.asset as string | null) ?? null,
+      transactionDate: tx,
+      disclosureDate: (row.disclosure_date as string | null)?.slice(0, 10) ?? null,
+      amountLow:
+        row.amount_low == null ? null : Number(row.amount_low),
+      amountHigh:
+        row.amount_high == null ? null : Number(row.amount_high),
+      amountRange: (row.amount_range as string | null) ?? null,
+    });
+  }
+
+  const { entryClose, latestClose } = await loadPriceMaps(buyRows);
+  const buys: MemberBuyPerformance[] = detail.map((d) => {
+    const entry = entryClose.get(`${d.ticker}|${d.transactionDate}`) ?? null;
+    const latest = latestClose.get(d.ticker) ?? null;
+    let returnPct: number | null = null;
+    if (
+      entry != null &&
+      latest != null &&
+      Number.isFinite(entry) &&
+      Number.isFinite(latest) &&
+      entry > 0
+    ) {
+      returnPct = ((latest - entry) / entry) * 100;
+    }
+    return {
+      ...d,
+      returnPct,
+      entryClose: entry,
+      latestClose: latest,
+    };
+  });
+
+  // Best return first, then most recent.
+  buys.sort((a, b) => {
+    if (a.returnPct != null && b.returnPct != null && a.returnPct !== b.returnPct) {
+      return b.returnPct - a.returnPct;
+    }
+    if (a.returnPct != null && b.returnPct == null) return -1;
+    if (a.returnPct == null && b.returnPct != null) return 1;
+    return b.transactionDate.localeCompare(a.transactionDate);
+  });
+
+  const first = rows[0]!;
+  return {
+    slug: normalized,
+    name: String(first.member ?? normalized),
+    chamber:
+      first.chamber === "house" || first.chamber === "senate"
+        ? first.chamber
+        : null,
+    state: (first.state as string | null) ?? null,
+    period,
+    buys,
+  };
+}
+
+export type OfficerBuysPayload = {
+  name: string;
+  officerTitle: string | null;
+  period: PerformerPeriod;
+  buys: MemberBuyPerformance[];
+};
+
+/** Form 4 purchases for one officer (matched by exact ceo_name) with % return. */
+export async function fetchOfficerBuysWithReturns(
+  name: string,
+  period: PerformerPeriod,
+): Promise<OfficerBuysPayload | null> {
+  if (!hasPublicSupabaseConfig()) return null;
+  const person = name.trim();
+  if (!person) return null;
+
+  const cutoff = performerCutoffDate(period);
+  const supabase = createBrowserSupabase();
+
+  async function loadPurchases(fromDate: string) {
+    const { data, error } = await supabase
+      .from("ceo_stock_purchases")
+      .select(
+        "id, ceo_name, officer_title, ticker, issuer_name, security_title, transaction_date, filing_date, shares_purchased, price_per_share, transaction_code, raw_source",
+      )
+      .ilike("ceo_name", person)
+      .gte("transaction_date", fromDate)
+      .not("ticker", "is", null)
+      .order("transaction_date", { ascending: false })
+      .limit(400);
+    if (error) throw new Error(error.message);
+    return (data ?? []).filter(
+      (row) =>
+        resolveCeoTransactionCode({
+          transaction_code: row.transaction_code as string | null,
+          raw_source: row.raw_source as Record<string, unknown> | null,
+        }) === "P",
+    );
+  }
+
+  let rows = await loadPurchases(cutoff);
+  if (rows.length === 0) {
+    const latest = await supabase
+      .from("ceo_stock_purchases")
+      .select("transaction_date")
+      .ilike("ceo_name", person)
+      .not("transaction_date", "is", null)
+      .order("transaction_date", { ascending: false })
+      .limit(1);
+    const maxDate = (
+      latest.data?.[0]?.transaction_date as string | null
+    )?.slice(0, 10);
+    if (maxDate) {
+      const today = new Date();
+      const todayUtc = Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+      );
+      const cutoffUtc = Date.parse(`${cutoff}T00:00:00Z`);
+      const windowDays = Math.max(
+        30,
+        Math.round((todayUtc - cutoffUtc) / (24 * 60 * 60 * 1000)),
+      );
+      const anchor = new Date(`${maxDate}T00:00:00Z`);
+      anchor.setUTCDate(anchor.getUTCDate() - windowDays);
+      let fallbackCutoff = anchor.toISOString().slice(0, 10);
+      if (fallbackCutoff < "2026-01-01") fallbackCutoff = "2026-01-01";
+      rows = await loadPurchases(fallbackCutoff);
+    }
+  }
+
+  if (rows.length === 0) {
+    return {
+      name: person,
+      officerTitle: null,
+      period,
+      buys: [],
+    };
+  }
+
+  const buyRows: BuyRow[] = [];
+  const detail: Array<{
+    id: string;
+    ticker: string;
+    asset: string | null;
+    transactionDate: string;
+    disclosureDate: string | null;
+    amountLow: number | null;
+    amountHigh: number | null;
+    amountRange: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    const ticker = normalizeTicker(row.ticker as string | null);
+    const tx = (row.transaction_date as string | null)?.slice(0, 10);
+    if (!ticker || !tx) continue;
+    const id = String(row.id ?? `${ticker}|${tx}`);
+    const shares =
+      row.shares_purchased == null ? null : Number(row.shares_purchased);
+    const price =
+      row.price_per_share == null ? null : Number(row.price_per_share);
+    let amountRange: string | null = null;
+    if (
+      shares != null &&
+      price != null &&
+      Number.isFinite(shares) &&
+      Number.isFinite(price)
+    ) {
+      amountRange = `${shares.toLocaleString("en-US")} @ ${price.toFixed(2)}`;
+    } else if (shares != null && Number.isFinite(shares)) {
+      amountRange = `${shares.toLocaleString("en-US")} shares`;
+    }
+
+    buyRows.push({
+      key: id,
+      name: person,
+      kind: "ceo",
+      memberSlug: null,
+      ticker,
+      transactionDate: tx,
+    });
+    detail.push({
+      id,
+      ticker,
+      asset:
+        (row.issuer_name as string | null) ??
+        (row.security_title as string | null) ??
+        null,
+      transactionDate: tx,
+      disclosureDate: (row.filing_date as string | null)?.slice(0, 10) ?? null,
+      amountLow: null,
+      amountHigh: null,
+      amountRange,
+    });
+  }
+
+  const { entryClose, latestClose } = await loadPriceMaps(buyRows);
+  const buys: MemberBuyPerformance[] = detail.map((d) => {
+    const entry = entryClose.get(`${d.ticker}|${d.transactionDate}`) ?? null;
+    const latest = latestClose.get(d.ticker) ?? null;
+    let returnPct: number | null = null;
+    if (
+      entry != null &&
+      latest != null &&
+      Number.isFinite(entry) &&
+      Number.isFinite(latest) &&
+      entry > 0
+    ) {
+      returnPct = ((latest - entry) / entry) * 100;
+    }
+    return {
+      ...d,
+      returnPct,
+      entryClose: entry,
+      latestClose: latest,
+    };
+  });
+
+  buys.sort((a, b) => {
+    if (
+      a.returnPct != null &&
+      b.returnPct != null &&
+      a.returnPct !== b.returnPct
+    ) {
+      return b.returnPct - a.returnPct;
+    }
+    if (a.returnPct != null && b.returnPct == null) return -1;
+    if (a.returnPct == null && b.returnPct != null) return 1;
+    return b.transactionDate.localeCompare(a.transactionDate);
+  });
+
+  const title =
+    (rows.find((r) => (r.officer_title as string | null)?.trim())
+      ?.officer_title as string | null) ?? null;
+
+  return {
+    name: String(rows[0]?.ceo_name ?? person),
+    officerTitle: title,
+    period,
+    buys,
+  };
 }
