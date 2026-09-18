@@ -17,10 +17,11 @@ function parsePage(value: string | string[] | undefined): number {
 
 function parseTab(
   value: string | string[] | undefined,
-): "activity" | "performers" | "sectors" {
+): "activity" | "performers" | "sectors" | "overlap" {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (raw === "performers") return "performers";
   if (raw === "sectors") return "sectors";
+  if (raw === "overlap") return "overlap";
   return "activity";
 }
 

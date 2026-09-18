@@ -57,8 +57,8 @@ type Props = {
   housePage?: number;
   senatePage?: number;
   insiderPage?: number;
-  /** activity (default) | performers | sectors */
-  tab?: "activity" | "performers" | "sectors";
+  /** activity (default) | performers | sectors | overlap */
+  tab?: "activity" | "performers" | "sectors" | "overlap";
 };
 
 type StockPanelState = {
@@ -362,6 +362,7 @@ export function FeedBoard({
   const showInsiders = view === "insiders";
   const showPerformers = tab === "performers";
   const showSectors = tab === "sectors";
+  const showOverlap = tab === "overlap";
   const showActivity = tab === "activity";
   const trendingLimit = 40;
 
@@ -474,11 +475,6 @@ export function FeedBoard({
           ? "Trending"
           : "House";
 
-  const sectorSubtitle =
-    view === "insiders"
-      ? "Share of Form 4 officer trades by industry sector in the current window"
-      : "Share of disclosed House/Senate trades by industry sector in the current window";
-
   const sectorsTabSubtitle =
     view === "insiders"
       ? "Market-share style breakdown of sectors being traded by officers"
@@ -508,46 +504,20 @@ export function FeedBoard({
       <ViewTabs view={view} tab={tab} query={query} />
 
       {showPerformers ? (
-        <div className="space-y-8">
-          <SectorShareChart
-            title={`Sector mix · ${payload.sectorShareScope}`}
-            subtitle={sectorSubtitle}
-            slices={payload.sectorShare}
-          />
-          <TopPerformersSection
-            title={`Top performers · ${chamberLabelForTabs}`}
-            subtitle={
-              view === "insiders"
-                ? "Highest average return on stocks bought by officers in the selected period — expand for buys, returns, and charts"
-                : "Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
-            }
-            rows={topPerformers}
-            portfolio={payload.portfolioGrowth}
-            period={payload.performerPeriod}
-            query={query}
-            view={view}
-            sectorByTicker={payload.tickerSectors}
-          />
-          {view === "house" || view === "senate" ? (
-            <SectorOverlapActivitySection
-              chamberLabel={chamberLabelForTabs}
-              rows={sectorOverlapActivity}
-              sectorByTicker={payload.tickerSectors}
-              stockPanel={stockPanel}
-              onOpenTicker={(ticker) =>
-                void openStock(
-                  ticker,
-                  view === "senate" ? "senate" : "house",
-                )
-              }
-              onCloseStock={() => setStockPanel(null)}
-              onTradeSource={(s) =>
-                stockPanel ? void openStock(stockPanel.ticker, s) : undefined
-              }
-              onOpenMember={(slug) => toggleMember(slug)}
-            />
-          ) : null}
-        </div>
+        <TopPerformersSection
+          title={`Top performers · ${chamberLabelForTabs}`}
+          subtitle={
+            view === "insiders"
+              ? "Highest average return on stocks bought by officers in the selected period — expand for buys, returns, and charts"
+              : "Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+          }
+          rows={topPerformers}
+          portfolio={payload.portfolioGrowth}
+          period={payload.performerPeriod}
+          query={query}
+          view={view}
+          sectorByTicker={payload.tickerSectors}
+        />
       ) : null}
 
       {showSectors ? (
@@ -555,6 +525,23 @@ export function FeedBoard({
           title={`Sector mix · ${payload.sectorShareScope}`}
           subtitle={sectorsTabSubtitle}
           slices={payload.sectorShare}
+        />
+      ) : null}
+
+      {showOverlap && (view === "house" || view === "senate") ? (
+        <SectorOverlapActivitySection
+          chamberLabel={chamberLabelForTabs}
+          rows={sectorOverlapActivity}
+          sectorByTicker={payload.tickerSectors}
+          stockPanel={stockPanel}
+          onOpenTicker={(ticker) =>
+            void openStock(ticker, view === "senate" ? "senate" : "house")
+          }
+          onCloseStock={() => setStockPanel(null)}
+          onTradeSource={(s) =>
+            stockPanel ? void openStock(stockPanel.ticker, s) : undefined
+          }
+          onOpenMember={(slug) => toggleMember(slug)}
         />
       ) : null}
 
@@ -928,7 +915,7 @@ function ViewTabs({
   query,
 }: {
   view: FeedView;
-  tab: "activity" | "performers" | "sectors";
+  tab: "activity" | "performers" | "sectors" | "overlap";
   query?: string;
 }) {
   const searchParams = useSearchParams();
@@ -941,11 +928,13 @@ function ViewTabs({
     return null;
   }
   const activityLabel = view === "trending" ? "Tickers" : "Activity";
-  function href(next: "activity" | "performers" | "sectors") {
+  const showOverlapTab = view === "house" || view === "senate";
+  function href(next: "activity" | "performers" | "sectors" | "overlap") {
     const params = new URLSearchParams();
     params.set("view", view);
     if (next === "performers") params.set("tab", "performers");
     if (next === "sectors") params.set("tab", "sectors");
+    if (next === "overlap") params.set("tab", "overlap");
     if (query) params.set("q", query);
     copyFilterParams(params, searchParams);
     return `/app?${params.toString()}`;
@@ -973,6 +962,15 @@ function ViewTabs({
       >
         Sectors
       </Link>
+      {showOverlapTab ? (
+        <Link
+          href={href("overlap")}
+          className="hx-tab"
+          data-active={tab === "overlap" ? "true" : "false"}
+        >
+          Sector overlap
+        </Link>
+      ) : null}
     </div>
   );
 }
