@@ -7,6 +7,7 @@ import {
   Building2,
   Landmark,
   Menu,
+  Newspaper,
   Search,
   TrendingUp,
   Users,
@@ -39,6 +40,7 @@ type NavItem = {
 
 /** House / Senate / Insiders focused navigation. */
 const NAV_ITEMS: NavItem[] = [
+  { key: "feed", href: "/feed", label: "Feed", icon: Newspaper },
   { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
   { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
   {
@@ -66,6 +68,7 @@ function resolveActive(
   view: string | null,
   fallback?: ChromeNavKey,
 ): ChromeNavKey {
+  if (pathname.startsWith("/feed")) return "feed";
   if (pathname.startsWith("/find-trades")) return "find-trades";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
