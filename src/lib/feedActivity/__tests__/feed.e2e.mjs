@@ -48,12 +48,18 @@ async function main() {
   await page.screenshot({ path: `${OUT}/feed_downtrend_filter.png`, fullPage: false });
 
   const n = Number(downText.replace(/,/g, "").match(/(\d+)/)?.[1] ?? "0");
+  // Intro should describe buyer-specific overlap focus
+  const intro = await page.locator("text=buyer-specific").count();
+  assert.ok(intro >= 1, "intro should mention buyer-specific patterns");
+
   if (n > 0) {
     const firstRow = page.locator('tbody tr[data-testid^="feed-row-"]').first();
     await firstRow.click();
-    await page.waitForSelector("text=Why noteworthy", { timeout: 10000 });
-    const streak = await page.getByText("Buy streaks").count();
-    assert.ok(streak >= 1);
+    await page.waitForSelector("text=Why this appears", { timeout: 10000 });
+    const strongest = await page.getByText("Strongest signal").count();
+    assert.ok(strongest >= 1);
+    const patterns = await page.getByText("Buyer / ticker patterns").count();
+    assert.ok(patterns >= 1);
     const rel = await page.getByText("Relative weakness").count();
     assert.ok(rel >= 1);
     await page.screenshot({

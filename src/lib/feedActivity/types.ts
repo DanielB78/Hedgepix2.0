@@ -19,6 +19,13 @@ export type FeedTradeSource = "house" | "senate" | "insider";
 
 export type FeedPositionKind = "new" | "adding" | "unknown";
 
+export type FeedOverlapBand =
+  | "direct"
+  | "very_high"
+  | "high"
+  | "moderate"
+  | "none";
+
 export type FeedBuyOccasion = {
   key: string;
   person: string | null;
@@ -33,12 +40,9 @@ export type FeedBuyOccasion = {
   disclosedMin: number | null;
   disclosedMax: number | null;
   exactValue: number | null;
-  /** Midpoint estimate for size ranking only — not an exact dollar. */
   purchaseEstimate: number | null;
   purchaseEstimateIsApproximate: boolean;
-  /** Market close near transaction date (reference, not execution). */
   priceAtTrade: number | null;
-  /** 20 trading-day return before this purchase (%, null if unknown). */
   return20dBefore: number | null;
   boughtDuringDowntrend: boolean;
   personSizeRatio: number | null;
@@ -55,6 +59,32 @@ export type FeedBuyOccasion = {
   recencyWeight: number;
 };
 
+export type FeedBuyerTickerSignal = {
+  person: string | null;
+  personKey: string;
+  source: FeedTradeSource;
+  memberSlug: string | null;
+  officerTitle: string | null;
+  score: number;
+  hasSectorOverlap: boolean;
+  overlapBand: FeedOverlapBand;
+  overlapMatchType: SectorOverlapMatchType | "semantic" | null;
+  overlapSimilarity: number | null;
+  overlapMemberLabel: string | null;
+  overlapTickerLabel: string | null;
+  buyCount: number;
+  consecutiveStreak: number;
+  lowerPriceRepeatBuys: number;
+  declineSinceFirstBuyPct: number | null;
+  isAveragingDown: boolean;
+  downtrendBuys: number;
+  unusuallyLargeBuys: number;
+  avgRecencyWeight: number;
+  latestDisclosure: string | null;
+  occasions: FeedBuyOccasion[];
+  whyLines: string[];
+};
+
 export type FeedBuyerStreak = {
   person: string | null;
   personKey: string;
@@ -69,26 +99,14 @@ export type FeedBuyerStreak = {
   maxDeclineFirstToLatest: number | null;
 };
 
-/** Transparent score components (point contributions after caps/weights). */
 export type FeedScoreBreakdown = {
-  buyOccasion: number;
-  distinctBuyer: number;
-  repeatBuyer: number;
-  consecutiveStreak: number;
-  overlapBuyer: number;
-  downtrendBuy: number;
-  currentDowntrend: number;
-  buyerCluster: number;
-  unusuallyLargeBuy: number;
-  averagingDown: number;
-  relativeWeakness: number;
-  unusualActivity: number;
-  recency: number;
-  crossSource: number;
+  bestBuyerScore: number;
+  secondBuyerContribution: number;
+  additionalBuyerContribution: number;
+  distinctBuyerContext: number;
   total: number;
 };
 
-/** Raw metric values shown in Why Noteworthy / explainability. */
 export type FeedScoreComponents = {
   buy_occasions: number;
   distinct_buyers: number;
@@ -112,6 +130,10 @@ export type FeedScoreComponents = {
   activity_ratio: number | null;
   active_source_types: string[];
   avg_recency_weight: number;
+  strongest_buyer: string | null;
+  strongest_buyer_score: number;
+  overlap_band: FeedOverlapBand | null;
+  overlap_similarity: number | null;
 };
 
 export type FeedTickerRow = {
@@ -123,6 +145,8 @@ export type FeedTickerRow = {
   breakdown: FeedScoreBreakdown;
   components: FeedScoreComponents;
   whyNoteworthy: string[];
+  strongestBuyer: FeedBuyerTickerSignal | null;
+  buyerSignals: FeedBuyerTickerSignal[];
   buyOccasions: number;
   distinctBuyers: number;
   repeatBuyers: number;
@@ -231,7 +255,11 @@ export function parseFeedFilters(
   const relRaw =
     typeof params.maxRelSector === "string" ? params.maxRelSector.trim() : "";
   const maxRelativeSectorPct =
-    relRaw === "" ? null : Number.isFinite(Number(relRaw)) ? Number(relRaw) : null;
+    relRaw === ""
+      ? null
+      : Number.isFinite(Number(relRaw))
+        ? Number(relRaw)
+        : null;
 
   return {
     ...EMPTY_FEED_FILTERS,

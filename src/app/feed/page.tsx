@@ -22,7 +22,7 @@ export default async function FeedPage({ searchParams }: PageProps) {
     <AppShell
       active="feed"
       title="Feed"
-      description="Repeated buying into weakness across House, Senate, and insider disclosures."
+      description="Buyer-specific sector-overlap signals — repeated purchases into weakness when a member's congressional industry exposure overlaps the ticker."
     >
       <FeedActivityBoard
         rows={payload.rows}

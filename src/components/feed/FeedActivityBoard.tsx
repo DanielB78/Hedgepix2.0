@@ -8,7 +8,7 @@ import {
   GENERAL_SECTOR_ORDER,
   nicheLabelsForParent,
 } from "@/lib/generalSectors";
-import { FEED_TREND_TRADING_DAYS, FEED_WEIGHTS } from "@/lib/feedActivity/weights";
+import { FEED_TREND_TRADING_DAYS } from "@/lib/feedActivity/weights";
 import type {
   FeedFilters,
   FeedSourceFilter,
@@ -375,13 +375,14 @@ function FilterBar({
 function TickerExpand({ row }: { row: FeedTickerRow }) {
   const b = row.breakdown;
   const c = row.components;
+  const best = row.strongestBuyer;
 
   return (
     <div className="grid gap-4 border-t border-[var(--line)] bg-[var(--panel-muted)] px-3 py-3 lg:grid-cols-2">
       <div className="space-y-3 text-[12px]">
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Why noteworthy
+            Why this appears
           </div>
           {row.whyNoteworthy.length > 0 ? (
             <ul className="space-y-1 text-[var(--ink)]">
@@ -396,6 +397,92 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
             <p className="text-[var(--fog-dim)]">No highlight summary.</p>
           )}
         </div>
+
+        {best ? (
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
+              Strongest signal
+            </div>
+            <dl className="grid grid-cols-[8.5rem_1fr] gap-x-2 gap-y-1">
+              <dt className="text-[var(--fog-dim)]">Buyer</dt>
+              <dd className="font-medium text-[var(--ink)]">
+                {best.person ?? "—"}
+                <span className="ml-1.5 font-normal text-[var(--fog-mute)]">
+                  {sourceLabel(best.source)}
+                  {best.officerTitle ? ` · ${best.officerTitle}` : ""}
+                </span>
+              </dd>
+              <dt className="text-[var(--fog-dim)]">Buyer score</dt>
+              <dd className="tabular-nums">{best.score}</dd>
+              {best.hasSectorOverlap ? (
+                <>
+                  <dt className="text-[var(--fog-dim)]">Sector overlap</dt>
+                  <dd>
+                    {best.overlapMemberLabel && best.overlapTickerLabel
+                      ? `${best.overlapMemberLabel} ↔ ${best.overlapTickerLabel}`
+                      : best.overlapBand}
+                    {best.overlapSimilarity != null
+                      ? ` · ${best.overlapSimilarity.toFixed(2)}`
+                      : best.overlapBand === "direct"
+                        ? " · direct"
+                        : ""}
+                  </dd>
+                </>
+              ) : null}
+              <dt className="text-[var(--fog-dim)]">Buying pattern</dt>
+              <dd>
+                {best.buyCount} purchase{best.buyCount === 1 ? "" : "s"}
+                {best.consecutiveStreak >= 2
+                  ? ` · ${best.consecutiveStreak} consecutive`
+                  : ""}
+                {best.lowerPriceRepeatBuys > 0
+                  ? ` · ${best.lowerPriceRepeatBuys} at lower prices`
+                  : ""}
+                {best.declineSinceFirstBuyPct != null &&
+                best.declineSinceFirstBuyPct < 0
+                  ? ` · ${pct(best.declineSinceFirstBuyPct)} since first`
+                  : ""}
+              </dd>
+              {(() => {
+                const ratios = best.occasions
+                  .map((o) => o.personSizeRatio)
+                  .filter((r): r is number => r != null && Number.isFinite(r));
+                const latestRatio =
+                  best.occasions
+                    .slice()
+                    .sort((a, b) =>
+                      (b.disclosureDate ?? b.transactionDate).localeCompare(
+                        a.disclosureDate ?? a.transactionDate,
+                      ),
+                    )
+                    .find((o) => o.personSizeRatio != null)?.personSizeRatio ??
+                  null;
+                if (latestRatio == null && ratios.length === 0) return null;
+                return (
+                  <>
+                    <dt className="text-[var(--fog-dim)]">Trade size</dt>
+                    <dd>
+                      {latestRatio != null
+                        ? `latest purchase ~${latestRatio.toFixed(1)}× typical disclosed size`
+                        : null}
+                      {best.unusuallyLargeBuys > 0
+                        ? ` · ${best.unusuallyLargeBuys} unusually large`
+                        : ""}
+                    </dd>
+                  </>
+                );
+              })()}
+              <dt className="text-[var(--fog-dim)]">Latest disclosure</dt>
+              <dd>{daysAgoLabel(best.latestDisclosure)}</dd>
+            </dl>
+            {row.distinctOverlapBuyers > 1 ? (
+              <p className="mt-1 text-[11px] text-[var(--fog-dim)]">
+                +{row.distinctOverlapBuyers - 1} additional sector-overlap
+                buyer{row.distinctOverlapBuyers - 1 === 1 ? "" : "s"}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
@@ -413,36 +500,21 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
 
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Score breakdown
+            Score aggregation
           </div>
           <ul className="space-y-0.5 text-[var(--fog-dim)]">
             <li>
-              Distinct buyers × {FEED_WEIGHTS.distinctBuyer} →{" "}
-              {b.distinctBuyer.toFixed(1)}
+              Best buyer/ticker signal → {b.bestBuyerScore.toFixed(1)}
             </li>
             <li>
-              Repeat / streak → {(b.repeatBuyer + b.consecutiveStreak).toFixed(1)}
+              Second strongest (40%) → {b.secondBuyerContribution.toFixed(1)}
             </li>
             <li>
-              Overlap buyers × {FEED_WEIGHTS.overlapBuyer} →{" "}
-              {b.overlapBuyer.toFixed(1)}
+              Additional strong buyers (20%) →{" "}
+              {b.additionalBuyerContribution.toFixed(1)}
             </li>
             <li>
-              Buyer clustering → {b.buyerCluster.toFixed(1)}
-            </li>
-            <li>
-              Downtrend / relative weakness →{" "}
-              {(b.downtrendBuy + b.currentDowntrend + b.relativeWeakness).toFixed(
-                1,
-              )}
-            </li>
-            <li>
-              Averaging down / large buys →{" "}
-              {(b.averagingDown + b.unusuallyLargeBuy).toFixed(1)}
-            </li>
-            <li>
-              Unusual activity / recency / cross-source →{" "}
-              {(b.unusualActivity + b.recency + b.crossSource).toFixed(1)}
+              Distinct-buyer context (tiny) → {b.distinctBuyerContext.toFixed(1)}
             </li>
             <li className="font-medium text-[var(--ink)]">
               Total score {b.total}
@@ -454,10 +526,10 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
       <div className="space-y-3 text-[12px]">
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Buy streaks
+            Buyer / ticker patterns
           </div>
           <div className="space-y-2">
-            {row.buyerStreaks.slice(0, 8).map((streak) => (
+            {row.buyerSignals.slice(0, 6).map((streak) => (
               <div
                 key={streak.personKey}
                 className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1.5"
@@ -467,15 +539,14 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                     {streak.person ?? "Unknown"}
                     <span className="ml-1.5 font-normal text-[var(--fog-mute)]">
                       {sourceLabel(streak.source)}
-                      {streak.hasOverlap ? " · overlap" : ""}
+                      {streak.hasSectorOverlap ? " · overlap" : ""}
                       {streak.isAveragingDown ? " · averaging down" : ""}
                     </span>
                   </span>
-                  <span className="text-[11px] text-[var(--fog-dim)]">
-                    Streak {streak.currentStreak || streak.maxStreak}
-                    {streak.maxDeclineFirstToLatest != null &&
-                    streak.maxDeclineFirstToLatest < 0
-                      ? ` · ${pct(streak.maxDeclineFirstToLatest)} first→latest`
+                  <span className="text-[11px] tabular-nums text-[var(--fog-dim)]">
+                    score {streak.score}
+                    {streak.consecutiveStreak >= 2
+                      ? ` · streak ${streak.consecutiveStreak}`
                       : ""}
                   </span>
                 </div>
@@ -490,15 +561,8 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                       {o.priceAtTrade != null ? (
                         <span>~${o.priceAtTrade.toFixed(2)}</span>
                       ) : null}
-                      {o.isAveragingDownStep ? (
-                        <span>lower price</span>
-                      ) : null}
+                      {o.isAveragingDownStep ? <span>lower price</span> : null}
                       {o.isUnusuallyLarge ? <span>large vs person</span> : null}
-                      {o.positionKind === "adding" ? (
-                        <span>adding</span>
-                      ) : o.positionKind === "new" ? (
-                        <span>new</span>
-                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -538,7 +602,8 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                       o.disclosedMax,
                       o.amountRange,
                     )}
-                    {o.purchaseEstimateIsApproximate && o.purchaseEstimate != null
+                    {o.purchaseEstimateIsApproximate &&
+                    o.purchaseEstimate != null
                       ? " · est. midpoint used for size ranking only"
                       : ""}
                   </span>
@@ -591,6 +656,12 @@ function FeedRow({ row }: { row: FeedTickerRow }) {
               {row.company}
             </div>
           ) : null}
+          {row.strongestBuyer?.person ? (
+            <div className="pl-4 text-[11px] text-[var(--fog-dim)]">
+              Strongest: {row.strongestBuyer.person}
+              {row.strongestBuyer.hasSectorOverlap ? " · overlap" : ""}
+            </div>
+          ) : null}
         </td>
         <td className="num py-2 pr-3 text-right text-[13px] font-semibold tabular-nums text-[var(--ink)]">
           {row.score}
@@ -598,14 +669,16 @@ function FeedRow({ row }: { row: FeedTickerRow }) {
         <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
           {row.buyOccasions}
         </td>
-        <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
+        <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[var(--fog-mute)]">
           {row.distinctBuyers}
         </td>
         <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
           {row.distinctOverlapBuyers}
         </td>
         <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
-          {row.repeatBuyers}
+          {row.maxConsecutiveStreak >= 2
+            ? row.maxConsecutiveStreak
+            : row.repeatBuyers}
         </td>
         <td className="py-2 pr-3 text-[12px] tabular-nums">
           {row.isCurrentDowntrend ? (
@@ -676,10 +749,11 @@ export function FeedActivityBoard({
             Noteworthy activity
           </h2>
           <p className="mt-0.5 max-w-2xl text-[12px] text-[var(--fog-dim)]">
-            Unusual combinations of disclosed buying and market weakness —
-            repeated purchases, clustered buyers, sector overlap, averaging
-            down, and relative underperformance. Observable patterns only; not
-            evidence of private information.
+            Surfaces buyer-specific patterns where a congressional sector
+            connection overlaps a company&apos;s industry — especially repeated
+            purchases into weakness. Sector overlap is a research screen only;
+            it does not establish improper conduct. Distinct buyer counts are
+            context, not the main ranking driver.
           </p>
         </div>
         <FilterBar
@@ -716,12 +790,20 @@ export function FeedActivityBoard({
                 <th className="px-3 py-2 font-medium">Ticker</th>
                 <th className="num py-2 pr-3 text-right font-medium">Score</th>
                 <th className="num py-2 pr-3 text-right font-medium">Buys</th>
-                <th className="num py-2 pr-3 text-right font-medium">Buyers</th>
+                <th
+                  className="num py-2 pr-3 text-right font-medium"
+                  title="Context only — not a major ranking factor"
+                >
+                  Buyers
+                </th>
                 <th className="num py-2 pr-3 text-right font-medium">
                   Overlap
                 </th>
-                <th className="num py-2 pr-3 text-right font-medium">
-                  Repeat
+                <th
+                  className="num py-2 pr-3 text-right font-medium"
+                  title="Max consecutive streak for strongest buyer pattern"
+                >
+                  Streak
                 </th>
                 <th className="py-2 pr-3 font-medium">Trend</th>
                 <th className="py-2 pr-3 font-medium">Rel. trend</th>

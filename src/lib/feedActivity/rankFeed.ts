@@ -1,6 +1,6 @@
 /**
- * Aggregate trades into ticker-level Feed rankings.
- * Transparent capped score from FEED_WEIGHTS — no ML.
+ * Feed ranking: buyer+ticker sector-overlap signals first, then aggregate to ticker.
+ * Distinct multi-buyer counts are display context only (near-zero weight).
  */
 
 import { normalizeTransactionType } from "@/lib/advancedTradeFilters";
@@ -20,17 +20,21 @@ import {
 import {
   FEED_ACTIVITY_BASELINE_FLOOR,
   FEED_CAPS,
-  FEED_MIN_BUY_OCCASIONS,
+  FEED_MIN_BUY_OCCASIONS_NO_OVERLAP,
+  FEED_TICKER_AGGREGATION,
   FEED_TREND_TRADING_DAYS,
   FEED_UNUSUAL_SIZE_RATIO,
   FEED_WEIGHTS,
   capCount,
+  overlapStrengthWeight,
   recencyWeight,
 } from "./weights";
 import type {
   FeedBuyOccasion,
   FeedBuyerStreak,
+  FeedBuyerTickerSignal,
   FeedFilters,
+  FeedOverlapBand,
   FeedPositionKind,
   FeedScoreBreakdown,
   FeedScoreComponents,
@@ -62,6 +66,23 @@ export type FeedRawTrade = {
   overlapSimilarity: number | null;
   overlapMemberLabel: string | null;
   overlapTickerLabel: string | null;
+};
+
+/** Temporary draft for buyer/ticker scoring between passes. */
+type BuyerScoreDraft = {
+  occasions: FeedBuyOccasion[];
+  consecutiveStreak: number;
+  lowerPriceRepeatBuys: number;
+  declineSinceFirstBuyPct: number | null;
+  isAveragingDown: boolean;
+  hasSectorOverlap: boolean;
+  overlapBand: FeedOverlapBand;
+  overlapWeight: number;
+  relativeWeaknessPct: number | null;
+  isCurrentDowntrend: boolean;
+  activityRatio: number | null;
+  source: FeedTradeSource;
+  officerTitle: string | null;
 };
 
 export function timeframeDays(tf: FeedTimeframe): number {
@@ -126,13 +147,16 @@ function matchesNiche(
   return industryLabels.some((l) => set.has(l.trim().toLowerCase()));
 }
 
-/** Exact value preferred; otherwise disclosed range midpoint (estimate only). */
 export function purchaseSizeEstimate(trade: {
   exactValue: number | null;
   disclosedMin: number | null;
   disclosedMax: number | null;
 }): { value: number | null; approximate: boolean } {
-  if (trade.exactValue != null && Number.isFinite(trade.exactValue) && trade.exactValue > 0) {
+  if (
+    trade.exactValue != null &&
+    Number.isFinite(trade.exactValue) &&
+    trade.exactValue > 0
+  ) {
     return { value: trade.exactValue, approximate: false };
   }
   const lo = trade.disclosedMin;
@@ -204,168 +228,303 @@ function sourceLabel(s: FeedTradeSource): string {
   return "Insider";
 }
 
-export function buildWhyNoteworthy(c: FeedScoreComponents): string[] {
+function isSeniorInsiderTitle(title: string | null | undefined): boolean {
+  const t = (title ?? "").toLowerCase();
+  if (!t) return false;
+  return (
+    /\bceo\b/.test(t) ||
+    /\bcfo\b/.test(t) ||
+    /\bcoo\b/.test(t) ||
+    /\bchief\b/.test(t) ||
+    /\bdirector\b/.test(t) ||
+    /\bpresident\b/.test(t)
+  );
+}
+
+function overlapBandLabel(band: FeedOverlapBand): string {
+  switch (band) {
+    case "direct":
+      return "direct exact match";
+    case "very_high":
+      return "very high semantic match";
+    case "high":
+      return "strong semantic match";
+    case "moderate":
+      return "moderate semantic match";
+    default:
+      return "no overlap";
+  }
+}
+
+export function buildBuyerWhyLines(signal: {
+  person: string | null;
+  source: FeedTradeSource;
+  hasSectorOverlap: boolean;
+  overlapBand: FeedOverlapBand;
+  overlapSimilarity: number | null;
+  overlapMemberLabel: string | null;
+  overlapTickerLabel: string | null;
+  buyCount: number;
+  consecutiveStreak: number;
+  lowerPriceRepeatBuys: number;
+  declineSinceFirstBuyPct: number | null;
+  downtrendBuys: number;
+  unusuallyLargeBuys: number;
+  latestDisclosure: string | null;
+  relativeSectorReturn: number | null;
+  relativeMarketReturn: number | null;
+  return20d: number | null;
+  officerTitle: string | null;
+}): string[] {
   const lines: string[] = [];
-  if (c.distinct_buyers > 0) {
-    lines.push(`${c.distinct_buyers} distinct buyer${c.distinct_buyers === 1 ? "" : "s"}`);
-  }
-  if (c.buyers_last_30d > 0) {
+  const who = signal.person ?? "This buyer";
+
+  if (signal.hasSectorOverlap) {
     lines.push(
-      `${c.buyers_last_30d} buyer${c.buyers_last_30d === 1 ? "" : "s"} in the last 30 days`,
+      `${who}'s congressional sector exposure overlaps the ticker's industry (${overlapBandLabel(signal.overlapBand)})`,
+    );
+    if (
+      signal.overlapMemberLabel &&
+      signal.overlapTickerLabel
+    ) {
+      lines.push(
+        `Overlap: ${signal.overlapMemberLabel} ↔ ${signal.overlapTickerLabel}`,
+      );
+    }
+    if (signal.overlapSimilarity != null) {
+      lines.push(`Sector similarity: ${signal.overlapSimilarity.toFixed(2)}`);
+    }
+  } else if (signal.source === "insider") {
+    lines.push(
+      `${who} is a corporate insider${signal.officerTitle ? ` (${signal.officerTitle})` : ""} — no congressional sector overlap`,
     );
   }
-  if (c.repeat_buyers > 0) {
-    lines.push(`${c.repeat_buyers} repeat buyer${c.repeat_buyers === 1 ? "" : "s"}`);
-  }
-  if (c.sector_overlap_buyers > 0) {
+
+  if (signal.consecutiveStreak >= 2 || signal.buyCount >= 2) {
     lines.push(
-      `${c.sector_overlap_buyers} congressional sector-overlap buyer${c.sector_overlap_buyers === 1 ? "" : "s"}`,
+      `Same ${signal.source === "insider" ? "insider" : "member"} has purchased this ticker ${signal.buyCount} time${signal.buyCount === 1 ? "" : "s"}` +
+        (signal.consecutiveStreak >= 2
+          ? ` (${signal.consecutiveStreak} consecutive)`
+          : ""),
     );
   }
-  if (c.downtrend_buys > 0) {
+
+  if (signal.lowerPriceRepeatBuys > 0) {
     lines.push(
-      `${c.downtrend_buys} buy${c.downtrend_buys === 1 ? "" : "s"} occurred during downtrends`,
+      `${signal.lowerPriceRepeatBuys} later purchase${signal.lowerPriceRepeatBuys === 1 ? "" : "s"} occurred at lower prices`,
     );
   }
-  if (c.return_20d != null && c.return_20d < 0) {
-    lines.push(`stock is currently ${c.return_20d.toFixed(1)}% over 20D`);
-  }
-  if (c.relative_sector_return_20d != null && c.relative_sector_return_20d < 0) {
-    lines.push(
-      `stock underperformed its sector by ${Math.abs(c.relative_sector_return_20d).toFixed(1)}%`,
-    );
-  } else if (
-    c.relative_market_return_20d != null &&
-    c.relative_market_return_20d < 0
+  if (
+    signal.declineSinceFirstBuyPct != null &&
+    signal.declineSinceFirstBuyPct < 0
   ) {
     lines.push(
-      `stock underperformed the market by ${Math.abs(c.relative_market_return_20d).toFixed(1)}%`,
+      `Stock fell ${Math.abs(signal.declineSinceFirstBuyPct).toFixed(0)}% during the buying sequence`,
     );
   }
-  if (c.averaging_down_buyers > 0) {
+  if (signal.relativeSectorReturn != null && signal.relativeSectorReturn < 0) {
     lines.push(
-      `${c.averaging_down_buyers} buyer${c.averaging_down_buyers === 1 ? "" : "s"} added again at lower prices`,
+      `Stock underperformed its sector by ${Math.abs(signal.relativeSectorReturn).toFixed(0)}%`,
     );
-  }
-  if (c.unusually_large_buys > 0) {
+  } else if (
+    signal.relativeMarketReturn != null &&
+    signal.relativeMarketReturn < 0
+  ) {
     lines.push(
-      `${c.unusually_large_buys} purchase${c.unusually_large_buys === 1 ? "" : "s"} unusually large vs that person's history`,
+      `Stock underperformed the market by ${Math.abs(signal.relativeMarketReturn).toFixed(0)}%`,
     );
-  }
-  if (c.activity_ratio != null && c.activity_ratio >= 1.5) {
+  } else if (signal.return20d != null && signal.return20d < 0) {
     lines.push(
-      `recent buy activity is ${c.activity_ratio.toFixed(1)}× its historical baseline`,
+      `Stock is currently ${signal.return20d.toFixed(1)}% over 20 trading days`,
     );
   }
-  if (c.active_source_types.length >= 2) {
-    lines.push(`${c.active_source_types.join(" + ")} buying both present`);
+  if (signal.downtrendBuys > 0) {
+    lines.push(
+      `${signal.downtrendBuys} purchase${signal.downtrendBuys === 1 ? "" : "s"} occurred while the stock was already falling`,
+    );
+  }
+  if (signal.unusuallyLargeBuys > 0) {
+    lines.push(
+      `Purchase size was unusually large relative to that ${signal.source === "insider" ? "insider" : "member"}'s history`,
+    );
+  }
+  if (signal.latestDisclosure) {
+    const age = daysBetween(
+      signal.latestDisclosure,
+      cutoffDateFromDays(0),
+    );
+    if (age <= 0) lines.push("Latest disclosed purchase was today");
+    else if (age === 1) lines.push("Latest disclosed purchase was 1 day ago");
+    else lines.push(`Latest disclosed purchase was ${age} days ago`);
+  }
+
+  return lines;
+}
+
+export function buildWhyNoteworthy(
+  strongest: FeedBuyerTickerSignal | null,
+  extras: {
+    additionalOverlapBuyers: number;
+    relativeSectorReturn: number | null;
+    relativeMarketReturn: number | null;
+    return20d: number | null;
+  },
+): string[] {
+  if (!strongest) return [];
+  const lines = [...strongest.whyLines];
+  if (extras.additionalOverlapBuyers > 0) {
+    lines.push(
+      `+${extras.additionalOverlapBuyers} additional sector-overlap buyer${extras.additionalOverlapBuyers === 1 ? "" : "s"}`,
+    );
   }
   return lines;
 }
 
-function computeScore(input: {
-  buyOccasions: number;
-  distinctBuyers: number;
-  repeatBuyers: number;
-  maxConsecutiveStreak: number;
-  distinctOverlapBuyers: number;
-  downtrendBuyCount: number;
-  isCurrentDowntrend: boolean;
-  buyersLast14d: number;
-  buyersLast30d: number;
-  unusuallyLargeBuyCount: number;
-  averagingDownBuyers: number;
+export function scoreBuyerTicker(input: {
+  occasions: FeedBuyOccasion[];
+  consecutiveStreak: number;
+  lowerPriceRepeatBuys: number;
+  declineSinceFirstBuyPct: number | null;
+  isAveragingDown: boolean;
+  hasSectorOverlap: boolean;
+  overlapBand: FeedOverlapBand;
+  overlapWeight: number;
   relativeWeaknessPct: number | null;
+  isCurrentDowntrend: boolean;
   activityRatio: number | null;
-  avgRecencyWeight: number;
-  extraSourceTypes: number;
-}): FeedScoreBreakdown {
-  const buyOccasion =
-    capCount(input.buyOccasions, FEED_CAPS.buyOccasion) * FEED_WEIGHTS.buyOccasion;
-  const distinctBuyer =
-    capCount(input.distinctBuyers, FEED_CAPS.distinctBuyer) *
-    FEED_WEIGHTS.distinctBuyer;
-  const repeatBuyer =
-    capCount(input.repeatBuyers, FEED_CAPS.repeatBuyer) * FEED_WEIGHTS.repeatBuyer;
-  const consecutiveStreak =
-    capCount(Math.max(0, input.maxConsecutiveStreak - 1), FEED_CAPS.consecutiveStreak) *
-    FEED_WEIGHTS.consecutiveStreak;
-  const overlapBuyer =
-    capCount(input.distinctOverlapBuyers, FEED_CAPS.overlapBuyer) *
-    FEED_WEIGHTS.overlapBuyer;
-  const downtrendBuy =
-    capCount(input.downtrendBuyCount, FEED_CAPS.downtrendBuy) *
-    FEED_WEIGHTS.downtrendBuy;
-  const currentDowntrend = input.isCurrentDowntrend
-    ? FEED_WEIGHTS.currentDowntrend
-    : 0;
-  const buyerCluster =
-    capCount(input.buyersLast14d, FEED_CAPS.buyerCluster14d) *
-      FEED_WEIGHTS.buyerCluster14d +
-    capCount(input.buyersLast30d, FEED_CAPS.buyerCluster30d) *
-      FEED_WEIGHTS.buyerCluster30d;
-  const unusuallyLargeBuy =
-    capCount(input.unusuallyLargeBuyCount, FEED_CAPS.unusuallyLargeBuy) *
-    FEED_WEIGHTS.unusuallyLargeBuy;
-  const averagingDown =
-    capCount(input.averagingDownBuyers, FEED_CAPS.averagingDownBuyer) *
-    FEED_WEIGHTS.averagingDownBuyer;
+  source: FeedTradeSource;
+  officerTitle: string | null;
+}): number {
+  const buys = input.occasions;
+  if (buys.length === 0) return 0;
 
-  let relativeWeakness = 0;
+  let score = 0;
+
+  // Overlap (congressional) or insider repeat base
+  if (input.hasSectorOverlap) {
+    score += input.overlapWeight;
+  } else if (input.source === "insider" && buys.length >= 2) {
+    score += FEED_WEIGHTS.insiderRepeatBase;
+    if (isSeniorInsiderTitle(input.officerTitle)) {
+      score += FEED_WEIGHTS.insiderSeniorRole;
+    }
+  } else if (input.source === "insider" && buys.length === 1) {
+    // Single insider buy: small base only if unusual size or weakness
+    score += 2;
+    if (isSeniorInsiderTitle(input.officerTitle)) {
+      score += FEED_WEIGHTS.insiderSeniorRole;
+    }
+  } else if (!input.hasSectorOverlap) {
+    // Congress without overlap: weak signal — only repeat+weakness can lift
+    score += 1;
+  }
+
+  const extraBuys = Math.max(0, buys.length - 1);
+  score +=
+    capCount(extraBuys, FEED_CAPS.repeatBuySamePerson) *
+    FEED_WEIGHTS.repeatBuySamePerson;
+
+  const streakSteps = Math.max(0, input.consecutiveStreak - 1);
+  score +=
+    capCount(streakSteps, FEED_CAPS.consecutiveStreakStep) *
+    FEED_WEIGHTS.consecutiveStreakStep;
+
+  score +=
+    capCount(input.lowerPriceRepeatBuys, FEED_CAPS.averagingDownStep) *
+    FEED_WEIGHTS.averagingDownStep;
+
+  if (
+    input.declineSinceFirstBuyPct != null &&
+    input.declineSinceFirstBuyPct < 0
+  ) {
+    const pts = Math.min(
+      Math.abs(input.declineSinceFirstBuyPct),
+      FEED_CAPS.declineSinceFirstBuyPct,
+    );
+    score += pts * FEED_WEIGHTS.declineSinceFirstBuy;
+  }
+
   if (input.relativeWeaknessPct != null && input.relativeWeaknessPct < 0) {
     const pts = Math.min(
       Math.abs(input.relativeWeaknessPct),
       FEED_CAPS.relativeWeaknessPct,
     );
-    relativeWeakness = pts * FEED_WEIGHTS.relativeWeakness;
+    score += pts * FEED_WEIGHTS.relativeWeakness;
   }
 
-  let unusualActivity = 0;
+  const downtrendBuys = buys.filter((b) => b.boughtDuringDowntrend).length;
+  score +=
+    capCount(downtrendBuys, FEED_CAPS.downtrendBuy) * FEED_WEIGHTS.downtrendBuy;
+
+  if (input.isCurrentDowntrend) score += FEED_WEIGHTS.currentDowntrend;
+
+  const large = buys.filter((b) => b.isUnusuallyLarge).length;
+  score +=
+    capCount(large, FEED_CAPS.unusuallyLargeBuy) *
+    FEED_WEIGHTS.unusuallyLargeBuy;
+
+  const avgRecency =
+    buys.reduce((s, b) => s + b.recencyWeight, 0) / Math.max(1, buys.length);
+  score += avgRecency * FEED_WEIGHTS.recency;
+
   if (input.activityRatio != null && input.activityRatio > 1) {
     const excess = Math.min(
       input.activityRatio - 1,
-      FEED_CAPS.activityRatio - 1,
+      FEED_CAPS.unusualActivityExcess,
     );
-    unusualActivity = excess * FEED_WEIGHTS.unusualActivity;
+    score += excess * FEED_WEIGHTS.unusualActivity;
   }
 
-  const recency = input.avgRecencyWeight * FEED_WEIGHTS.recency;
-  const crossSource =
-    capCount(input.extraSourceTypes, FEED_CAPS.crossSourceExtra) *
-    FEED_WEIGHTS.crossSource;
+  // Amplify when overlap + averaging down + repeats coincide
+  if (
+    input.hasSectorOverlap &&
+    input.isAveragingDown &&
+    buys.length >= 3
+  ) {
+    score *= 1.15;
+  }
+
+  return Math.round(score * 10) / 10;
+}
+
+export function aggregateTickerScore(
+  buyerScores: number[],
+  distinctBuyers: number,
+): FeedScoreBreakdown {
+  const sorted = [...buyerScores].sort((a, b) => b - a);
+  const best = sorted[0] ?? 0;
+  const second = sorted[1] ?? 0;
+  const additional = sorted
+    .slice(2)
+    .filter((s) => s >= FEED_TICKER_AGGREGATION.additionalMinScore)
+    .slice(0, FEED_TICKER_AGGREGATION.maxAdditional);
+
+  const bestBuyerScore = best * FEED_TICKER_AGGREGATION.bestWeight;
+  const secondBuyerContribution =
+    second * FEED_TICKER_AGGREGATION.secondWeight;
+  const additionalBuyerContribution = additional.reduce(
+    (s, v) => s + v * FEED_TICKER_AGGREGATION.additionalWeight,
+    0,
+  );
+  const distinctBuyerContext =
+    Math.max(0, distinctBuyers - 1) * FEED_WEIGHTS.distinctBuyerContext;
 
   const total =
-    buyOccasion +
-    distinctBuyer +
-    repeatBuyer +
-    consecutiveStreak +
-    overlapBuyer +
-    downtrendBuy +
-    currentDowntrend +
-    buyerCluster +
-    unusuallyLargeBuy +
-    averagingDown +
-    relativeWeakness +
-    unusualActivity +
-    recency +
-    crossSource;
+    Math.round(
+      (bestBuyerScore +
+        secondBuyerContribution +
+        additionalBuyerContribution +
+        distinctBuyerContext) *
+        10,
+    ) / 10;
 
   return {
-    buyOccasion,
-    distinctBuyer,
-    repeatBuyer,
-    consecutiveStreak,
-    overlapBuyer,
-    downtrendBuy,
-    currentDowntrend,
-    buyerCluster,
-    unusuallyLargeBuy,
-    averagingDown,
-    relativeWeakness,
-    unusualActivity,
-    recency,
-    crossSource,
-    total: Math.round(total * 10) / 10,
+    bestBuyerScore: Math.round(bestBuyerScore * 10) / 10,
+    secondBuyerContribution: Math.round(secondBuyerContribution * 10) / 10,
+    additionalBuyerContribution:
+      Math.round(additionalBuyerContribution * 10) / 10,
+    distinctBuyerContext: Math.round(distinctBuyerContext * 10) / 10,
+    total,
   };
 }
 
@@ -376,7 +535,6 @@ export function rankFeedTickers(
     timeframe: FeedTimeframe;
     filters?: Partial<FeedFilters>;
     now?: Date;
-    minBuyOccasions?: number;
   },
 ): FeedTickerRow[] {
   const filters: FeedFilters = {
@@ -394,7 +552,6 @@ export function rankFeedTickers(
     maxRelativeSectorPct: opts.filters?.maxRelativeSectorPct ?? null,
     crossSource: opts.filters?.crossSource ?? "all",
   };
-  const minOccasions = opts.minBuyOccasions ?? FEED_MIN_BUY_OCCASIONS;
   const now = opts.now ?? new Date();
   const today = cutoffDateFromDays(0, now);
   const windowCutoff = cutoffDateFromDays(timeframeDays(opts.timeframe), now);
@@ -422,7 +579,6 @@ export function rankFeedTickers(
     return a.id.localeCompare(b.id);
   });
 
-  // Person-level purchase size medians (all loaded buys, for unusual-size).
   const personSizeSamples = new Map<string, number[]>();
   for (const t of chrono) {
     if (normalizeTransactionType(t.transactionType) !== "buy") continue;
@@ -441,19 +597,17 @@ export function rankFeedTickers(
     if (m != null && m > 0) personMedian.set(k, m);
   }
 
-  // Ticker historical buy occasions outside the recent 30d for activity baseline.
-  // Use all loaded buys grouped by occasion key.
   const tickerHistOccasions = new Map<string, Set<string>>();
   for (const t of chrono) {
     if (normalizeTransactionType(t.transactionType) !== "buy") continue;
+    if (t.discDate >= d30) continue;
     const key = occasionKey(t.personKey, t.tickerNorm, t.txDate);
     let set = tickerHistOccasions.get(t.tickerNorm);
     if (!set) {
       set = new Set();
       tickerHistOccasions.set(t.tickerNorm, set);
     }
-    // Count only disclosures before the recent 30d window for baseline.
-    if (t.discDate < d30) set.add(key);
+    set.add(key);
   }
 
   const byPersonTicker = new Map<string, ChronoTrade[]>();
@@ -467,33 +621,18 @@ export function rankFeedTickers(
     list.push(t);
   }
 
-  // Sector membership for cross-sectional sector benchmark
   const tickersBySector = new Map<string, string[]>();
+  const marketBench = marketBenchmarkReturn(seriesByTicker);
 
-  type Acc = {
+  // Build per-ticker collections of window-qualifying occasions + buyer signals
+  type TickerAcc = {
     ticker: string;
     company: string | null;
     occasions: Map<string, FeedBuyOccasion>;
-    buyerOccasions: Map<string, Set<string>>;
-    overlapBuyers: Set<string>;
-    downtrendBuyers: Set<string>;
-    buyerMeta: Map<
-      string,
-      {
-        person: string | null;
-        source: FeedTradeSource;
-        memberSlug: string | null;
-        hasOverlap: boolean;
-        maxStreak: number;
-        currentStreak: number;
-        isAveragingDown: boolean;
-        lowerPriceTransitions: number;
-        maxDeclineFirstToLatest: number | null;
-      }
-    >;
+    buyerSignals: FeedBuyerTickerSignal[];
   };
-
-  const byTicker = new Map<string, Acc>();
+  const byTicker = new Map<string, TickerAcc>();
+  const draftStore = new Map<string, BuyerScoreDraft>();
 
   for (const [, list] of byPersonTicker) {
     const streakInput = list.map((t) => ({
@@ -503,7 +642,6 @@ export function rankFeedTickers(
     }));
     const streaks = computeBuyStreaks(streakInput);
 
-    // Position kind + averaging-down from full chronology
     const buyOccasionsChrono: Array<{
       key: string;
       txDate: string;
@@ -523,8 +661,12 @@ export function rankFeedTickers(
       if (buyOccasionsChrono.some((x) => x.key === oKey)) continue;
       const series = seriesByTicker.get(t.tickerNorm) ?? [];
       const price = priceAtDate(series, t.txDate);
-      const positionKind: FeedPositionKind = openPosition ? "adding" : "new";
-      buyOccasionsChrono.push({ key: oKey, txDate: t.txDate, price, positionKind });
+      buyOccasionsChrono.push({
+        key: oKey,
+        txDate: t.txDate,
+        price,
+        positionKind: openPosition ? "adding" : "new",
+      });
       openPosition = true;
     }
 
@@ -532,20 +674,16 @@ export function rankFeedTickers(
     for (let i = 1; i < buyOccasionsChrono.length; i++) {
       const prev = buyOccasionsChrono[i - 1]!;
       const cur = buyOccasionsChrono[i]!;
-      if (
-        prev.price != null &&
-        cur.price != null &&
-        cur.price < prev.price
-      ) {
+      if (prev.price != null && cur.price != null && cur.price < prev.price) {
         lowerPriceTransitions += 1;
       }
     }
     const firstPx = buyOccasionsChrono[0]?.price ?? null;
     const lastPx =
       buyOccasionsChrono[buyOccasionsChrono.length - 1]?.price ?? null;
-    let maxDeclineFirstToLatest: number | null = null;
+    let declineSinceFirst: number | null = null;
     if (firstPx != null && lastPx != null && firstPx > 0) {
-      maxDeclineFirstToLatest = ((lastPx - firstPx) / firstPx) * 100;
+      declineSinceFirst = ((lastPx - firstPx) / firstPx) * 100;
     }
     const lastTwo = buyOccasionsChrono.slice(-2);
     const isAveragingDown =
@@ -561,14 +699,19 @@ export function rankFeedTickers(
     for (let i = 1; i < buyOccasionsChrono.length; i++) {
       const prev = buyOccasionsChrono[i - 1]!;
       const cur = buyOccasionsChrono[i]!;
-      if (
-        prev.price != null &&
-        cur.price != null &&
-        cur.price < prev.price
-      ) {
+      if (prev.price != null && cur.price != null && cur.price < prev.price) {
         avgDownStepKeys.add(cur.key);
       }
     }
+
+    const windowOccasions: FeedBuyOccasion[] = [];
+    let bestOverlap = {
+      has: false,
+      matchType: null as FeedBuyOccasion["overlapMatchType"],
+      similarity: null as number | null,
+      memberLabel: null as string | null,
+      tickerLabel: null as string | null,
+    };
 
     for (const t of list) {
       if (normalizeTransactionType(t.transactionType) !== "buy") continue;
@@ -582,8 +725,6 @@ export function rankFeedTickers(
       const med = personMedian.get(t.personKey);
       const sizeRatio =
         est.value != null && med != null && med > 0 ? est.value / med : null;
-      const isUnusuallyLarge =
-        sizeRatio != null && sizeRatio >= FEED_UNUSUAL_SIZE_RATIO;
 
       let overlapMatchType: FeedBuyOccasion["overlapMatchType"] = null;
       if (t.overlapMatchType === "direct") overlapMatchType = "direct";
@@ -594,61 +735,58 @@ export function rankFeedTickers(
         overlapMatchType = "semantic";
       }
 
+      if (hasOverlap) {
+        bestOverlap = {
+          has: true,
+          matchType: overlapMatchType,
+          similarity: t.overlapSimilarity,
+          memberLabel: t.overlapMemberLabel,
+          tickerLabel: t.overlapTickerLabel,
+        };
+      }
+
       const oKey = occasionKey(t.personKey, t.tickerNorm, t.txDate);
       const pos = positionByKey.get(oKey);
       const ageDays = Math.max(0, daysBetween(t.discDate, today));
 
-      let acc = byTicker.get(t.tickerNorm);
-      if (!acc) {
-        const industry = getTickerIndustryLabel(t.tickerNorm);
-        acc = {
-          ticker: t.tickerNorm,
-          company: industry?.company ?? t.company,
-          occasions: new Map(),
-          buyerOccasions: new Map(),
-          overlapBuyers: new Set(),
-          downtrendBuyers: new Set(),
-          buyerMeta: new Map(),
-        };
-        byTicker.set(t.tickerNorm, acc);
-      }
-      if (t.company && !acc.company) acc.company = t.company;
+      const occasion: FeedBuyOccasion = {
+        key: oKey,
+        person: t.person,
+        personKey: t.personKey,
+        memberSlug: t.memberSlug,
+        source: t.source,
+        ticker: t.tickerNorm,
+        company: getTickerIndustryLabel(t.tickerNorm)?.company ?? t.company,
+        transactionDate: t.txDate,
+        disclosureDate: t.discDate,
+        amountRange: t.amountRange,
+        disclosedMin: t.disclosedMin,
+        disclosedMax: t.disclosedMax,
+        exactValue: t.exactValue,
+        purchaseEstimate: est.value,
+        purchaseEstimateIsApproximate: est.approximate,
+        priceAtTrade: priceAtDate(series, t.txDate),
+        return20dBefore: ret20,
+        boughtDuringDowntrend,
+        personSizeRatio: sizeRatio,
+        isUnusuallyLarge:
+          sizeRatio != null && sizeRatio >= FEED_UNUSUAL_SIZE_RATIO,
+        positionKind: pos?.positionKind ?? "unknown",
+        isAveragingDownStep: avgDownStepKeys.has(oKey),
+        hasSectorOverlap: hasOverlap,
+        overlapMatchType,
+        overlapSimilarity: t.overlapSimilarity,
+        overlapMemberLabel: t.overlapMemberLabel,
+        overlapTickerLabel: t.overlapTickerLabel,
+        officerTitle: t.officerTitle,
+        filingUrl: t.filingUrl,
+        recencyWeight: recencyWeight(ageDays),
+      };
 
-      if (!acc.occasions.has(oKey)) {
-        acc.occasions.set(oKey, {
-          key: oKey,
-          person: t.person,
-          personKey: t.personKey,
-          memberSlug: t.memberSlug,
-          source: t.source,
-          ticker: t.tickerNorm,
-          company: acc.company,
-          transactionDate: t.txDate,
-          disclosureDate: t.discDate,
-          amountRange: t.amountRange,
-          disclosedMin: t.disclosedMin,
-          disclosedMax: t.disclosedMax,
-          exactValue: t.exactValue,
-          purchaseEstimate: est.value,
-          purchaseEstimateIsApproximate: est.approximate,
-          priceAtTrade: priceAtDate(series, t.txDate),
-          return20dBefore: ret20,
-          boughtDuringDowntrend,
-          personSizeRatio: sizeRatio,
-          isUnusuallyLarge,
-          positionKind: pos?.positionKind ?? "unknown",
-          isAveragingDownStep: avgDownStepKeys.has(oKey),
-          hasSectorOverlap: hasOverlap,
-          overlapMatchType,
-          overlapSimilarity: t.overlapSimilarity,
-          overlapMemberLabel: t.overlapMemberLabel,
-          overlapTickerLabel: t.overlapTickerLabel,
-          officerTitle: t.officerTitle,
-          filingUrl: t.filingUrl,
-          recencyWeight: recencyWeight(ageDays),
-        });
+      if (!windowOccasions.some((o) => o.key === oKey)) {
+        windowOccasions.push(occasion);
       } else {
-        const existing = acc.occasions.get(oKey)!;
+        const existing = windowOccasions.find((o) => o.key === oKey)!;
         if (hasOverlap && !existing.hasSectorOverlap) {
           existing.hasSectorOverlap = true;
           existing.overlapMatchType = overlapMatchType;
@@ -656,64 +794,141 @@ export function rankFeedTickers(
           existing.overlapMemberLabel = t.overlapMemberLabel;
           existing.overlapTickerLabel = t.overlapTickerLabel;
         }
-        if (isUnusuallyLarge) existing.isUnusuallyLarge = true;
       }
-
-      let buyerSet = acc.buyerOccasions.get(t.personKey);
-      if (!buyerSet) {
-        buyerSet = new Set();
-        acc.buyerOccasions.set(t.personKey, buyerSet);
-      }
-      buyerSet.add(oKey);
-
-      if (hasOverlap) acc.overlapBuyers.add(t.personKey);
-      if (boughtDuringDowntrend) acc.downtrendBuyers.add(t.personKey);
-
-      const prev = acc.buyerMeta.get(t.personKey);
-      acc.buyerMeta.set(t.personKey, {
-        person: t.person,
-        source: t.source,
-        memberSlug: t.memberSlug,
-        hasOverlap: (prev?.hasOverlap ?? false) || hasOverlap,
-        maxStreak: streaks.maxStreak,
-        currentStreak: streaks.currentStreak,
-        isAveragingDown,
-        lowerPriceTransitions,
-        maxDeclineFirstToLatest,
-      });
     }
+
+    if (windowOccasions.length === 0) continue;
+
+    windowOccasions.sort((a, b) =>
+      a.transactionDate.localeCompare(b.transactionDate),
+    );
+
+    const ticker = windowOccasions[0]!.ticker;
+    const series = seriesByTicker.get(ticker) ?? [];
+    const currentTrendReturn = currentTradingDayReturn(series);
+    const isCurrentDowntrend =
+      currentTrendReturn != null && currentTrendReturn < 0;
+
+    const industryLabels = tickerIndustryLabelsForFilter(ticker);
+    const generalParents = new Set<string>();
+    for (const label of industryLabels) {
+      for (const p of parentsForNicheLabel(label)) generalParents.add(p);
+    }
+    const generalSector =
+      generalParents.size > 0 ? [...generalParents][0]! : null;
+    if (generalSector) {
+      const peers = tickersBySector.get(generalSector) ?? [];
+      if (!peers.includes(ticker)) {
+        peers.push(ticker);
+        tickersBySector.set(generalSector, peers);
+      }
+    }
+
+    // Relative weakness filled after sector maps are complete — use provisional now,
+    // recompute at ticker aggregation with full peer set.
+    const overlapInfo = overlapStrengthWeight({
+      hasOverlap: bestOverlap.has,
+      matchType: bestOverlap.matchType,
+      similarity: bestOverlap.similarity,
+    });
+
+    const histCount = tickerHistOccasions.get(ticker)?.size ?? 0;
+    const allDisc = chrono
+      .filter((t) => t.tickerNorm === ticker)
+      .map((t) => t.discDate);
+    const oldest = allDisc.length
+      ? allDisc.reduce((a, b) => (a < b ? a : b))
+      : d30;
+    const histDays = Math.max(30, daysBetween(oldest, d30));
+    const expectedPer30d = Math.max(
+      FEED_ACTIVITY_BASELINE_FLOOR,
+      (histCount / histDays) * 30,
+    );
+    const buysLast30d = windowOccasions.filter(
+      (o) => (o.disclosureDate ?? o.transactionDate) >= d30,
+    ).length;
+    const activityRatio = buysLast30d / expectedPer30d;
+
+    // Placeholder relative weakness — refined in second pass
+    const signalDraft = {
+      occasions: windowOccasions,
+      consecutiveStreak: streaks.maxStreak,
+      lowerPriceRepeatBuys: lowerPriceTransitions,
+      declineSinceFirstBuyPct: declineSinceFirst,
+      isAveragingDown,
+      hasSectorOverlap: bestOverlap.has,
+      overlapBand: overlapInfo.band,
+      overlapWeight: overlapInfo.weight,
+      relativeWeaknessPct: null as number | null,
+      isCurrentDowntrend,
+      activityRatio,
+      source: windowOccasions[0]!.source,
+      officerTitle: windowOccasions[0]!.officerTitle,
+    };
+
+    let acc = byTicker.get(ticker);
+    if (!acc) {
+      acc = {
+        ticker,
+        company: windowOccasions[0]!.company,
+        occasions: new Map(),
+        buyerSignals: [],
+      };
+      byTicker.set(ticker, acc);
+    }
+    for (const o of windowOccasions) {
+      if (!acc.occasions.has(o.key)) acc.occasions.set(o.key, o);
+    }
+
+    // Store draft on a temp field via buyerSignals after scoring with provisional relative=null;
+    // we'll rescore after sector benchmarks are ready.
+    acc.buyerSignals.push({
+      person: windowOccasions[0]!.person,
+      personKey: windowOccasions[0]!.personKey,
+      source: windowOccasions[0]!.source,
+      memberSlug: windowOccasions[0]!.memberSlug,
+      officerTitle: windowOccasions[0]!.officerTitle,
+      score: 0, // filled in second pass
+      hasSectorOverlap: bestOverlap.has,
+      overlapBand: overlapInfo.band,
+      overlapMatchType: bestOverlap.matchType,
+      overlapSimilarity: bestOverlap.similarity,
+      overlapMemberLabel: bestOverlap.memberLabel,
+      overlapTickerLabel: bestOverlap.tickerLabel,
+      buyCount: windowOccasions.length,
+      consecutiveStreak: streaks.maxStreak,
+      lowerPriceRepeatBuys: lowerPriceTransitions,
+      declineSinceFirstBuyPct: declineSinceFirst,
+      isAveragingDown,
+      downtrendBuys: windowOccasions.filter((o) => o.boughtDuringDowntrend)
+        .length,
+      unusuallyLargeBuys: windowOccasions.filter((o) => o.isUnusuallyLarge)
+        .length,
+      avgRecencyWeight:
+        windowOccasions.reduce((s, o) => s + o.recencyWeight, 0) /
+        windowOccasions.length,
+      latestDisclosure:
+        windowOccasions
+          .map((o) => o.disclosureDate ?? o.transactionDate)
+          .sort()
+          .at(-1) ?? null,
+      occasions: windowOccasions,
+      whyLines: [],
+      // stash draft fields on object via scoreBuyerTicker later
+    });
+
+    // Attach draft for second pass via a side map
+    const draftKey = `${windowOccasions[0]!.personKey}|${ticker}`;
+    draftStore.set(draftKey, signalDraft);
   }
 
-  // Build sector ticker lists for proxies
-  for (const acc of byTicker.values()) {
-    const labels = tickerIndustryLabelsForFilter(acc.ticker);
-    const parents = new Set<string>();
-    for (const label of labels) {
-      for (const p of parentsForNicheLabel(label)) parents.add(p);
-    }
-    for (const p of parents) {
-      const list = tickersBySector.get(p) ?? [];
-      list.push(acc.ticker);
-      tickersBySector.set(p, list);
-    }
-  }
-
-  const marketBench = marketBenchmarkReturn(seriesByTicker);
   const rows: FeedTickerRow[] = [];
 
   for (const acc of byTicker.values()) {
     const occasions = [...acc.occasions.values()].sort((a, b) =>
       b.transactionDate.localeCompare(a.transactionDate),
     );
-    if (occasions.length < minOccasions) continue;
-
-    const latest = occasions.reduce((best, o) => {
-      const d = o.disclosureDate ?? o.transactionDate;
-      const bd = best.disclosureDate ?? best.transactionDate;
-      return d >= bd ? o : best;
-    }, occasions[0]!);
-    const latestDisc = latest.disclosureDate ?? latest.transactionDate;
-    if (latestDisc < windowCutoff) continue;
+    if (occasions.length === 0) continue;
 
     const industryLabels = tickerIndustryLabelsForFilter(acc.ticker);
     if (!matchesNiche(industryLabels, filters.nicheLabels)) continue;
@@ -725,28 +940,106 @@ export function rankFeedTickers(
     const generalSector =
       generalParents.size > 0 ? [...generalParents][0]! : null;
 
-    const distinctBuyers = acc.buyerOccasions.size;
-    let repeatBuyers = 0;
-    for (const set of acc.buyerOccasions.values()) {
-      if (set.size >= 2) repeatBuyers += 1;
+    const series = seriesByTicker.get(acc.ticker) ?? [];
+    const currentTrendReturn = currentTradingDayReturn(
+      series,
+      FEED_TREND_TRADING_DAYS,
+    );
+    const isCurrentDowntrend =
+      currentTrendReturn != null && currentTrendReturn < 0;
+
+    const sectorPeers = generalSector
+      ? (tickersBySector.get(generalSector) ?? []).filter(
+          (t) => t !== acc.ticker,
+        )
+      : [];
+    const sectorBench = sectorBenchmarkReturn(
+      seriesByTicker,
+      generalSector,
+      sectorPeers,
+    );
+    const relativeMarketReturn =
+      currentTrendReturn != null && marketBench.returnPct != null
+        ? currentTrendReturn - marketBench.returnPct
+        : null;
+    const relativeSectorReturn =
+      currentTrendReturn != null && sectorBench.returnPct != null
+        ? currentTrendReturn - sectorBench.returnPct
+        : null;
+    const relativeWeaknessPct =
+      relativeSectorReturn ?? relativeMarketReturn;
+
+    // Rescore each buyer signal with relative weakness
+    const rescored: FeedBuyerTickerSignal[] = [];
+    for (const sig of acc.buyerSignals) {
+      const draftKey = `${sig.personKey}|${acc.ticker}`;
+      const draft = draftStore.get(draftKey);
+      if (!draft) continue;
+      draft.relativeWeaknessPct = relativeWeaknessPct;
+      draft.isCurrentDowntrend = isCurrentDowntrend;
+      const score = scoreBuyerTicker(draft);
+      const whyLines = buildBuyerWhyLines({
+        person: sig.person,
+        source: sig.source,
+        hasSectorOverlap: sig.hasSectorOverlap,
+        overlapBand: sig.overlapBand,
+        overlapSimilarity: sig.overlapSimilarity,
+        overlapMemberLabel: sig.overlapMemberLabel,
+        overlapTickerLabel: sig.overlapTickerLabel,
+        buyCount: sig.buyCount,
+        consecutiveStreak: sig.consecutiveStreak,
+        lowerPriceRepeatBuys: sig.lowerPriceRepeatBuys,
+        declineSinceFirstBuyPct: sig.declineSinceFirstBuyPct,
+        downtrendBuys: sig.downtrendBuys,
+        unusuallyLargeBuys: sig.unusuallyLargeBuys,
+        latestDisclosure: sig.latestDisclosure,
+        relativeSectorReturn,
+        relativeMarketReturn,
+        return20d: currentTrendReturn,
+        officerTitle: sig.officerTitle,
+      });
+      rescored.push({ ...sig, score, whyLines });
     }
 
+    rescored.sort((a, b) => b.score - a.score);
+    if (rescored.length === 0) continue;
+
+    const strongest = rescored[0]!;
+    const hasAnyOverlap = rescored.some((s) => s.hasSectorOverlap);
+
+    // Eligibility: overlap patterns can be 1 buy; others need ≥2
+    if (!hasAnyOverlap && occasions.length < FEED_MIN_BUY_OCCASIONS_NO_OVERLAP) {
+      continue;
+    }
+    // Prefer overlap-focused feed when filter says so
+    if (filters.overlap === "has_overlap" && !hasAnyOverlap) continue;
+
+    const latest = occasions.reduce((best, o) => {
+      const d = o.disclosureDate ?? o.transactionDate;
+      const bd = best.disclosureDate ?? best.transactionDate;
+      return d >= bd ? o : best;
+    }, occasions[0]!);
+    if ((latest.disclosureDate ?? latest.transactionDate) < windowCutoff) {
+      continue;
+    }
+
+    const distinctBuyers = new Set(occasions.map((o) => o.personKey)).size;
+    let repeatBuyers = 0;
+    const byBuyer = new Map<string, number>();
+    for (const o of occasions) {
+      byBuyer.set(o.personKey, (byBuyer.get(o.personKey) ?? 0) + 1);
+    }
+    for (const n of byBuyer.values()) {
+      if (n >= 2) repeatBuyers += 1;
+    }
+
+    const distinctOverlapBuyers = new Set(
+      occasions.filter((o) => o.hasSectorOverlap).map((o) => o.personKey),
+    ).size;
     const overlapBuyCount = occasions.filter((o) => o.hasSectorOverlap).length;
-    const distinctOverlapBuyers = acc.overlapBuyers.size;
     const downtrendBuyCount = occasions.filter(
       (o) => o.boughtDuringDowntrend,
     ).length;
-    const distinctDowntrendBuyers = acc.downtrendBuyers.size;
-
-    let maxConsecutiveStreak = 0;
-    let averagingDownBuyers = 0;
-    for (const meta of acc.buyerMeta.values()) {
-      if (meta.maxStreak > maxConsecutiveStreak) {
-        maxConsecutiveStreak = meta.maxStreak;
-      }
-      if (meta.isAveragingDown) averagingDownBuyers += 1;
-    }
-
     const buyersLast14d = new Set(
       occasions
         .filter((o) => (o.disclosureDate ?? o.transactionDate) >= d14)
@@ -763,10 +1056,10 @@ export function rankFeedTickers(
     const buysLast30d = occasions.filter(
       (o) => (o.disclosureDate ?? o.transactionDate) >= d30,
     ).length;
-
     const unusuallyLargeBuyCount = occasions.filter(
       (o) => o.isUnusuallyLarge,
     ).length;
+    const averagingDownBuyers = rescored.filter((s) => s.isAveragingDown).length;
     const newPositionBuyers = new Set(
       occasions.filter((o) => o.positionKind === "new").map((o) => o.personKey),
     ).size;
@@ -775,52 +1068,25 @@ export function rankFeedTickers(
         .filter((o) => o.positionKind === "adding")
         .map((o) => o.personKey),
     ).size;
-
     const sourceTypes = [...new Set(occasions.map((o) => o.source))];
-    const avgRecencyWeight =
-      occasions.reduce((s, o) => s + o.recencyWeight, 0) /
-      Math.max(1, occasions.length);
+    const maxConsecutiveStreak = Math.max(
+      ...rescored.map((s) => s.consecutiveStreak),
+      0,
+    );
 
-    // Activity ratio: recent 30d buys vs historical expected per 30d
     const histCount = tickerHistOccasions.get(acc.ticker)?.size ?? 0;
-    // Approximate history span from oldest loaded trade for this ticker
     const allDisc = chrono
       .filter((t) => t.tickerNorm === acc.ticker)
       .map((t) => t.discDate);
-    const oldest = allDisc.length ? allDisc.reduce((a, b) => (a < b ? a : b)) : d30;
+    const oldest = allDisc.length
+      ? allDisc.reduce((a, b) => (a < b ? a : b))
+      : d30;
     const histDays = Math.max(30, daysBetween(oldest, d30));
     const expectedPer30d = Math.max(
       FEED_ACTIVITY_BASELINE_FLOOR,
       (histCount / histDays) * 30,
     );
     const activityRatio = buysLast30d / expectedPer30d;
-
-    const series = seriesByTicker.get(acc.ticker) ?? [];
-    const currentTrendReturn = currentTradingDayReturn(series);
-    const isCurrentDowntrend =
-      currentTrendReturn != null && currentTrendReturn < 0;
-
-    const sectorPeers = generalSector
-      ? (tickersBySector.get(generalSector) ?? []).filter((t) => t !== acc.ticker)
-      : [];
-    const sectorBench = sectorBenchmarkReturn(
-      seriesByTicker,
-      generalSector,
-      sectorPeers,
-    );
-
-    const relativeMarketReturn =
-      currentTrendReturn != null && marketBench.returnPct != null
-        ? currentTrendReturn - marketBench.returnPct
-        : null;
-    const relativeSectorReturn =
-      currentTrendReturn != null && sectorBench.returnPct != null
-        ? currentTrendReturn - sectorBench.returnPct
-        : null;
-
-    // Prefer sector-relative weakness for scoring when available
-    const relativeWeaknessPct =
-      relativeSectorReturn ?? relativeMarketReturn;
 
     if (filters.trend === "down" && !isCurrentDowntrend) continue;
     if (
@@ -829,11 +1095,8 @@ export function rankFeedTickers(
     ) {
       continue;
     }
-    if (filters.overlap === "has_overlap" && distinctOverlapBuyers === 0) {
-      continue;
-    }
     if (distinctBuyers < filters.minBuyers) continue;
-    if (occasions.length < Math.max(minOccasions, filters.minBuys)) continue;
+    if (occasions.length < filters.minBuys) continue;
     if (repeatBuyers < filters.minRepeatBuyers) continue;
     if (distinctOverlapBuyers < filters.minOverlapBuyers) continue;
     if (buyersLast30d < filters.minBuyers30d) continue;
@@ -855,22 +1118,17 @@ export function rankFeedTickers(
       continue;
     }
 
-    const breakdown = computeScore({
-      buyOccasions: occasions.length,
+    const breakdown = aggregateTickerScore(
+      rescored.map((s) => s.score),
       distinctBuyers,
-      repeatBuyers,
-      maxConsecutiveStreak,
-      distinctOverlapBuyers,
-      downtrendBuyCount,
-      isCurrentDowntrend,
-      buyersLast14d,
-      buyersLast30d,
-      unusuallyLargeBuyCount,
-      averagingDownBuyers,
-      relativeWeaknessPct,
-      activityRatio,
-      avgRecencyWeight,
-      extraSourceTypes: Math.max(0, sourceTypes.length - 1),
+    );
+
+    const additionalOverlap = Math.max(0, distinctOverlapBuyers - (strongest.hasSectorOverlap ? 1 : 0));
+    const whyNoteworthy = buildWhyNoteworthy(strongest, {
+      additionalOverlapBuyers: additionalOverlap,
+      relativeSectorReturn,
+      relativeMarketReturn,
+      return20d: currentTrendReturn,
     });
 
     const components: FeedScoreComponents = {
@@ -895,34 +1153,26 @@ export function rankFeedTickers(
       relative_sector_return_20d: relativeSectorReturn,
       activity_ratio: activityRatio,
       active_source_types: sourceTypes.map(sourceLabel),
-      avg_recency_weight: avgRecencyWeight,
+      avg_recency_weight: strongest.avgRecencyWeight,
+      strongest_buyer: strongest.person,
+      strongest_buyer_score: strongest.score,
+      overlap_band: strongest.overlapBand,
+      overlap_similarity: strongest.overlapSimilarity,
     };
 
-    const buyerStreaks: FeedBuyerStreak[] = [];
-    for (const [personKey, occKeys] of acc.buyerOccasions) {
-      const meta = acc.buyerMeta.get(personKey);
-      const buyerOccasions = [...occKeys]
-        .map((k) => acc.occasions.get(k)!)
-        .filter(Boolean)
-        .sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
-      buyerStreaks.push({
-        person: meta?.person ?? buyerOccasions[0]?.person ?? null,
-        personKey,
-        source: meta?.source ?? buyerOccasions[0]?.source ?? "house",
-        memberSlug: meta?.memberSlug ?? null,
-        occasions: buyerOccasions,
-        maxStreak: meta?.maxStreak ?? buyerOccasions.length,
-        currentStreak: meta?.currentStreak ?? 0,
-        hasOverlap: meta?.hasOverlap ?? false,
-        isAveragingDown: meta?.isAveragingDown ?? false,
-        lowerPriceTransitions: meta?.lowerPriceTransitions ?? 0,
-        maxDeclineFirstToLatest: meta?.maxDeclineFirstToLatest ?? null,
-      });
-    }
-    buyerStreaks.sort((a, b) => {
-      if (b.maxStreak !== a.maxStreak) return b.maxStreak - a.maxStreak;
-      return b.occasions.length - a.occasions.length;
-    });
+    const buyerStreaks: FeedBuyerStreak[] = rescored.map((s) => ({
+      person: s.person,
+      personKey: s.personKey,
+      source: s.source,
+      memberSlug: s.memberSlug,
+      occasions: s.occasions,
+      maxStreak: s.consecutiveStreak,
+      currentStreak: s.consecutiveStreak,
+      hasOverlap: s.hasSectorOverlap,
+      isAveragingDown: s.isAveragingDown,
+      lowerPriceTransitions: s.lowerPriceRepeatBuys,
+      maxDeclineFirstToLatest: s.declineSinceFirstBuyPct,
+    }));
 
     rows.push({
       ticker: acc.ticker,
@@ -932,14 +1182,20 @@ export function rankFeedTickers(
       score: breakdown.total,
       breakdown,
       components,
-      whyNoteworthy: buildWhyNoteworthy(components),
+      whyNoteworthy,
+      strongestBuyer: strongest,
+      buyerSignals: rescored,
       buyOccasions: occasions.length,
       distinctBuyers,
       repeatBuyers,
       overlapBuyCount,
       distinctOverlapBuyers,
       downtrendBuyCount,
-      distinctDowntrendBuyers,
+      distinctDowntrendBuyers: new Set(
+        occasions
+          .filter((o) => o.boughtDuringDowntrend)
+          .map((o) => o.personKey),
+      ).size,
       maxConsecutiveStreak,
       buyersLast14d,
       buyersLast30d,
@@ -966,15 +1222,15 @@ export function rankFeedTickers(
 
   rows.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
+    const sa = a.strongestBuyer?.score ?? 0;
+    const sb = b.strongestBuyer?.score ?? 0;
+    if (sb !== sa) return sb - sa;
     if (b.distinctOverlapBuyers !== a.distinctOverlapBuyers) {
       return b.distinctOverlapBuyers - a.distinctOverlapBuyers;
     }
-    if (b.distinctBuyers !== a.distinctBuyers) {
-      return b.distinctBuyers - a.distinctBuyers;
-    }
-    const da = a.latestBuyDisclosure ?? "";
-    const db = b.latestBuyDisclosure ?? "";
-    return db.localeCompare(da);
+    return (b.latestBuyDisclosure ?? "").localeCompare(
+      a.latestBuyDisclosure ?? "",
+    );
   });
 
   return rows;
