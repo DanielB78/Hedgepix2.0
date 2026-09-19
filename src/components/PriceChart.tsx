@@ -43,6 +43,8 @@ type Props = {
   initialRange?: ChartRange;
   /** Auto-pin the marker nearest this transaction date when data loads. */
   focusDate?: string | null;
+  /** Emphasize markers for these transaction dates (e.g. a buy sequence). */
+  highlightDates?: string[] | null;
 };
 
 const RANGES: { value: ChartRange; label: string }[] = [
@@ -127,6 +129,7 @@ export function PriceChart({
   tall = false,
   initialRange = "1y",
   focusDate = null,
+  highlightDates = null,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -138,6 +141,14 @@ export function PriceChart({
   const [windowSpan, setWindowSpan] = useState<{ start: number; end: number } | null>(
     null,
   );
+  const highlightSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of highlightDates ?? []) {
+      const key = d?.slice(0, 10);
+      if (key) set.add(key);
+    }
+    return set;
+  }, [highlightDates]);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -562,6 +573,8 @@ export function PriceChart({
                   : "var(--gold)";
             const ring =
               group.hasSale && group.hasPurchase ? "var(--coral)" : fill;
+            const highlighted = highlightSet.has(group.date);
+            const active = activeMarker?.date === group.date;
             return (
               <g key={group.date}>
                 <circle
@@ -589,10 +602,22 @@ export function PriceChart({
                     setActiveMarker(group);
                   }}
                 />
+                {highlighted ? (
+                  <circle
+                    cx={group.x}
+                    cy={group.y}
+                    r="10"
+                    fill="none"
+                    stroke="var(--aqua)"
+                    strokeWidth="1.5"
+                    opacity="0.85"
+                    className="pointer-events-none"
+                  />
+                ) : null}
                 <circle
                   cx={group.x}
                   cy={group.y}
-                  r={activeMarker?.date === group.date ? 6.5 : 5}
+                  r={active || highlighted ? 6.5 : 5}
                   fill={fill}
                   stroke={ring}
                   strokeWidth={group.hasPurchase && group.hasSale ? 2 : 0}

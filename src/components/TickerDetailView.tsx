@@ -27,7 +27,6 @@ import {
 } from "@/lib/chartTrades";
 import type { CongressTrade } from "@/lib/types";
 import type {
-  FeedBuyOccasion,
   FeedBuyerTickerSignal,
   FeedTickerRow,
 } from "@/lib/feedActivity/types";
@@ -669,6 +668,7 @@ export function TickerDetailView({
   preferredSources = ["congress", "house", "senate", "ceo"],
   feedRow = null,
   initialFocusDate = null,
+  highlightDates = null,
 }: {
   state: TickerDetailState;
   context?: TickerDetailContext;
@@ -678,6 +678,8 @@ export function TickerDetailView({
   preferredSources?: ChartTradeSource[];
   feedRow?: FeedTickerRow | null;
   initialFocusDate?: string | null;
+  /** Purchase dates in the focused buyer sequence to emphasize on the chart. */
+  highlightDates?: string[] | null;
 }) {
   const ref = useScrollIntoView(true);
   const [focusDate, setFocusDate] = useState<string | null>(initialFocusDate);
@@ -699,15 +701,23 @@ export function TickerDetailView({
   const bars = state.data?.bars ?? [];
   const trades = state.data?.topTrades ?? [];
 
+  const sequenceDates = useMemo(() => {
+    if (highlightDates?.length) {
+      return highlightDates.map((d) => d.slice(0, 10));
+    }
+    if (context === "feed" && feedRow?.strongestBuyer?.occasions?.length) {
+      return feedRow.strongestBuyer.occasions
+        .map((o) => o.transactionDate?.slice(0, 10))
+        .filter((d): d is string => Boolean(d));
+    }
+    return [] as string[];
+  }, [context, feedRow, highlightDates]);
+
   // Prefer strongest buyer's latest purchase as initial chart focus for Feed
   const chartFocus =
     focusDate ??
     (context === "feed"
-      ? feedRow?.strongestBuyer?.occasions
-          ?.slice()
-          .sort((a: FeedBuyOccasion, b: FeedBuyOccasion) =>
-            b.transactionDate.localeCompare(a.transactionDate),
-          )[0]?.transactionDate ?? null
+      ? sequenceDates.slice().sort((a, b) => b.localeCompare(a))[0] ?? null
       : null);
 
   return (
@@ -774,6 +784,7 @@ export function TickerDetailView({
               trades={trades}
               interactive
               focusDate={chartFocus}
+              highlightDates={sequenceDates}
             />
           ) : (
             <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">

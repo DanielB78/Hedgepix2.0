@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { formatShortDate } from "@/lib/format";
 import {
@@ -12,8 +12,10 @@ import {
   TickerDetailView,
   type TickerDetailState,
 } from "@/components/TickerDetailView";
+import { SegmentedToggle } from "@/components/SegmentedToggle";
 import type { StockPreviewPayload } from "@/lib/feed";
 import type { ChartTradeSource } from "@/lib/chartTrades";
+
 import type {
   FeedFilters,
   FeedSourceFilter,
@@ -23,12 +25,23 @@ import type {
   FeedOverlapFilter,
   FeedYesNoFilter,
 } from "@/lib/feedActivity/types";
+import {
+  flattenNotableTrades,
+  focusTickerRowOnBuyer,
+  type NotableTradeRow,
+} from "@/lib/feedActivity/notableTrades";
 
 const TIMEFRAMES: Array<{ id: FeedTimeframe; label: string }> = [
   { id: "3m", label: "3 Months" },
   { id: "6m", label: "6 Months" },
   { id: "1y", label: "1 Year" },
 ];
+
+export type WatchlistViewMode = "tickers" | "trades";
+
+function parseWatchlistView(raw: string | null): WatchlistViewMode {
+  return raw === "trades" ? "trades" : "tickers";
+}
 
 async function loadStockPreview(
   ticker: string,
@@ -64,9 +77,14 @@ function daysAgoLabel(iso: string | null, now = new Date()): string {
   return formatShortDate(iso);
 }
 
-function buildHref(timeframe: FeedTimeframe, filters: FeedFilters): string {
+function buildHref(
+  timeframe: FeedTimeframe,
+  filters: FeedFilters,
+  viewMode: WatchlistViewMode = "tickers",
+): string {
   const params = new URLSearchParams();
   if (timeframe !== "3m") params.set("tf", timeframe);
+  if (viewMode !== "tickers") params.set("wv", viewMode);
   if (filters.source !== "all") params.set("src", filters.source);
   if (filters.trend !== "all") params.set("trend", filters.trend);
   if (filters.overlap !== "all") params.set("overlap", "1");
@@ -132,21 +150,33 @@ function NumInput({
 function FilterBar({
   timeframe,
   filters,
+  viewMode,
   onNavigate,
 }: {
   timeframe: FeedTimeframe;
   filters: FeedFilters;
+  viewMode: WatchlistViewMode;
   onNavigate: (href: string) => void;
 }) {
   const [sectorOpen, setSectorOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
 
-  function apply(next: Partial<FeedFilters>, tf = timeframe) {
-    onNavigate(buildHref(tf, { ...filters, ...next }));
+  function apply(next: Partial<FeedFilters>, tf = timeframe, wv = viewMode) {
+    onNavigate(buildHref(tf, { ...filters, ...next }, wv));
   }
 
   return (
     <div className="space-y-3">
+      <SegmentedToggle
+        testIdPrefix="watchlist-view"
+        value={viewMode}
+        onChange={(wv) => apply({}, timeframe, wv)}
+        options={[
+          { id: "tickers", label: "Notable Tickers" },
+          { id: "trades", label: "Notable Trades" },
+        ]}
+      />
+
       <div className="flex flex-wrap items-center gap-1.5">
         {TIMEFRAMES.map((tf) => {
           const active = timeframe === tf.id;
@@ -401,6 +431,17 @@ function preferredFeedSource(
   return "both";
 }
 
+function sequenceFocusDates(row: FeedTickerRow): string[] {
+  const occasions = row.strongestBuyer?.occasions ?? [];
+  return [
+    ...new Set(
+      occasions
+        .map((o) => o.transactionDate?.slice(0, 10))
+        .filter((d): d is string => Boolean(d)),
+    ),
+  ].sort();
+}
+
 function FeedRow({
   row,
   open,
@@ -416,6 +457,10 @@ function FeedRow({
   onTradeSource: (source: import("@/lib/chartTrades").ChartTradeSource) => void;
   onClose: () => void;
 }) {
+  const focusDates = sequenceFocusDates(row);
+  const initialFocusDate =
+    focusDates.slice().sort((a, b) => b.localeCompare(a))[0] ?? null;
+
   return (
     <>
       <tr
@@ -497,13 +542,97 @@ function FeedRow({
               onClose={onClose}
               onTradeSource={onTradeSource}
               preferredSources={["both", "congress", "house", "senate", "ceo"]}
-              initialFocusDate={
-                row.strongestBuyer?.occasions
-                  ?.slice()
-                  .sort((a, b) =>
-                    b.transactionDate.localeCompare(a.transactionDate),
-                  )[0]?.transactionDate ?? null
-              }
+              initialFocusDate={initialFocusDate}
+              highlightDates={focusDates}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function buySequenceLabel(trade: NotableTradeRow): string {
+  const n =
+    trade.signal.consecutiveStreak >= 2
+      ? trade.signal.consecutiveStreak
+      : trade.signal.buyCount;
+  return n === 1 ? "1 buy" : `${n} buys`;
+}
+
+function TradeRow({
+  trade,
+  open,
+  detail,
+  onToggle,
+  onTradeSource,
+  onClose,
+}: {
+  trade: NotableTradeRow;
+  open: boolean;
+  detail: TickerDetailState | null;
+  onToggle: () => void;
+  onTradeSource: (source: ChartTradeSource) => void;
+  onClose: () => void;
+}) {
+  const focusedRow = useMemo(
+    () => focusTickerRowOnBuyer(trade.tickerRow, trade.signal.personKey),
+    [trade],
+  );
+  const focusDates = sequenceFocusDates(focusedRow);
+  const initialFocusDate = trade.latestBuyDate ?? focusDates.at(-1) ?? null;
+
+  return (
+    <>
+      <tr
+        data-testid={`notable-trade-${trade.id}`}
+        className="cursor-pointer border-b border-[var(--line)] hover:bg-[var(--panel-muted)]"
+        onClick={onToggle}
+      >
+        <td className="whitespace-nowrap py-2 pl-3 pr-2 text-[12px] text-[var(--ink)]">
+          <span className="inline-flex items-center gap-1 font-medium">
+            {open ? (
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 shrink-0" />
+            )}
+            {trade.signal.person ?? "Unknown"}
+          </span>
+        </td>
+        <td className="py-2 pr-3 font-mono text-[12px] font-semibold text-[var(--ink)]">
+          {trade.ticker}
+        </td>
+        <td className="py-2 pr-3 text-[12px] text-[var(--fog-dim)]">
+          {trade.signalLabel}
+        </td>
+        <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
+          {buySequenceLabel(trade)}
+        </td>
+        <td className="py-2 pr-3 text-[12px] tabular-nums text-[var(--fog-dim)]">
+          {trade.overlapLabel}
+        </td>
+        <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[var(--fog-dim)]">
+          {pct(trade.priceMovePct)}
+        </td>
+        <td className="py-2 pr-3 text-[12px] text-[var(--fog-dim)]">
+          {trade.latestBuyDate ? formatShortDate(trade.latestBuyDate) : "—"}
+        </td>
+        <td className="num py-2 pr-3 text-right text-[13px] font-semibold tabular-nums text-[var(--ink)]">
+          {trade.signal.score}
+        </td>
+      </tr>
+      {open && detail ? (
+        <tr className="border-b border-[var(--line)]">
+          <td colSpan={8} className="bg-[var(--panel-muted)] p-2 sm:p-3">
+            <TickerDetailView
+              context="feed"
+              state={detail}
+              feedRow={focusedRow}
+              onClose={onClose}
+              onTradeSource={onTradeSource}
+              preferredSources={["both", "congress", "house", "senate", "ceo"]}
+              initialFocusDate={initialFocusDate}
+              highlightDates={focusDates}
             />
           </td>
         </tr>
@@ -526,8 +655,10 @@ export function FeedActivityBoard({
   tradeCount: number;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const viewMode = parseWatchlistView(searchParams.get("wv"));
   const [pending, startTransition] = useTransition();
-  const [openTicker, setOpenTicker] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [detail, setDetail] = useState<TickerDetailState | null>(null);
   const requestId = useRef(0);
 
@@ -537,11 +668,17 @@ export function FeedActivityBoard({
     });
   }
 
+  const notableTrades = useMemo(() => flattenNotableTrades(rows), [rows]);
+
   const openDetail = useCallback(
-    async (row: FeedTickerRow, tradeSource?: ChartTradeSource) => {
+    async (
+      row: FeedTickerRow,
+      key: string,
+      tradeSource?: ChartTradeSource,
+    ) => {
       const source = tradeSource ?? preferredFeedSource(row);
       const id = ++requestId.current;
-      setOpenTicker(row.ticker);
+      setOpenKey(key);
       setDetail({
         ticker: row.ticker,
         tradeSource: source,
@@ -573,38 +710,54 @@ export function FeedActivityBoard({
     [],
   );
 
-  const toggleRow = useCallback(
+  const closeDetail = useCallback(() => {
+    setOpenKey(null);
+    setDetail(null);
+  }, []);
+
+  const toggleTicker = useCallback(
     (row: FeedTickerRow) => {
-      if (openTicker === row.ticker) {
-        setOpenTicker(null);
-        setDetail(null);
+      if (openKey === row.ticker) {
+        closeDetail();
         return;
       }
-      void openDetail(row);
+      void openDetail(row, row.ticker);
     },
-    [openDetail, openTicker],
+    [closeDetail, openDetail, openKey],
   );
 
-  const visible = useMemo(() => rows, [rows]);
+  const toggleTrade = useCallback(
+    (trade: NotableTradeRow) => {
+      if (openKey === trade.id) {
+        closeDetail();
+        return;
+      }
+      const focused = focusTickerRowOnBuyer(
+        trade.tickerRow,
+        trade.signal.personKey,
+      );
+      void openDetail(focused, trade.id);
+    },
+    [closeDetail, openDetail, openKey],
+  );
 
   return (
     <div className={`space-y-4 ${pending ? "opacity-70" : ""}`}>
       <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4">
         <div className="mb-3">
           <h2 className="font-[family-name:var(--font-display)] text-[15px] font-semibold text-[var(--ink)]">
-            Noteworthy activity
+            Watchlist
           </h2>
           <p className="mt-0.5 max-w-2xl text-[12px] text-[var(--fog-dim)]">
-            Surfaces buyer-specific patterns where a congressional sector
-            connection overlaps a company&apos;s industry — especially repeated
-            purchases into weakness. Sector overlap is a research screen only;
-            it does not establish improper conduct. Distinct buyer counts are
-            context, not the main ranking driver.
+            {viewMode === "trades"
+              ? "Strongest individual buyer + ticker patterns — consecutive purchases, sector overlap, and averaging down. Distinct unrelated buyers are not a ranking factor."
+              : "Ticker-level aggregation of buyer-specific sector-overlap signals — repeated purchases into weakness when a member's industry exposure overlaps the company."}
           </p>
         </div>
         <FilterBar
           timeframe={timeframe}
           filters={filters}
+          viewMode={viewMode}
           onNavigate={onNavigate}
         />
       </div>
@@ -615,80 +768,147 @@ export function FeedActivityBoard({
         </div>
       ) : null}
 
-      <div>
-        <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2
-            data-testid="feed-result-count"
-            className="text-[13px] font-semibold text-[var(--ink)]"
-          >
-            {visible.length.toLocaleString()} ticker
-            {visible.length === 1 ? "" : "s"}
-          </h2>
-          <span className="text-[11px] text-[var(--fog-mute)]">
-            from {tradeCount.toLocaleString()} trades · sorted by Watchlist score
-          </span>
-        </div>
+      {viewMode === "trades" ? (
+        <div>
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <h2
+              data-testid="feed-result-count"
+              className="text-[13px] font-semibold text-[var(--ink)]"
+            >
+              {notableTrades.length.toLocaleString()} notable trade
+              {notableTrades.length === 1 ? "" : "s"}
+            </h2>
+            <span className="text-[11px] text-[var(--fog-mute)]">
+              from {tradeCount.toLocaleString()} trades · sorted by buyer+ticker
+              score
+            </span>
+          </div>
 
-        <div className="hx-table-wrap overflow-x-auto rounded-md border border-[var(--line)]">
-          <table className="hx-table w-full min-w-[62rem]">
-            <thead>
-              <tr className="border-b border-[var(--line)] text-left text-[11px] uppercase tracking-wide text-[var(--fog-mute)]">
-                <th className="px-3 py-2 font-medium">Ticker</th>
-                <th className="num py-2 pr-3 text-right font-medium">Score</th>
-                <th className="num py-2 pr-3 text-right font-medium">Buys</th>
-                <th
-                  className="num py-2 pr-3 text-right font-medium"
-                  title="Context only — not a major ranking factor"
-                >
-                  Buyers
-                </th>
-                <th className="num py-2 pr-3 text-right font-medium">
-                  Overlap
-                </th>
-                <th
-                  className="num py-2 pr-3 text-right font-medium"
-                  title="Max consecutive streak for strongest buyer pattern"
-                >
-                  Streak
-                </th>
-                <th className="py-2 pr-3 font-medium">Trend</th>
-                <th className="py-2 pr-3 font-medium">Rel. trend</th>
-                <th className="py-2 pr-3 font-medium">Recent</th>
-                <th className="py-2 pr-3 font-medium">Latest</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={10}
-                    className="px-3 py-8 text-center text-[13px] text-[var(--fog-dim)]"
-                  >
-                    No tickers match the current Watchlist criteria.
-                  </td>
+          <div className="hx-table-wrap overflow-x-auto rounded-md border border-[var(--line)]">
+            <table className="hx-table w-full min-w-[56rem]">
+              <thead>
+                <tr className="border-b border-[var(--line)] text-left text-[11px] uppercase tracking-wide text-[var(--fog-mute)]">
+                  <th className="px-3 py-2 font-medium">Person</th>
+                  <th className="py-2 pr-3 font-medium">Ticker</th>
+                  <th className="py-2 pr-3 font-medium">Signal</th>
+                  <th className="num py-2 pr-3 text-right font-medium">
+                    Buy Sequence
+                  </th>
+                  <th className="py-2 pr-3 font-medium">Sector Overlap</th>
+                  <th className="num py-2 pr-3 text-right font-medium">
+                    Price Move
+                  </th>
+                  <th className="py-2 pr-3 font-medium">Latest Buy</th>
+                  <th className="num py-2 pr-3 text-right font-medium">Score</th>
                 </tr>
-              ) : (
-                visible.map((row) => (
-                  <FeedRow
-                    key={row.ticker}
-                    row={row}
-                    open={openTicker === row.ticker}
-                    detail={
-                      openTicker === row.ticker ? detail : null
-                    }
-                    onToggle={() => toggleRow(row)}
-                    onClose={() => {
-                      setOpenTicker(null);
-                      setDetail(null);
-                    }}
-                    onTradeSource={(s) => void openDetail(row, s)}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {notableTrades.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-3 py-8 text-center text-[13px] text-[var(--fog-dim)]"
+                    >
+                      No notable trades match the current Watchlist criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  notableTrades.map((trade) => (
+                    <TradeRow
+                      key={trade.id}
+                      trade={trade}
+                      open={openKey === trade.id}
+                      detail={openKey === trade.id ? detail : null}
+                      onToggle={() => toggleTrade(trade)}
+                      onClose={closeDetail}
+                      onTradeSource={(s) => {
+                        const focused = focusTickerRowOnBuyer(
+                          trade.tickerRow,
+                          trade.signal.personKey,
+                        );
+                        void openDetail(focused, trade.id, s);
+                      }}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <h2
+              data-testid="feed-result-count"
+              className="text-[13px] font-semibold text-[var(--ink)]"
+            >
+              {rows.length.toLocaleString()} ticker
+              {rows.length === 1 ? "" : "s"}
+            </h2>
+            <span className="text-[11px] text-[var(--fog-mute)]">
+              from {tradeCount.toLocaleString()} trades · sorted by Watchlist
+              score
+            </span>
+          </div>
+
+          <div className="hx-table-wrap overflow-x-auto rounded-md border border-[var(--line)]">
+            <table className="hx-table w-full min-w-[62rem]">
+              <thead>
+                <tr className="border-b border-[var(--line)] text-left text-[11px] uppercase tracking-wide text-[var(--fog-mute)]">
+                  <th className="px-3 py-2 font-medium">Ticker</th>
+                  <th className="num py-2 pr-3 text-right font-medium">Score</th>
+                  <th className="num py-2 pr-3 text-right font-medium">Buys</th>
+                  <th
+                    className="num py-2 pr-3 text-right font-medium"
+                    title="Context only — not a major ranking factor"
+                  >
+                    Buyers
+                  </th>
+                  <th className="num py-2 pr-3 text-right font-medium">
+                    Overlap
+                  </th>
+                  <th
+                    className="num py-2 pr-3 text-right font-medium"
+                    title="Max consecutive streak for strongest buyer pattern"
+                  >
+                    Streak
+                  </th>
+                  <th className="py-2 pr-3 font-medium">Trend</th>
+                  <th className="py-2 pr-3 font-medium">Rel. trend</th>
+                  <th className="py-2 pr-3 font-medium">Recent</th>
+                  <th className="py-2 pr-3 font-medium">Latest</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-3 py-8 text-center text-[13px] text-[var(--fog-dim)]"
+                    >
+                      No tickers match the current Watchlist criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((row) => (
+                    <FeedRow
+                      key={row.ticker}
+                      row={row}
+                      open={openKey === row.ticker}
+                      detail={openKey === row.ticker ? detail : null}
+                      onToggle={() => toggleTicker(row)}
+                      onClose={closeDetail}
+                      onTradeSource={(s) =>
+                        void openDetail(row, row.ticker, s)
+                      }
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

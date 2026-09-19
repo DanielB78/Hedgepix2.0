@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DisclosureDayCard } from "@/components/DisclosureDayCard";
-import { PerformerExpandCard } from "@/components/PerformerExpandCard";
 import { PriceChart } from "@/components/PriceChart";
 import { SectorShareChart } from "@/components/SectorShareChart";
 import {
@@ -28,14 +27,19 @@ import type { CongressTrade, TrendingTicker } from "@/lib/types";
 import {
   type ChartTradeSource,
 } from "@/lib/chartTrades";
+import { SegmentedToggle } from "@/components/SegmentedToggle";
 import {
   PERFORMER_PERIODS,
   performerPeriodHref,
   performerPeriodLabel,
+  parsePerformerView,
   type PerformerPeriod,
+  type PerformerViewMode,
   type PortfolioGrowth,
   type TopPerformer,
+  type TopPerformingBuy,
 } from "@/lib/topPerformers";
+import { memberHref } from "@/lib/holdings";
 import {
   filterTrades,
   parseAdvancedTradeFilters,
@@ -384,10 +388,23 @@ export function FeedBoard({
         if (!q) return true;
         return (
           row.name.toLowerCase().includes(q) ||
-          (row.bestTicker ?? "").toLowerCase().includes(q)
+          (row.bestTicker ?? "").toLowerCase().includes(q) ||
+          (row.worstTicker ?? "").toLowerCase().includes(q)
         );
       }),
     [payload.topPerformers, q],
+  );
+
+  const topPerformingBuys = useMemo(
+    () =>
+      (payload.topPerformingBuys ?? []).filter((row) => {
+        if (!q) return true;
+        return (
+          row.name.toLowerCase().includes(q) ||
+          row.ticker.toLowerCase().includes(q)
+        );
+      }),
+    [payload.topPerformingBuys, q],
   );
 
   /** Sector-Overlap Activity: always purchase-only; uses filtered chamber trades. */
@@ -440,18 +457,29 @@ export function FeedBoard({
 
       {showPerformers ? (
         <TopPerformersSection
-          title={`Top performers · ${chamberLabelForTabs}`}
+          title={`Top Performers · ${chamberLabelForTabs}`}
           subtitle={
             view === "insiders"
-              ? "Highest average return on stocks bought by officers in the selected period — expand for buys, returns, and charts"
-              : "Highest average return on stocks bought in the selected period — expand a member for buys, returns, and charts"
+              ? "Factual appreciation of officer purchases vs market reference prices — not a judgment of skill"
+              : "Factual appreciation of disclosed purchases vs market reference prices — not a ranking of politicians"
           }
           rows={topPerformers}
+          topBuys={topPerformingBuys}
           portfolio={payload.portfolioGrowth}
           period={payload.performerPeriod}
           query={query}
           view={view}
           sectorByTicker={payload.tickerSectors}
+          onOpenTicker={(ticker) =>
+            void openStock(
+              ticker,
+              view === "senate"
+                ? "senate"
+                : view === "insiders"
+                  ? "ceo"
+                  : "house",
+            )
+          }
         />
       ) : null}
 
@@ -910,6 +938,8 @@ function PerformerPeriodChips({
     const value = searchParams.get(key);
     if (value) filterExtras[key] = value;
   }
+  const pv = searchParams.get("pv");
+  if (pv) filterExtras.pv = pv;
   return (
     <div className="hx-toolbar">
       {PERFORMER_PERIODS.map((value) => (
@@ -1110,52 +1140,326 @@ function TopPerformersSection({
   title,
   subtitle,
   rows,
+  topBuys,
   portfolio,
   period,
   query,
   view,
   sectorByTicker,
+  onOpenTicker,
 }: {
   title: string;
   subtitle: string;
   rows: TopPerformer[];
+  topBuys: TopPerformingBuy[];
   portfolio: PortfolioGrowth | null;
   period: PerformerPeriod;
   query?: string;
   view: FeedView;
   sectorByTicker?: Record<string, string>;
+  onOpenTicker: (ticker: string) => void;
 }) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const viewMode = parsePerformerView(searchParams.get("pv") ?? undefined);
+  const [localFilter, setLocalFilter] = useState("");
+
+  const filterExtras: Record<string, string | undefined> = {};
+  for (const key of FILTER_PARAM_KEYS) {
+    const value = searchParams.get(key);
+    if (value) filterExtras[key] = value;
+  }
+
+  function setViewMode(next: PerformerViewMode) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "portfolio") params.delete("pv");
+    else params.set("pv", next);
+    params.set("tab", "performers");
+    if (view !== "feed") params.set("view", view);
+    const qs = params.toString();
+    router.push(qs ? `/app?${qs}` : "/app");
+  }
+
+  const needle = localFilter.trim().toLowerCase();
+  const filteredPeople = useMemo(() => {
+    if (!needle) return rows;
+    return rows.filter(
+      (row) =>
+        row.name.toLowerCase().includes(needle) ||
+        (row.bestTicker ?? "").toLowerCase().includes(needle) ||
+        (row.worstTicker ?? "").toLowerCase().includes(needle),
+    );
+  }, [needle, rows]);
+
+  const filteredBuys = useMemo(() => {
+    if (!needle) return topBuys;
+    return topBuys.filter(
+      (row) =>
+        row.name.toLowerCase().includes(needle) ||
+        row.ticker.toLowerCase().includes(needle),
+    );
+  }, [needle, topBuys]);
 
   return (
-    <section className="animate-rise space-y-4">
+    <section className="animate-rise space-y-4" data-testid="top-performers">
       <SectionTitle title={title} subtitle={subtitle} />
+      <div className="flex flex-wrap items-center gap-3">
+        <SegmentedToggle
+          testIdPrefix="performer-view"
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { id: "portfolio", label: "Portfolio Performance" },
+            { id: "buys", label: "Top Performing Buys" },
+          ]}
+        />
+      </div>
       <PerformerPeriodChips period={period} query={query} view={view} />
-      {portfolio ? (
+      {portfolio && viewMode === "portfolio" ? (
         <PortfolioGrowthBanner portfolio={portfolio} period={period} />
       ) : null}
-      <div className="space-y-3">
-        {rows.length === 0 ? (
-          <Empty text="No priced purchases in this period yet." />
-        ) : (
-          rows.map((row, i) => {
-            const key = row.memberSlug ?? row.key;
-            return (
-              <PerformerExpandCard
-                key={row.key}
-                rank={i + 1}
-                row={row}
-                expanded={expandedKey === key}
-                defaultPeriod={period}
-                onToggle={() =>
-                  setExpandedKey((prev) => (prev === key ? null : key))
-                }
-                sectorByTicker={sectorByTicker}
-              />
-            );
-          })
-        )}
-      </div>
+
+      <label className="flex max-w-sm items-center gap-2 text-[12px] text-[color:var(--fog-dim)]">
+        Filter
+        <input
+          data-testid="performer-filter"
+          type="search"
+          className="w-full rounded border border-[color:var(--line)] bg-[color:var(--panel)] px-2 py-1.5 text-[12px] text-[color:var(--fog)]"
+          placeholder={
+            viewMode === "buys" ? "Person or ticker…" : "Person or ticker…"
+          }
+          value={localFilter}
+          onChange={(e) => setLocalFilter(e.target.value)}
+        />
+      </label>
+
+      {viewMode === "buys" ? (
+        <div className="hx-table-wrap overflow-x-auto rounded-md border border-[color:var(--line)]">
+          <table className="hx-table w-full min-w-[48rem]">
+            <thead>
+              <tr className="border-b border-[color:var(--line)] text-left text-[11px] uppercase tracking-wide text-[color:var(--fog-mute)]">
+                <th className="px-3 py-2 font-medium">Ticker</th>
+                <th className="py-2 pr-3 font-medium">Person</th>
+                <th className="py-2 pr-3 font-medium">Purchase Date</th>
+                <th className="num py-2 pr-3 text-right font-medium">
+                  Reference
+                </th>
+                <th className="num py-2 pr-3 text-right font-medium">Latest</th>
+                <th className="num py-2 pr-3 text-right font-medium">Return</th>
+                <th className="py-2 pr-3 font-medium">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBuys.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-3 py-8 text-center text-[13px] text-[color:var(--fog-dim)]"
+                  >
+                    No priced purchases in this period yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredBuys.map((buy) => (
+                  <tr
+                    key={buy.id}
+                    data-testid={`top-buy-${buy.id}`}
+                    className="border-b border-[color:var(--line)]"
+                  >
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="font-mono text-[13px] font-semibold text-[color:var(--mint)] hover:opacity-80"
+                        onClick={() => onOpenTicker(buy.ticker)}
+                      >
+                        {buy.ticker}
+                      </button>
+                      {sectorByTicker?.[buy.ticker] ? (
+                        <div className="text-[11px] text-[color:var(--fog-mute)]">
+                          {sectorByTicker[buy.ticker]}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="py-2 pr-3 text-[13px] text-[color:var(--fog)]">
+                      {buy.memberSlug ? (
+                        <Link
+                          href={memberHref(buy.memberSlug)}
+                          className="hover:text-[color:var(--mint)]"
+                        >
+                          {buy.name}
+                        </Link>
+                      ) : (
+                        buy.name
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-[12px] text-[color:var(--fog-dim)]">
+                      {formatShortDate(buy.transactionDate)}
+                      {buy.holdingDays != null ? (
+                        <div className="text-[11px] text-[color:var(--fog-mute)]">
+                          {buy.holdingDays}d held
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[color:var(--fog-dim)]">
+                      ${buy.referencePrice.toFixed(2)}
+                      <div className="text-[10px] text-[color:var(--fog-mute)]">
+                        reference
+                      </div>
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[color:var(--fog-dim)]">
+                      ${buy.latestPrice.toFixed(2)}
+                      <div className="text-[10px] text-[color:var(--fog-mute)]">
+                        {buy.latestPriceDate
+                          ? formatShortDate(buy.latestPriceDate)
+                          : "latest"}
+                      </div>
+                    </td>
+                    <td
+                      className={`num py-2 pr-3 text-right text-[13px] font-semibold tabular-nums ${
+                        buy.returnPct >= 0
+                          ? "text-[color:var(--mint)]"
+                          : "text-[color:var(--coral)]"
+                      }`}
+                    >
+                      {formatReturnPct(buy.returnPct)}
+                    </td>
+                    <td className="py-2 pr-3 text-[12px] text-[color:var(--fog-dim)]">
+                      {buy.sourceLabel}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="hx-table-wrap overflow-x-auto rounded-md border border-[color:var(--line)]">
+          <table className="hx-table w-full min-w-[44rem]">
+            <thead>
+              <tr className="border-b border-[color:var(--line)] text-left text-[11px] uppercase tracking-wide text-[color:var(--fog-mute)]">
+                <th className="px-3 py-2 font-medium">Person</th>
+                <th className="num py-2 pr-3 text-right font-medium">
+                  Avg Return
+                </th>
+                <th className="num py-2 pr-3 text-right font-medium">
+                  Median Return
+                </th>
+                <th className="num py-2 pr-3 text-right font-medium">Best Buy</th>
+                <th className="num py-2 pr-3 text-right font-medium">
+                  Worst Buy
+                </th>
+                <th className="num py-2 pr-3 text-right font-medium">
+                  Qualifying Buys
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPeople.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-3 py-8 text-center text-[13px] text-[color:var(--fog-dim)]"
+                  >
+                    No priced purchases in this period yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredPeople.map((row) => (
+                  <tr
+                    key={row.key}
+                    data-testid={`portfolio-row-${row.key}`}
+                    className="border-b border-[color:var(--line)]"
+                  >
+                    <td className="px-3 py-2 text-[13px]">
+                      {row.memberSlug ? (
+                        <Link
+                          href={memberHref(row.memberSlug)}
+                          className="font-medium text-[color:var(--fog)] hover:text-[color:var(--mint)]"
+                        >
+                          {row.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-[color:var(--fog)]">
+                          {row.name}
+                        </span>
+                      )}
+                      <div className="text-[11px] text-[color:var(--fog-mute)]">
+                        {row.kind === "ceo"
+                          ? "Officer"
+                          : row.kind === "senate"
+                            ? "Senate"
+                            : "House"}
+                      </div>
+                    </td>
+                    <td
+                      className={`num py-2 pr-3 text-right text-[13px] font-semibold tabular-nums ${
+                        row.avgReturnPct >= 0
+                          ? "text-[color:var(--mint)]"
+                          : "text-[color:var(--coral)]"
+                      }`}
+                    >
+                      {formatReturnPct(row.avgReturnPct)}
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[color:var(--fog-dim)]">
+                      {formatReturnPct(row.medianReturnPct)}
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
+                      {row.bestReturnPct != null ? (
+                        <button
+                          type="button"
+                          className="text-[color:var(--mint)] hover:opacity-80"
+                          onClick={() =>
+                            row.bestTicker
+                              ? onOpenTicker(row.bestTicker)
+                              : undefined
+                          }
+                        >
+                          {formatReturnPct(row.bestReturnPct)}
+                          {row.bestTicker ? (
+                            <span className="ml-1 font-mono text-[11px] text-[color:var(--fog-mute)]">
+                              {row.bestTicker}
+                            </span>
+                          ) : null}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
+                      {row.worstReturnPct != null ? (
+                        <button
+                          type="button"
+                          className="text-[color:var(--coral)] hover:opacity-80"
+                          onClick={() =>
+                            row.worstTicker
+                              ? onOpenTicker(row.worstTicker)
+                              : undefined
+                          }
+                        >
+                          {formatReturnPct(row.worstReturnPct)}
+                          {row.worstTicker ? (
+                            <span className="ml-1 font-mono text-[11px] text-[color:var(--fog-mute)]">
+                              {row.worstTicker}
+                            </span>
+                          ) : null}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="num py-2 pr-3 text-right text-[12px] tabular-nums text-[color:var(--fog-dim)]">
+                      {row.pricedBuyCount}
+                      {row.buyCount > row.pricedBuyCount
+                        ? ` / ${row.buyCount}`
+                        : ""}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

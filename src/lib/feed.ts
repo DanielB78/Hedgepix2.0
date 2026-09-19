@@ -20,6 +20,7 @@ import {
   type PerformerPeriod,
   type PortfolioGrowth,
   type TopPerformer,
+  type TopPerformingBuy,
 } from "./topPerformers";
 import {
   asCongressChartTrade,
@@ -78,6 +79,7 @@ export type FeedPayload = {
   /** Form 4 officer trades (CEO/CFO/…) for the Insiders activity view. */
   recentInsider: ChartTrade[];
   topPerformers: TopPerformer[];
+  topPerformingBuys: TopPerformingBuy[];
   portfolioGrowth: PortfolioGrowth | null;
   performerPeriod: PerformerPeriod;
   /** ticker → industry/sector label for UI chips */
@@ -396,6 +398,7 @@ export async function fetchFeedPayload(
       recentCeoBuys: [],
       recentInsider: [],
       topPerformers: [],
+      topPerformingBuys: [],
       portfolioGrowth: null,
       performerPeriod,
       tickerSectors: {},
@@ -462,6 +465,7 @@ export async function fetchFeedPayload(
         ? fetchTopPerformers(performerPeriod, 10, performerOpts)
         : Promise.resolve({
             rows: [] as TopPerformer[],
+            topBuys: [] as TopPerformingBuy[],
             portfolio: null,
             error: null as string | null,
           }),
@@ -525,6 +529,7 @@ export async function fetchFeedPayload(
     recentCeoBuys: [],
     recentInsider: recentInsider.rows,
     topPerformers: topPerformers.rows,
+    topPerformingBuys: topPerformers.topBuys,
     portfolioGrowth: topPerformers.portfolio,
     performerPeriod,
     tickerSectors: mergedSectors,

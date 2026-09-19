@@ -2,7 +2,7 @@ import type { Chamber } from "./types";
 import { resolveCeoTransactionCode } from "./ceoAggregate";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
 
-export type PerformerPeriod = "2026" | "6m" | "3m" | "1m";
+export type PerformerPeriod = "2026" | "1y" | "6m" | "3m" | "1m";
 
 export type TopPerformer = {
   key: string;
@@ -10,10 +10,13 @@ export type TopPerformer = {
   kind: "ceo" | Chamber;
   memberSlug: string | null;
   avgReturnPct: number;
+  medianReturnPct: number;
   buyCount: number;
   pricedBuyCount: number;
   bestTicker: string | null;
   bestReturnPct: number | null;
+  worstTicker: string | null;
+  worstReturnPct: number | null;
 };
 
 export type PortfolioGrowth = {
@@ -25,6 +28,23 @@ export type PortfolioGrowth = {
   ceoPricedCount: number;
 };
 
+/** Individual purchase ranked by appreciation since reference price. */
+export type TopPerformingBuy = {
+  id: string;
+  ticker: string;
+  personKey: string;
+  name: string;
+  kind: "ceo" | Chamber;
+  memberSlug: string | null;
+  transactionDate: string;
+  referencePrice: number;
+  latestPrice: number;
+  latestPriceDate: string | null;
+  returnPct: number;
+  holdingDays: number | null;
+  sourceLabel: string;
+};
+
 type BuyRow = {
   key: string;
   name: string;
@@ -34,7 +54,7 @@ type BuyRow = {
   transactionDate: string;
 };
 
-export const PERFORMER_PERIODS: PerformerPeriod[] = ["1m", "3m", "6m", "2026"];
+export const PERFORMER_PERIODS: PerformerPeriod[] = ["1m", "3m", "6m", "1y"];
 
 const PAGE = 1000;
 const TICKER_CHUNK = 40;
@@ -51,6 +71,7 @@ export function parsePerformerPeriod(
 ): PerformerPeriod {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (raw === "2026" || raw === "ytd") return "2026";
+  if (raw === "1y" || raw === "12m" || raw === "year") return "1y";
   if (raw === "6m" || raw === "6mo" || raw === "6") return "6m";
   if (raw === "3m" || raw === "3mo" || raw === "3") return "3m";
   if (raw === "1m" || raw === "month" || raw === "1mo" || raw === "1") {
@@ -63,18 +84,21 @@ export function performerPeriodLabel(period: PerformerPeriod): string {
   switch (period) {
     case "2026":
       return "2026";
+    case "1y":
+      return "1 Year";
     case "6m":
-      return "6 months";
+      return "6 Months";
     case "3m":
-      return "3 months";
+      return "3 Months";
     case "1m":
-      return "Month";
+      return "1 Month";
   }
 }
 
 export function performerCutoffDate(period: PerformerPeriod): string {
   if (period === "2026") return "2026-01-01";
-  const days = period === "6m" ? 180 : period === "3m" ? 90 : 30;
+  const days =
+    period === "1y" ? 365 : period === "6m" ? 180 : period === "3m" ? 90 : 30;
   const now = new Date();
   const utc = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -82,6 +106,15 @@ export function performerCutoffDate(period: PerformerPeriod): string {
   utc.setUTCDate(utc.getUTCDate() - days);
   const cutoff = utc.toISOString().slice(0, 10);
   return cutoff < "2026-01-01" ? "2026-01-01" : cutoff;
+}
+
+export type PerformerViewMode = "portfolio" | "buys";
+
+export function parsePerformerView(
+  value: string | string[] | undefined,
+): PerformerViewMode {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return raw === "buys" || raw === "top-buys" ? "buys" : "portfolio";
 }
 
 export function performerPeriodHref(
@@ -105,12 +138,73 @@ function normalizeTicker(raw: string | null | undefined): string | null {
   return t || null;
 }
 
+function isValidTxDate(tx: string, todayIso: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tx)) return false;
+  if (tx > todayIso) return false;
+  return true;
+}
+
+function sourceLabelForKind(kind: "ceo" | Chamber): string {
+  if (kind === "ceo") return "Form 4";
+  if (kind === "senate") return "Senate";
+  return "House";
+}
+
+function holdingDaysBetween(
+  fromIso: string,
+  toIso: string | null,
+): number | null {
+  if (!toIso) return null;
+  const a = Date.parse(`${fromIso.slice(0, 10)}T00:00:00Z`);
+  const b = Date.parse(`${toIso.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.max(0, Math.round((b - a) / (24 * 60 * 60 * 1000)));
+}
+
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1]! + sorted[mid]!) / 2;
+  }
+  return sorted[mid]!;
+}
+
+/** Same person + ticker + transaction date → one purchase occasion. */
+export function dedupeSameDayBuys(buys: BuyRow[]): BuyRow[] {
+  const seen = new Set<string>();
+  const out: BuyRow[] = [];
+  for (const buy of buys) {
+    const key = `${buy.key}|${buy.ticker}|${buy.transactionDate}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(buy);
+  }
+  return out;
+}
+
 function buyReturns(
   buys: BuyRow[],
   entryClose: Map<string, number>,
   latestClose: Map<string, number>,
-): Array<BuyRow & { returnPct: number }> {
-  const out: Array<BuyRow & { returnPct: number }> = [];
+  latestCloseDate: Map<string, string>,
+): Array<
+  BuyRow & {
+    returnPct: number;
+    referencePrice: number;
+    latestPrice: number;
+    latestPriceDate: string | null;
+  }
+> {
+  const out: Array<
+    BuyRow & {
+      returnPct: number;
+      referencePrice: number;
+      latestPrice: number;
+      latestPriceDate: string | null;
+    }
+  > = [];
   for (const buy of buys) {
     const entry = entryClose.get(`${buy.ticker}|${buy.transactionDate}`);
     const latest = latestClose.get(buy.ticker);
@@ -126,6 +220,9 @@ function buyReturns(
     out.push({
       ...buy,
       returnPct: ((latest - entry) / entry) * 100,
+      referencePrice: entry,
+      latestPrice: latest,
+      latestPriceDate: latestCloseDate.get(buy.ticker) ?? null,
     });
   }
   return out;
@@ -137,6 +234,31 @@ export function rankBuyPerformers(
   entryClose: Map<string, number>,
   latestClose: Map<string, number>,
   limit = 10,
+  latestCloseDate: Map<string, string> = new Map(),
+): TopPerformer[] {
+  const people = rankPortfolioPeople(
+    buys,
+    entryClose,
+    latestClose,
+    latestCloseDate,
+  );
+  return people
+    .slice()
+    .sort((a, b) => {
+      if (b.avgReturnPct !== a.avgReturnPct) {
+        return b.avgReturnPct - a.avgReturnPct;
+      }
+      return b.pricedBuyCount - a.pricedBuyCount;
+    })
+    .slice(0, limit);
+}
+
+/** Person-level portfolio metrics; default order is name (A–Z). */
+export function rankPortfolioPeople(
+  buys: BuyRow[],
+  entryClose: Map<string, number>,
+  latestClose: Map<string, number>,
+  latestCloseDate: Map<string, string> = new Map(),
 ): TopPerformer[] {
   type Acc = {
     key: string;
@@ -146,10 +268,13 @@ export function rankBuyPerformers(
     returns: number[];
     bestTicker: string | null;
     bestReturnPct: number | null;
+    worstTicker: string | null;
+    worstReturnPct: number | null;
     buyCount: number;
   };
 
   const byKey = new Map<string, Acc>();
+  const priced = buyReturns(buys, entryClose, latestClose, latestCloseDate);
 
   for (const buy of buys) {
     let acc = byKey.get(buy.key);
@@ -162,28 +287,26 @@ export function rankBuyPerformers(
         returns: [],
         bestTicker: null,
         bestReturnPct: null,
+        worstTicker: null,
+        worstReturnPct: null,
         buyCount: 0,
       };
       byKey.set(buy.key, acc);
     }
     acc.buyCount += 1;
+  }
 
-    const entry = entryClose.get(`${buy.ticker}|${buy.transactionDate}`);
-    const latest = latestClose.get(buy.ticker);
-    if (
-      entry == null ||
-      latest == null ||
-      !Number.isFinite(entry) ||
-      !Number.isFinite(latest) ||
-      entry <= 0
-    ) {
-      continue;
-    }
-    const ret = ((latest - entry) / entry) * 100;
-    acc.returns.push(ret);
-    if (acc.bestReturnPct == null || ret > acc.bestReturnPct) {
-      acc.bestReturnPct = ret;
+  for (const buy of priced) {
+    const acc = byKey.get(buy.key);
+    if (!acc) continue;
+    acc.returns.push(buy.returnPct);
+    if (acc.bestReturnPct == null || buy.returnPct > acc.bestReturnPct) {
+      acc.bestReturnPct = buy.returnPct;
       acc.bestTicker = buy.ticker;
+    }
+    if (acc.worstReturnPct == null || buy.returnPct < acc.worstReturnPct) {
+      acc.worstReturnPct = buy.returnPct;
+      acc.worstTicker = buy.ticker;
     }
   }
 
@@ -197,17 +320,48 @@ export function rankBuyPerformers(
         kind: acc.kind,
         memberSlug: acc.memberSlug,
         avgReturnPct: sum / acc.returns.length,
+        medianReturnPct: medianOf(acc.returns),
         buyCount: acc.buyCount,
         pricedBuyCount: acc.returns.length,
         bestTicker: acc.bestTicker,
         bestReturnPct: acc.bestReturnPct,
+        worstTicker: acc.worstTicker,
+        worstReturnPct: acc.worstReturnPct,
       };
     })
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+}
+
+/** Individual purchases ranked by return descending. */
+export function rankTopPerformingBuys(
+  buys: BuyRow[],
+  entryClose: Map<string, number>,
+  latestClose: Map<string, number>,
+  latestCloseDate: Map<string, string> = new Map(),
+  limit = 50,
+): TopPerformingBuy[] {
+  const priced = buyReturns(buys, entryClose, latestClose, latestCloseDate);
+  return priced
+    .map((buy) => ({
+      id: `${buy.key}|${buy.ticker}|${buy.transactionDate}`,
+      ticker: buy.ticker,
+      personKey: buy.key,
+      name: buy.name,
+      kind: buy.kind,
+      memberSlug: buy.memberSlug,
+      transactionDate: buy.transactionDate,
+      referencePrice: buy.referencePrice,
+      latestPrice: buy.latestPrice,
+      latestPriceDate: buy.latestPriceDate,
+      returnPct: buy.returnPct,
+      holdingDays: holdingDaysBetween(buy.transactionDate, buy.latestPriceDate),
+      sourceLabel: sourceLabelForKind(buy.kind),
+    }))
     .sort((a, b) => {
-      if (b.avgReturnPct !== a.avgReturnPct) {
-        return b.avgReturnPct - a.avgReturnPct;
-      }
-      return b.pricedBuyCount - a.pricedBuyCount;
+      if (b.returnPct !== a.returnPct) return b.returnPct - a.returnPct;
+      return b.transactionDate.localeCompare(a.transactionDate);
     })
     .slice(0, limit);
 }
@@ -217,8 +371,9 @@ export function computePortfolioGrowth(
   buys: BuyRow[],
   entryClose: Map<string, number>,
   latestClose: Map<string, number>,
+  latestCloseDate: Map<string, string> = new Map(),
 ): PortfolioGrowth | null {
-  const priced = buyReturns(buys, entryClose, latestClose);
+  const priced = buyReturns(buys, entryClose, latestClose, latestCloseDate);
   if (priced.length === 0) return null;
   const sum = priced.reduce((a, b) => a + b.returnPct, 0);
   return {
@@ -236,6 +391,7 @@ async function fetchRecentCongressBuys(
 ): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
   const buys: BuyRow[] = [];
+  const todayIso = new Date().toISOString().slice(0, 10);
   let from = 0;
 
   while (buys.length < MAX_CONGRESS_BUYS) {
@@ -247,9 +403,9 @@ async function fetchRecentCongressBuys(
       )
       .eq("transaction_type", "purchase")
       .eq("is_listed_equity", true)
-      .gte("disclosure_date", cutoff)
+      .gte("transaction_date", cutoff)
       .not("ticker", "is", null)
-      .order("disclosure_date", { ascending: false })
+      .order("transaction_date", { ascending: false })
       .range(from, end);
     if (chamber === "house" || chamber === "senate") {
       query = query.eq("chamber", chamber);
@@ -272,10 +428,12 @@ async function fetchRecentCongressBuys(
         !ticker ||
         !name ||
         !tx ||
+        !isValidTxDate(tx, todayIso) ||
         (rowChamber !== "house" && rowChamber !== "senate")
       ) {
         continue;
       }
+      if (tx < cutoff) continue;
       if (chamber && rowChamber !== chamber) continue;
       buys.push({
         key: `congress:${slug ?? name.toLowerCase()}`,
@@ -291,11 +449,12 @@ async function fetchRecentCongressBuys(
     from += PAGE;
   }
 
-  return buys;
+  return dedupeSameDayBuys(buys);
 }
 
 async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
   const supabase = createBrowserSupabase();
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   async function scan(fromDate: string): Promise<BuyRow[]> {
     const buys: BuyRow[] = [];
@@ -332,7 +491,8 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
         const ticker = normalizeTicker(row.ticker as string | null);
         const name = String(row.ceo_name ?? "").trim();
         const tx = (row.transaction_date as string | null)?.slice(0, 10);
-        if (!ticker || !name || !tx) continue;
+        if (!ticker || !name || !tx || !isValidTxDate(tx, todayIso)) continue;
+        if (tx < fromDate) continue;
         buys.push({
           key: `ceo:${name.toLowerCase()}`,
           name,
@@ -346,7 +506,7 @@ async function fetchRecentCeoBuys(cutoff: string): Promise<BuyRow[]> {
       if (rows.length < end - from + 1) break;
       from += PAGE;
     }
-    return buys;
+    return dedupeSameDayBuys(buys);
   }
 
   let buys = await scan(cutoff);
@@ -388,6 +548,7 @@ async function loadPriceMaps(
 ): Promise<{
   entryClose: Map<string, number>;
   latestClose: Map<string, number>;
+  latestCloseDate: Map<string, string>;
 }> {
   const supabase = createBrowserSupabase();
   const tickers = [...new Set(buys.map((b) => b.ticker))];
@@ -435,9 +596,12 @@ async function loadPriceMaps(
   }
 
   const latestClose = new Map<string, number>();
+  const latestCloseDate = new Map<string, string>();
   for (const [ticker, list] of series) {
     if (list.length === 0) continue;
-    latestClose.set(ticker, list[list.length - 1].close);
+    const last = list[list.length - 1]!;
+    latestClose.set(ticker, last.close);
+    latestCloseDate.set(ticker, last.date);
   }
 
   const entryClose = new Map<string, number>();
@@ -455,6 +619,7 @@ async function loadPriceMaps(
     const list = series.get(ticker);
     if (!list || list.length === 0) continue;
     for (const tx of dates) {
+      // Nearest available session on/after tx; else nearest prior session.
       let found: number | null = null;
       for (const bar of list) {
         if (bar.date >= tx) {
@@ -462,11 +627,19 @@ async function loadPriceMaps(
           break;
         }
       }
+      if (found == null) {
+        for (let i = list.length - 1; i >= 0; i--) {
+          if (list[i]!.date <= tx) {
+            found = list[i]!.close;
+            break;
+          }
+        }
+      }
       if (found != null) entryClose.set(`${ticker}|${tx}`, found);
     }
   }
 
-  return { entryClose, latestClose };
+  return { entryClose, latestClose, latestCloseDate };
 }
 
 export type TopPerformerOptions = {
@@ -480,15 +653,16 @@ export type TopPerformerOptions = {
 
 export async function fetchTopPerformers(
   period: PerformerPeriod,
-  limit = 10,
+  limit = 50,
   options?: TopPerformerOptions,
 ): Promise<{
   rows: TopPerformer[];
+  topBuys: TopPerformingBuy[];
   portfolio: PortfolioGrowth | null;
   error: string | null;
 }> {
   if (!hasPublicSupabaseConfig()) {
-    return { rows: [], portfolio: null, error: null };
+    return { rows: [], topBuys: [], portfolio: null, error: null };
   }
 
   try {
@@ -501,26 +675,41 @@ export async function fetchTopPerformers(
         : Promise.resolve([] as BuyRow[]),
       includeCeo ? fetchRecentCeoBuys(cutoff) : Promise.resolve([] as BuyRow[]),
     ]);
-    const buys = [...congress, ...ceos];
+    const buys = dedupeSameDayBuys([...congress, ...ceos]);
     if (buys.length === 0) {
-      return { rows: [], portfolio: null, error: null };
+      return { rows: [], topBuys: [], portfolio: null, error: null };
     }
 
-    const { entryClose, latestClose } = await loadPriceMaps(buys);
+    const { entryClose, latestClose, latestCloseDate } =
+      await loadPriceMaps(buys);
     return {
-      rows: rankBuyPerformers(buys, entryClose, latestClose, limit),
-      portfolio: computePortfolioGrowth(buys, entryClose, latestClose),
+      rows: rankPortfolioPeople(buys, entryClose, latestClose, latestCloseDate),
+      topBuys: rankTopPerformingBuys(
+        buys,
+        entryClose,
+        latestClose,
+        latestCloseDate,
+        limit,
+      ),
+      portfolio: computePortfolioGrowth(
+        buys,
+        entryClose,
+        latestClose,
+        latestCloseDate,
+      ),
       error: null,
     };
   } catch (err) {
     return {
       rows: [],
+      topBuys: [],
       portfolio: null,
       error:
         err instanceof Error ? err.message : "Failed to load top performers",
     };
   }
 }
+
 
 export type MemberBuyPerformance = {
   id: string;
@@ -564,7 +753,7 @@ export async function fetchMemberBuysWithReturns(
     .eq("member_slug", normalized)
     .eq("transaction_type", "purchase")
     .eq("is_listed_equity", true)
-    .gte("disclosure_date", cutoff)
+    .gte("transaction_date", cutoff)
     .not("ticker", "is", null)
     .order("transaction_date", { ascending: false })
     .limit(200);
@@ -583,6 +772,7 @@ export async function fetchMemberBuysWithReturns(
   }
 
   const buyRows: BuyRow[] = [];
+  const seenOccasions = new Set<string>();
   const detail: Array<{
     id: string;
     ticker: string;
@@ -598,7 +788,10 @@ export async function fetchMemberBuysWithReturns(
     const ticker = normalizeTicker(row.ticker as string | null);
     const tx = (row.transaction_date as string | null)?.slice(0, 10);
     if (!ticker || !tx) continue;
-    const id = String(row.id ?? `${ticker}|${tx}`);
+    const occasionKey = `${normalized}|${ticker}|${tx}`;
+    if (seenOccasions.has(occasionKey)) continue;
+    seenOccasions.add(occasionKey);
+    const id = String(row.id ?? occasionKey);
     buyRows.push({
       key: id,
       name: String(row.member ?? normalized),
