@@ -16,6 +16,7 @@ import type {
   FeedTimeframe,
   FeedTrendFilter,
   FeedOverlapFilter,
+  FeedYesNoFilter,
 } from "@/lib/feedActivity/types";
 
 const TIMEFRAMES: Array<{ id: FeedTimeframe; label: string }> = [
@@ -36,10 +37,19 @@ function pct(n: number | null | undefined, digits = 1): string {
   return `${sign}${n.toFixed(digits)}%`;
 }
 
-function buildHref(
-  timeframe: FeedTimeframe,
-  filters: FeedFilters,
-): string {
+function daysAgoLabel(iso: string | null, now = new Date()): string {
+  if (!iso) return "—";
+  const ms =
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+    Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  const days = Math.round(ms / (24 * 60 * 60 * 1000));
+  if (days <= 0) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 60) return `${days} days ago`;
+  return formatShortDate(iso);
+}
+
+function buildHref(timeframe: FeedTimeframe, filters: FeedFilters): string {
   const params = new URLSearchParams();
   if (timeframe !== "3m") params.set("tf", timeframe);
   if (filters.source !== "all") params.set("src", filters.source);
@@ -47,11 +57,61 @@ function buildHref(
   if (filters.overlap !== "all") params.set("overlap", "1");
   if (filters.minBuyers > 0) params.set("minBuyers", String(filters.minBuyers));
   if (filters.minBuys > 0) params.set("minBuys", String(filters.minBuys));
+  if (filters.minRepeatBuyers > 0) {
+    params.set("minRepeat", String(filters.minRepeatBuyers));
+  }
+  if (filters.minOverlapBuyers > 0) {
+    params.set("minOverlap", String(filters.minOverlapBuyers));
+  }
+  if (filters.minBuyers30d > 0) {
+    params.set("minBuyers30d", String(filters.minBuyers30d));
+  }
+  if (filters.minActivityRatio > 0) {
+    params.set("minAct", String(filters.minActivityRatio));
+  }
+  if (filters.averagingDown !== "all") {
+    params.set("avgDown", filters.averagingDown);
+  }
+  if (filters.maxRelativeSectorPct != null) {
+    params.set("maxRelSector", String(filters.maxRelativeSectorPct));
+  }
+  if (filters.crossSource !== "all") {
+    params.set("crossSrc", filters.crossSource);
+  }
   if (filters.nicheLabels.length) {
     params.set("sectors", filters.nicheLabels.join("|"));
   }
   const qs = params.toString();
   return qs ? `/feed?${qs}` : "/feed";
+}
+
+function NumInput({
+  label,
+  testId,
+  value,
+  onCommit,
+}: {
+  label: string;
+  testId: string;
+  value: number;
+  onCommit: (n: number) => void;
+}) {
+  const [local, setLocal] = useState(String(value || ""));
+  return (
+    <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
+      {label}
+      <input
+        data-testid={testId}
+        type="number"
+        min={0}
+        step="any"
+        className="w-14 rounded border border-[var(--line)] bg-[var(--panel)] px-1.5 py-1 text-[12px]"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onCommit(Math.max(0, Number(local) || 0))}
+      />
+    </label>
+  );
 }
 
 function FilterBar({
@@ -64,12 +124,7 @@ function FilterBar({
   onNavigate: (href: string) => void;
 }) {
   const [sectorOpen, setSectorOpen] = useState(false);
-  const [localMinBuyers, setLocalMinBuyers] = useState(
-    String(filters.minBuyers || ""),
-  );
-  const [localMinBuys, setLocalMinBuys] = useState(
-    String(filters.minBuys || ""),
-  );
+  const [moreOpen, setMoreOpen] = useState(false);
 
   function apply(next: Partial<FeedFilters>, tf = timeframe) {
     onNavigate(buildHref(tf, { ...filters, ...next }));
@@ -141,9 +196,7 @@ function FilterBar({
             className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-[12px] text-[var(--ink)]"
             value={filters.overlap}
             onChange={(e) =>
-              apply({
-                overlap: e.target.value as FeedOverlapFilter,
-              })
+              apply({ overlap: e.target.value as FeedOverlapFilter })
             }
           >
             <option value="all">All</option>
@@ -212,81 +265,149 @@ function FilterBar({
           ) : null}
         </div>
 
-        <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
-          Min buyers
-          <input
-            data-testid="feed-min-buyers"
-            type="number"
-            min={0}
-            className="w-14 rounded border border-[var(--line)] bg-[var(--panel)] px-1.5 py-1 text-[12px]"
-            value={localMinBuyers}
-            onChange={(e) => setLocalMinBuyers(e.target.value)}
-            onBlur={() =>
-              apply({
-                minBuyers: Math.max(0, Number(localMinBuyers) || 0),
-              })
-            }
-          />
-        </label>
+        <NumInput
+          label="Min buyers"
+          testId="feed-min-buyers"
+          value={filters.minBuyers}
+          onCommit={(n) => apply({ minBuyers: n })}
+        />
+        <NumInput
+          label="Min buys"
+          testId="feed-min-buys"
+          value={filters.minBuys}
+          onCommit={(n) => apply({ minBuys: n })}
+        />
 
-        <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
-          Min buys
-          <input
-            data-testid="feed-min-buys"
-            type="number"
-            min={0}
-            className="w-14 rounded border border-[var(--line)] bg-[var(--panel)] px-1.5 py-1 text-[12px]"
-            value={localMinBuys}
-            onChange={(e) => setLocalMinBuys(e.target.value)}
-            onBlur={() =>
-              apply({
-                minBuys: Math.max(0, Number(localMinBuys) || 0),
-              })
-            }
-          />
-        </label>
+        <button
+          type="button"
+          className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-[12px] text-[var(--fog-dim)] hover:text-[var(--ink)]"
+          onClick={() => setMoreOpen((v) => !v)}
+        >
+          {moreOpen ? "Fewer filters" : "More filters"}
+        </button>
       </div>
+
+      {moreOpen ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] pt-2 text-[12px]">
+          <NumInput
+            label="Min repeat"
+            testId="feed-min-repeat"
+            value={filters.minRepeatBuyers}
+            onCommit={(n) => apply({ minRepeatBuyers: n })}
+          />
+          <NumInput
+            label="Min overlap buyers"
+            testId="feed-min-overlap"
+            value={filters.minOverlapBuyers}
+            onCommit={(n) => apply({ minOverlapBuyers: n })}
+          />
+          <NumInput
+            label="Min buyers / 30D"
+            testId="feed-min-buyers-30d"
+            value={filters.minBuyers30d}
+            onCommit={(n) => apply({ minBuyers30d: n })}
+          />
+          <NumInput
+            label="Min activity ×"
+            testId="feed-min-activity"
+            value={filters.minActivityRatio}
+            onCommit={(n) => apply({ minActivityRatio: n })}
+          />
+          <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
+            Averaging down
+            <select
+              data-testid="feed-avg-down"
+              className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-[12px] text-[var(--ink)]"
+              value={filters.averagingDown}
+              onChange={(e) =>
+                apply({ averagingDown: e.target.value as FeedYesNoFilter })
+              }
+            >
+              <option value="all">All</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
+            Cross-source
+            <select
+              data-testid="feed-cross-source"
+              className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-[12px] text-[var(--ink)]"
+              value={filters.crossSource}
+              onChange={(e) =>
+                apply({ crossSource: e.target.value as FeedYesNoFilter })
+              }
+            >
+              <option value="all">All</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-[var(--fog-dim)]">
+            Rel. sector ≤
+            <input
+              data-testid="feed-max-rel-sector"
+              type="number"
+              className="w-16 rounded border border-[var(--line)] bg-[var(--panel)] px-1.5 py-1 text-[12px]"
+              placeholder="%"
+              defaultValue={
+                filters.maxRelativeSectorPct != null
+                  ? String(filters.maxRelativeSectorPct)
+                  : ""
+              }
+              onBlur={(e) => {
+                const raw = e.target.value.trim();
+                apply({
+                  maxRelativeSectorPct:
+                    raw === "" || !Number.isFinite(Number(raw))
+                      ? null
+                      : Number(raw),
+                });
+              }}
+            />
+          </label>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 function TickerExpand({ row }: { row: FeedTickerRow }) {
   const b = row.breakdown;
+  const c = row.components;
+
   return (
-    <div className="grid gap-4 border-t border-[var(--line)] bg-[var(--panel-muted)] px-3 py-3 md:grid-cols-2">
+    <div className="grid gap-4 border-t border-[var(--line)] bg-[var(--panel-muted)] px-3 py-3 lg:grid-cols-2">
       <div className="space-y-3 text-[12px]">
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Why this ranked
+            Why noteworthy
           </div>
-          <dl className="grid grid-cols-[9rem_1fr] gap-x-2 gap-y-1">
-            <dt className="text-[var(--fog-dim)]">
-              Current {FEED_TREND_TRADING_DAYS}D trend
-            </dt>
-            <dd className="tabular-nums">
-              {pct(row.currentTrendReturn)}
-              {row.isCurrentDowntrend ? (
-                <span className="ml-1.5 text-[var(--fog-dim)]">Downtrend</span>
-              ) : null}
-            </dd>
-            <dt className="text-[var(--fog-dim)]">Purchase occasions</dt>
-            <dd>{row.buyOccasions}</dd>
-            <dt className="text-[var(--fog-dim)]">Distinct buyers</dt>
-            <dd>{row.distinctBuyers}</dd>
-            <dt className="text-[var(--fog-dim)]">Repeat buyers</dt>
-            <dd>{row.repeatBuyers}</dd>
-            <dt className="text-[var(--fog-dim)]">Overlap buyers</dt>
-            <dd>
-              {row.distinctOverlapBuyers}
-              {row.overlapBuyCount
-                ? ` · ${row.overlapBuyCount} overlap purchases`
-                : ""}
-            </dd>
-            <dt className="text-[var(--fog-dim)]">Buys into weakness</dt>
-            <dd>
-              {row.downtrendBuyCount} of {row.buyOccasions} during a negative{" "}
-              {FEED_TREND_TRADING_DAYS}D trend
-            </dd>
+          {row.whyNoteworthy.length > 0 ? (
+            <ul className="space-y-1 text-[var(--ink)]">
+              {row.whyNoteworthy.map((line) => (
+                <li key={line} className="flex gap-1.5">
+                  <span className="text-[var(--fog-mute)]">•</span>
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[var(--fog-dim)]">No highlight summary.</p>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
+            Relative weakness
+          </div>
+          <dl className="grid grid-cols-[8rem_1fr] gap-x-2 gap-y-1 tabular-nums">
+            <dt className="text-[var(--fog-dim)]">20D</dt>
+            <dd>{pct(c.return_20d)}</dd>
+            <dt className="text-[var(--fog-dim)]">vs sector</dt>
+            <dd>{pct(c.relative_sector_return_20d)}</dd>
+            <dt className="text-[var(--fog-dim)]">vs market</dt>
+            <dd>{pct(c.relative_market_return_20d)}</dd>
           </dl>
         </div>
 
@@ -296,19 +417,32 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
           </div>
           <ul className="space-y-0.5 text-[var(--fog-dim)]">
             <li>
-              Buy occasions × {FEED_WEIGHTS.buyOccasion} → {b.buyOccasion}
+              Distinct buyers × {FEED_WEIGHTS.distinctBuyer} →{" "}
+              {b.distinctBuyer.toFixed(1)}
             </li>
             <li>
-              Repeat buyers × {FEED_WEIGHTS.repeatBuyer} → {b.repeatBuyer}
+              Repeat / streak → {(b.repeatBuyer + b.consecutiveStreak).toFixed(1)}
             </li>
             <li>
-              Overlap buyers × {FEED_WEIGHTS.overlapBuyer} → {b.overlapBuyer}
+              Overlap buyers × {FEED_WEIGHTS.overlapBuyer} →{" "}
+              {b.overlapBuyer.toFixed(1)}
             </li>
             <li>
-              Downtrend buys × {FEED_WEIGHTS.downtrendBuy} → {b.downtrendBuy}
+              Buyer clustering → {b.buyerCluster.toFixed(1)}
             </li>
             <li>
-              Current downtrend → {b.currentDowntrend}
+              Downtrend / relative weakness →{" "}
+              {(b.downtrendBuy + b.currentDowntrend + b.relativeWeakness).toFixed(
+                1,
+              )}
+            </li>
+            <li>
+              Averaging down / large buys →{" "}
+              {(b.averagingDown + b.unusuallyLargeBuy).toFixed(1)}
+            </li>
+            <li>
+              Unusual activity / recency / cross-source →{" "}
+              {(b.unusualActivity + b.recency + b.crossSource).toFixed(1)}
             </li>
             <li className="font-medium text-[var(--ink)]">
               Total score {b.total}
@@ -334,27 +468,37 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                     <span className="ml-1.5 font-normal text-[var(--fog-mute)]">
                       {sourceLabel(streak.source)}
                       {streak.hasOverlap ? " · overlap" : ""}
+                      {streak.isAveragingDown ? " · averaging down" : ""}
                     </span>
                   </span>
                   <span className="text-[11px] text-[var(--fog-dim)]">
                     Streak {streak.currentStreak || streak.maxStreak}
-                    {streak.maxStreak !== streak.currentStreak
-                      ? ` (max ${streak.maxStreak})`
+                    {streak.maxDeclineFirstToLatest != null &&
+                    streak.maxDeclineFirstToLatest < 0
+                      ? ` · ${pct(streak.maxDeclineFirstToLatest)} first→latest`
                       : ""}
                   </span>
                 </div>
                 <ul className="mt-1 space-y-0.5 text-[11px] text-[var(--fog-dim)]">
                   {streak.occasions.map((o) => (
-                    <li key={o.key} className="flex gap-2 tabular-nums">
+                    <li key={o.key} className="flex flex-wrap gap-2 tabular-nums">
                       <span className="w-20 shrink-0">
                         {formatShortDate(o.transactionDate)}
                       </span>
                       <span className="hx-buy">Buy</span>
-                      {o.boughtDuringDowntrend ? (
-                        <span>{pct(o.return20dBefore)} pre</span>
-                      ) : (
-                        <span>{pct(o.return20dBefore)} pre</span>
-                      )}
+                      <span>{pct(o.return20dBefore)} pre</span>
+                      {o.priceAtTrade != null ? (
+                        <span>~${o.priceAtTrade.toFixed(2)}</span>
+                      ) : null}
+                      {o.isAveragingDownStep ? (
+                        <span>lower price</span>
+                      ) : null}
+                      {o.isUnusuallyLarge ? <span>large vs person</span> : null}
+                      {o.positionKind === "adding" ? (
+                        <span>adding</span>
+                      ) : o.positionKind === "new" ? (
+                        <span>new</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -384,12 +528,6 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                     <span className="text-[var(--fog-mute)]">
                       {sourceLabel(o.source)}
                     </span>
-                    {o.officerTitle ? (
-                      <span className="text-[var(--fog-mute)]">
-                        {" "}
-                        · {o.officerTitle}
-                      </span>
-                    ) : null}
                   </span>
                   <span className="hx-buy text-[11px]">Buy</span>
                 </div>
@@ -400,11 +538,13 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
                       o.disclosedMax,
                       o.amountRange,
                     )}
+                    {o.purchaseEstimateIsApproximate && o.purchaseEstimate != null
+                      ? " · est. midpoint used for size ranking only"
+                      : ""}
                   </span>
                   <span>
                     {FEED_TREND_TRADING_DAYS}D at purchase:{" "}
                     {pct(o.return20dBefore)}
-                    {o.boughtDuringDowntrend ? " · into weakness" : ""}
                   </span>
                   {o.hasSectorOverlap ? (
                     <span className="text-[var(--accent)]">
@@ -462,34 +602,40 @@ function FeedRow({ row }: { row: FeedTickerRow }) {
           {row.distinctBuyers}
         </td>
         <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
-          {row.repeatBuyers}
-        </td>
-        <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
           {row.distinctOverlapBuyers}
         </td>
         <td className="num py-2 pr-3 text-right text-[12px] tabular-nums">
-          {row.downtrendBuyCount}
+          {row.repeatBuyers}
         </td>
         <td className="py-2 pr-3 text-[12px] tabular-nums">
           {row.isCurrentDowntrend ? (
             <span className="text-[var(--fog-dim)]">
-              ↓ {pct(row.currentTrendReturn)} / {FEED_TREND_TRADING_DAYS}D
+              ↓ {pct(row.currentTrendReturn)}
             </span>
           ) : (
             <span className="text-[var(--fog-mute)]">
-              {pct(row.currentTrendReturn)} / {FEED_TREND_TRADING_DAYS}D
+              {pct(row.currentTrendReturn)}
             </span>
           )}
         </td>
+        <td className="py-2 pr-3 text-[12px] tabular-nums text-[var(--fog-dim)]">
+          {row.relativeSectorReturn != null
+            ? pct(row.relativeSectorReturn)
+            : pct(row.relativeMarketReturn)}
+        </td>
+        <td className="py-2 pr-3 text-[12px] tabular-nums text-[var(--fog-dim)]">
+          {row.buyersLast30d} / 30D
+          {row.activityRatio != null && row.activityRatio >= 1.5
+            ? ` · ${row.activityRatio.toFixed(1)}×`
+            : ""}
+        </td>
         <td className="py-2 pr-3 text-[12px] text-[var(--fog-dim)]">
-          {formatShortDate(
-            row.latestBuyDisclosure ?? row.latestBuyTransaction,
-          )}
+          {daysAgoLabel(row.latestBuyDisclosure ?? row.latestBuyTransaction)}
         </td>
       </tr>
       {open ? (
         <tr className="border-b border-[var(--line)]">
-          <td colSpan={9} className="p-0">
+          <td colSpan={10} className="p-0">
             <TickerExpand row={row} />
           </td>
         </tr>
@@ -527,13 +673,13 @@ export function FeedActivityBoard({
       <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4">
         <div className="mb-3">
           <h2 className="font-[family-name:var(--font-display)] text-[15px] font-semibold text-[var(--ink)]">
-            Notable buying activity
+            Noteworthy activity
           </h2>
           <p className="mt-0.5 max-w-2xl text-[12px] text-[var(--fog-dim)]">
-            Tickers with repeated purchases, multiple buyers, and buying into
-            weakness — with congressional sector overlap highlighted when
-            available. Observable patterns only; not evidence of private
-            information.
+            Unusual combinations of disclosed buying and market weakness —
+            repeated purchases, clustered buyers, sector overlap, averaging
+            down, and relative underperformance. Observable patterns only; not
+            evidence of private information.
           </p>
         </div>
         <FilterBar
@@ -564,7 +710,7 @@ export function FeedActivityBoard({
         </div>
 
         <div className="hx-table-wrap overflow-x-auto rounded-md border border-[var(--line)]">
-          <table className="hx-table w-full min-w-[56rem]">
+          <table className="hx-table w-full min-w-[62rem]">
             <thead>
               <tr className="border-b border-[var(--line)] text-left text-[11px] uppercase tracking-wide text-[var(--fog-mute)]">
                 <th className="px-3 py-2 font-medium">Ticker</th>
@@ -572,23 +718,22 @@ export function FeedActivityBoard({
                 <th className="num py-2 pr-3 text-right font-medium">Buys</th>
                 <th className="num py-2 pr-3 text-right font-medium">Buyers</th>
                 <th className="num py-2 pr-3 text-right font-medium">
-                  Repeat
-                </th>
-                <th className="num py-2 pr-3 text-right font-medium">
                   Overlap
                 </th>
                 <th className="num py-2 pr-3 text-right font-medium">
-                  ↓ Buys
+                  Repeat
                 </th>
-                <th className="py-2 pr-3 font-medium">Current trend</th>
-                <th className="py-2 pr-3 font-medium">Latest buy</th>
+                <th className="py-2 pr-3 font-medium">Trend</th>
+                <th className="py-2 pr-3 font-medium">Rel. trend</th>
+                <th className="py-2 pr-3 font-medium">Recent</th>
+                <th className="py-2 pr-3 font-medium">Latest</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-3 py-8 text-center text-[13px] text-[var(--fog-dim)]"
                   >
                     No tickers match the current Feed criteria.

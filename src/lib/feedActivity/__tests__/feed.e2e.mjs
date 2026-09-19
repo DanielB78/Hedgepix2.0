@@ -41,19 +41,21 @@ async function main() {
   // Filter downtrend
   await page.selectOption('[data-testid="feed-trend"]', "down");
   await page.waitForURL(/trend=down/);
-  await page.waitForTimeout(800);
+  await page.waitForLoadState("networkidle");
+  await page.waitForSelector('[data-testid="feed-result-count"]');
   const downText = await page.locator('[data-testid="feed-result-count"]').innerText();
   console.log("downtrend filter:", downText);
   await page.screenshot({ path: `${OUT}/feed_downtrend_filter.png`, fullPage: false });
 
   const n = Number(downText.replace(/,/g, "").match(/(\d+)/)?.[1] ?? "0");
   if (n > 0) {
-    await page.locator("tbody tr").first().click();
-    await page.waitForTimeout(500);
-    const why = await page.getByText("Why this ranked").count();
-    assert.ok(why >= 1, "expanded row should explain ranking");
+    const firstRow = page.locator('tbody tr[data-testid^="feed-row-"]').first();
+    await firstRow.click();
+    await page.waitForSelector("text=Why noteworthy", { timeout: 10000 });
     const streak = await page.getByText("Buy streaks").count();
     assert.ok(streak >= 1);
+    const rel = await page.getByText("Relative weakness").count();
+    assert.ok(rel >= 1);
     await page.screenshot({
       path: `${OUT}/feed_expanded_ticker.png`,
       fullPage: false,

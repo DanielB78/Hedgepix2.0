@@ -21,7 +21,12 @@ import {
   timeframeDays,
   type FeedRawTrade,
 } from "./rankFeed";
-import { FEED_STREAK_LOOKBACK_DAYS } from "./weights";
+import {
+  FEED_HISTORY_LOOKBACK_DAYS,
+  FEED_STREAK_LOOKBACK_DAYS,
+  MARKET_BENCHMARK_TICKERS,
+  SECTOR_BENCHMARK_ETFS,
+} from "./weights";
 import type { FeedFilters, FeedTickerRow, FeedTimeframe } from "./types";
 import { EMPTY_FEED_FILTERS } from "./types";
 
@@ -235,8 +240,11 @@ export async function fetchFeedActivityPayload(
 
   try {
     const windowDays = timeframeDays(timeframe);
-    // Load extra history so buy streaks are not broken at the window edge.
-    const fetchDays = windowDays + FEED_STREAK_LOOKBACK_DAYS;
+    // Load extra history so buy streaks, size medians, and activity baselines work.
+    const fetchDays = Math.max(
+      windowDays + FEED_STREAK_LOOKBACK_DAYS,
+      FEED_HISTORY_LOOKBACK_DAYS,
+    );
     const since = cutoffDateFromDays(fetchDays);
 
     const [house, senate, insiders] = await Promise.all([
@@ -276,9 +284,11 @@ export async function fetchFeedActivityPayload(
 
     const tickers = [
       ...new Set(
-        raw
-          .map((r) => r.ticker)
-          .filter((t): t is string => Boolean(t)),
+        [
+          ...raw.map((r) => r.ticker).filter((t): t is string => Boolean(t)),
+          ...MARKET_BENCHMARK_TICKERS,
+          ...Object.values(SECTOR_BENCHMARK_ETFS),
+        ],
       ),
     ];
     const minTx =
