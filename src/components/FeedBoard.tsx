@@ -7,6 +7,10 @@ import { DisclosureDayCard } from "@/components/DisclosureDayCard";
 import { PerformerExpandCard } from "@/components/PerformerExpandCard";
 import { PriceChart } from "@/components/PriceChart";
 import { SectorShareChart } from "@/components/SectorShareChart";
+import {
+  TickerDetailView,
+  type TickerDetailState,
+} from "@/components/TickerDetailView";
 import { TradeFiltersBar } from "@/components/TradeFiltersBar";
 import type {
   FeedPayload,
@@ -17,14 +21,11 @@ import type {
 } from "@/lib/feed";
 import {
   chamberLabel,
-  formatAmountRange,
   formatShortDate,
-  tradeVerb,
 } from "@/lib/format";
 import { groupTradesByDisclosure } from "@/lib/groupTrades";
 import type { CongressTrade, TrendingTicker } from "@/lib/types";
 import {
-  type ChartTrade,
   type ChartTradeSource,
 } from "@/lib/chartTrades";
 import {
@@ -61,13 +62,7 @@ type Props = {
   tab?: "activity" | "performers" | "sectors" | "overlap";
 };
 
-type StockPanelState = {
-  ticker: string;
-  tradeSource: ChartTradeSource;
-  data: StockPreviewPayload | null;
-  loading: boolean;
-  error: string | null;
-};
+type StockPanelState = TickerDetailState;
 
 type MemberPanelState = {
   slug: string;
@@ -88,66 +83,6 @@ async function loadJson<T>(url: string): Promise<T> {
     throw new Error(body?.error ?? `Request failed (${res.status})`);
   }
   return (await res.json()) as T;
-}
-
-function TradeRow({
-  trade,
-  onOpenMember,
-}: {
-  trade: ChartTrade | CongressTrade;
-  onOpenMember?: (slug: string) => void;
-}) {
-  const buy = trade.transaction_type === "purchase";
-  const slug =
-    "member_slug" in trade && trade.member_slug
-      ? trade.member_slug
-      : null;
-  const memberClickable = !!slug && !!onOpenMember;
-
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] py-2.5 last:border-0">
-      <div className="min-w-0">
-        {memberClickable ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenMember(slug!);
-            }}
-            className="truncate text-left text-sm font-semibold text-[color:var(--mint)] hover:opacity-80"
-          >
-            {trade.member ?? "Unknown"}
-          </button>
-        ) : (
-          <p className="truncate text-sm font-semibold text-[color:var(--fog)]">
-            {trade.member ?? "Unknown"}
-          </p>
-        )}
-        <p className="text-xs text-[color:var(--fog-dim)]">
-          {("source" in trade && trade.source === "ceo")
-            ? (trade.state?.trim() || "Insider")
-            : chamberLabel(trade.chamber)}{" "}
-          · {formatShortDate(trade.disclosure_date ?? trade.transaction_date)}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p
-          className={`text-xs font-semibold uppercase tracking-wide ${
-            buy ? "text-[color:var(--mint)]" : "text-[color:var(--coral)]"
-          }`}
-        >
-          {tradeVerb(trade.transaction_type)}
-        </p>
-        <p className="text-xs text-[color:var(--fog-dim)]">
-          {formatAmountRange(
-            trade.amount_low,
-            trade.amount_high,
-            trade.amount_range,
-          )}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function useScrollIntoView(active: boolean) {
@@ -567,7 +502,8 @@ export function FeedBoard({
                       onOpen={() => toggleStock(row.ticker)}
                     />
                     {active && stockPanel ? (
-                      <StockPanel
+                      <TickerDetailView
+                        context="trending"
                         state={stockPanel}
                         onClose={() => setStockPanel(null)}
                         onTradeSource={(s) => void openStock(stockPanel.ticker, s)}
@@ -736,141 +672,6 @@ function TickerCard({
   );
 }
 
-function StockPanel({
-  state,
-  onClose,
-  onTradeSource,
-  onOpenMember,
-  preferredSources = ["congress", "house", "senate", "ceo"],
-}: {
-  state: StockPanelState;
-  onClose: () => void;
-  onTradeSource: (source: ChartTradeSource) => void;
-  onOpenMember?: (slug: string) => void;
-  preferredSources?: ChartTradeSource[];
-}) {
-  const ref = useScrollIntoView(true);
-  const sources = preferredSources.filter(
-    (s) =>
-      s === "congress" ||
-      s === "house" ||
-      s === "senate" ||
-      s === "ceo" ||
-      s === "both",
-  );
-
-  return (
-    <div
-      ref={ref}
-      className="animate-expand overflow-hidden rounded-md border border-[color:var(--mint)]/25 bg-[color:var(--panel)] shadow-[var(--shadow-soft)]"
-    >
-      <div className="flex items-center justify-between gap-3 border-b border-[color:var(--line)] px-4 py-2.5">
-        <div>
-          <p className="font-[family-name:var(--font-display)] text-base font-semibold text-[color:var(--fog)]">
-            {state.ticker}
-          </p>
-          <p className="text-sm text-[color:var(--fog-dim)]">
-            {state.data?.asset ?? "Trade activity"}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-3 py-1.5 text-sm text-[color:var(--fog-dim)] hover:bg-[color:var(--panel-elevated)] hover:text-[color:var(--fog)]"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="grid lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
-        <aside className="flex max-h-[420px] flex-col border-b border-[color:var(--line)] lg:max-h-[520px] lg:border-b-0 lg:border-r">
-          <div className="shrink-0 space-y-3 p-5 pb-3">
-            <div className="hx-toolbar gap-3">
-              {sources.map((value) => {
-                const label =
-                  value === "congress"
-                    ? "Congress"
-                    : value === "house"
-                      ? "House"
-                      : value === "senate"
-                        ? "Senate"
-                        : value === "both"
-                          ? "All"
-                          : "Insiders";
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onTradeSource(value);
-                    }}
-                    className="hx-tab"
-                    data-active={state.tradeSource === value ? "true" : "false"}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--fog-dim)]">
-              Trades
-              {state.data?.topTrades.length
-                ? ` · ${state.data.topTrades.length}`
-                : ""}
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5">
-            {state.loading ? (
-              <p className="text-sm text-[color:var(--fog-dim)]">Loading…</p>
-            ) : state.error ? (
-              <p className="text-sm text-[color:var(--coral)]">{state.error}</p>
-            ) : state.data?.topTrades.length ? (
-              state.data.topTrades.map((trade) => (
-                <TradeRow
-                  key={trade.id}
-                  trade={trade}
-                  onOpenMember={onOpenMember}
-                />
-              ))
-            ) : (
-              <p className="text-sm text-[color:var(--fog-dim)]">
-                No matching trades.
-              </p>
-            )}
-          </div>
-          <div className="shrink-0 p-5 pt-3">
-            <Link
-              href={`/stocks/${encodeURIComponent(state.ticker)}?source=${encodeURIComponent(state.tradeSource)}`}
-              className="inline-flex w-full items-center justify-center rounded-md border border-[color:var(--mint)]/40 px-4 py-2.5 text-sm font-semibold text-[color:var(--mint)] transition-colors hover:bg-[color:var(--mint)] hover:text-[color:var(--ink)]"
-            >
-              Open full view
-            </Link>
-          </div>
-        </aside>
-
-        <div className="p-4 sm:p-5">
-          {state.loading ? (
-            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
-              Loading chart…
-            </div>
-          ) : state.data?.bars.length ? (
-            <PriceChart
-              key={`${state.ticker}-${state.tradeSource}`}
-              bars={state.data.bars}
-              trades={state.data.topTrades}
-              interactive
-            />
-          ) : (
-            <div className="flex h-[280px] items-center justify-center text-sm text-[color:var(--fog-dim)]">
-              No price history yet for this ticker.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const FILTER_PARAM_KEYS = [
   "tx",
@@ -1226,7 +1027,8 @@ function SectorOverlapActivitySection({
                       onOpenMember={onOpenMember}
                     />
                     {stockPanel ? (
-                      <StockPanel
+                      <TickerDetailView
+                        context="trending"
                         state={stockPanel}
                         onClose={onCloseStock}
                         onTradeSource={onTradeSource}

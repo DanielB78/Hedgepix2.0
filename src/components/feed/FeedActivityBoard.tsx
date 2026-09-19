@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { formatShortDate, formatAmountRange } from "@/lib/format";
+import { formatShortDate } from "@/lib/format";
 import {
   GENERAL_SECTOR_ORDER,
   nicheLabelsForParent,
 } from "@/lib/generalSectors";
-import { FEED_TREND_TRADING_DAYS } from "@/lib/feedActivity/weights";
+import {
+  TickerDetailView,
+  type TickerDetailState,
+} from "@/components/TickerDetailView";
+import type { StockPreviewPayload } from "@/lib/feed";
+import type { ChartTradeSource } from "@/lib/chartTrades";
 import type {
   FeedFilters,
   FeedSourceFilter,
@@ -25,10 +30,20 @@ const TIMEFRAMES: Array<{ id: FeedTimeframe; label: string }> = [
   { id: "1y", label: "1 Year" },
 ];
 
-function sourceLabel(source: string): string {
-  if (source === "house") return "House";
-  if (source === "senate") return "Senate";
-  return "Insider";
+async function loadStockPreview(
+  ticker: string,
+  tradeSource: ChartTradeSource,
+): Promise<StockPreviewPayload> {
+  const res = await fetch(
+    `/api/feed/preview?kind=stock&ticker=${encodeURIComponent(ticker)}&source=${tradeSource}`,
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+  return (await res.json()) as StockPreviewPayload;
 }
 
 function pct(n: number | null | undefined, digits = 1): string {
@@ -372,276 +387,41 @@ function FilterBar({
   );
 }
 
-function TickerExpand({ row }: { row: FeedTickerRow }) {
-  const b = row.breakdown;
-  const c = row.components;
-  const best = row.strongestBuyer;
 
-  return (
-    <div className="grid gap-4 border-t border-[var(--line)] bg-[var(--panel-muted)] px-3 py-3 lg:grid-cols-2">
-      <div className="space-y-3 text-[12px]">
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Why this appears
-          </div>
-          {row.whyNoteworthy.length > 0 ? (
-            <ul className="space-y-1 text-[var(--ink)]">
-              {row.whyNoteworthy.map((line) => (
-                <li key={line} className="flex gap-1.5">
-                  <span className="text-[var(--fog-mute)]">•</span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[var(--fog-dim)]">No highlight summary.</p>
-          )}
-        </div>
-
-        {best ? (
-          <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-              Strongest signal
-            </div>
-            <dl className="grid grid-cols-[8.5rem_1fr] gap-x-2 gap-y-1">
-              <dt className="text-[var(--fog-dim)]">Buyer</dt>
-              <dd className="font-medium text-[var(--ink)]">
-                {best.person ?? "—"}
-                <span className="ml-1.5 font-normal text-[var(--fog-mute)]">
-                  {sourceLabel(best.source)}
-                  {best.officerTitle ? ` · ${best.officerTitle}` : ""}
-                </span>
-              </dd>
-              <dt className="text-[var(--fog-dim)]">Buyer score</dt>
-              <dd className="tabular-nums">{best.score}</dd>
-              {best.hasSectorOverlap ? (
-                <>
-                  <dt className="text-[var(--fog-dim)]">Sector overlap</dt>
-                  <dd>
-                    {best.overlapMemberLabel && best.overlapTickerLabel
-                      ? `${best.overlapMemberLabel} ↔ ${best.overlapTickerLabel}`
-                      : best.overlapBand}
-                    {best.overlapSimilarity != null
-                      ? ` · ${best.overlapSimilarity.toFixed(2)}`
-                      : best.overlapBand === "direct"
-                        ? " · direct"
-                        : ""}
-                  </dd>
-                </>
-              ) : null}
-              <dt className="text-[var(--fog-dim)]">Buying pattern</dt>
-              <dd>
-                {best.buyCount} purchase{best.buyCount === 1 ? "" : "s"}
-                {best.consecutiveStreak >= 2
-                  ? ` · ${best.consecutiveStreak} consecutive`
-                  : ""}
-                {best.lowerPriceRepeatBuys > 0
-                  ? ` · ${best.lowerPriceRepeatBuys} at lower prices`
-                  : ""}
-                {best.declineSinceFirstBuyPct != null &&
-                best.declineSinceFirstBuyPct < 0
-                  ? ` · ${pct(best.declineSinceFirstBuyPct)} since first`
-                  : ""}
-              </dd>
-              {(() => {
-                const ratios = best.occasions
-                  .map((o) => o.personSizeRatio)
-                  .filter((r): r is number => r != null && Number.isFinite(r));
-                const latestRatio =
-                  best.occasions
-                    .slice()
-                    .sort((a, b) =>
-                      (b.disclosureDate ?? b.transactionDate).localeCompare(
-                        a.disclosureDate ?? a.transactionDate,
-                      ),
-                    )
-                    .find((o) => o.personSizeRatio != null)?.personSizeRatio ??
-                  null;
-                if (latestRatio == null && ratios.length === 0) return null;
-                return (
-                  <>
-                    <dt className="text-[var(--fog-dim)]">Trade size</dt>
-                    <dd>
-                      {latestRatio != null
-                        ? `latest purchase ~${latestRatio.toFixed(1)}× typical disclosed size`
-                        : null}
-                      {best.unusuallyLargeBuys > 0
-                        ? ` · ${best.unusuallyLargeBuys} unusually large`
-                        : ""}
-                    </dd>
-                  </>
-                );
-              })()}
-              <dt className="text-[var(--fog-dim)]">Latest disclosure</dt>
-              <dd>{daysAgoLabel(best.latestDisclosure)}</dd>
-            </dl>
-            {row.distinctOverlapBuyers > 1 ? (
-              <p className="mt-1 text-[11px] text-[var(--fog-dim)]">
-                +{row.distinctOverlapBuyers - 1} additional sector-overlap
-                buyer{row.distinctOverlapBuyers - 1 === 1 ? "" : "s"}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Relative weakness
-          </div>
-          <dl className="grid grid-cols-[8rem_1fr] gap-x-2 gap-y-1 tabular-nums">
-            <dt className="text-[var(--fog-dim)]">20D</dt>
-            <dd>{pct(c.return_20d)}</dd>
-            <dt className="text-[var(--fog-dim)]">vs sector</dt>
-            <dd>{pct(c.relative_sector_return_20d)}</dd>
-            <dt className="text-[var(--fog-dim)]">vs market</dt>
-            <dd>{pct(c.relative_market_return_20d)}</dd>
-          </dl>
-        </div>
-
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Score aggregation
-          </div>
-          <ul className="space-y-0.5 text-[var(--fog-dim)]">
-            <li>
-              Best buyer/ticker signal → {b.bestBuyerScore.toFixed(1)}
-            </li>
-            <li>
-              Second strongest overlap buyer (40%) →{" "}
-              {b.secondBuyerContribution.toFixed(1)}
-            </li>
-            <li>
-              Additional overlap buyers (20%) →{" "}
-              {b.additionalBuyerContribution.toFixed(1)}
-            </li>
-            <li>
-              Distinct-buyer context (tiny) → {b.distinctBuyerContext.toFixed(1)}
-            </li>
-            <li className="font-medium text-[var(--ink)]">
-              Total score {b.total}
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <div className="space-y-3 text-[12px]">
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Buyer / ticker patterns
-          </div>
-          <div className="space-y-2">
-            {row.buyerSignals.slice(0, 6).map((streak) => (
-              <div
-                key={streak.personKey}
-                className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1.5"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-medium text-[var(--ink)]">
-                    {streak.person ?? "Unknown"}
-                    <span className="ml-1.5 font-normal text-[var(--fog-mute)]">
-                      {sourceLabel(streak.source)}
-                      {streak.hasSectorOverlap ? " · overlap" : ""}
-                      {streak.isAveragingDown ? " · averaging down" : ""}
-                    </span>
-                  </span>
-                  <span className="text-[11px] tabular-nums text-[var(--fog-dim)]">
-                    score {streak.score}
-                    {streak.consecutiveStreak >= 2
-                      ? ` · streak ${streak.consecutiveStreak}`
-                      : ""}
-                  </span>
-                </div>
-                <ul className="mt-1 space-y-0.5 text-[11px] text-[var(--fog-dim)]">
-                  {streak.occasions.map((o) => (
-                    <li key={o.key} className="flex flex-wrap gap-2 tabular-nums">
-                      <span className="w-20 shrink-0">
-                        {formatShortDate(o.transactionDate)}
-                      </span>
-                      <span className="hx-buy">Buy</span>
-                      <span>{pct(o.return20dBefore)} pre</span>
-                      {o.priceAtTrade != null ? (
-                        <span>~${o.priceAtTrade.toFixed(2)}</span>
-                      ) : null}
-                      {o.isAveragingDownStep ? <span>lower price</span> : null}
-                      {o.isUnusuallyLarge ? <span>large vs person</span> : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--fog-mute)]">
-            Purchases (newest first)
-          </div>
-          <ul className="space-y-1.5">
-            {row.occasions.slice(0, 20).map((o) => (
-              <li
-                key={o.key}
-                className="rounded border border-[var(--line)] bg-[var(--panel)] px-2 py-1.5"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span>
-                    <span className="tabular-nums text-[var(--fog-dim)]">
-                      {formatShortDate(o.transactionDate)}
-                    </span>
-                    <span className="mx-1.5 font-medium text-[var(--ink)]">
-                      {o.person}
-                    </span>
-                    <span className="text-[var(--fog-mute)]">
-                      {sourceLabel(o.source)}
-                    </span>
-                  </span>
-                  <span className="hx-buy text-[11px]">Buy</span>
-                </div>
-                <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-[var(--fog-dim)]">
-                  <span>
-                    {formatAmountRange(
-                      o.disclosedMin,
-                      o.disclosedMax,
-                      o.amountRange,
-                    )}
-                    {o.purchaseEstimateIsApproximate &&
-                    o.purchaseEstimate != null
-                      ? " · est. midpoint used for size ranking only"
-                      : ""}
-                  </span>
-                  <span>
-                    {FEED_TREND_TRADING_DAYS}D at purchase:{" "}
-                    {pct(o.return20dBefore)}
-                  </span>
-                  {o.hasSectorOverlap ? (
-                    <span className="text-[var(--accent)]">
-                      Sector overlap
-                      {o.overlapMemberLabel && o.overlapTickerLabel
-                        ? `: ${o.overlapMemberLabel} ↔ ${o.overlapTickerLabel}`
-                        : ""}
-                      {o.overlapSimilarity != null
-                        ? ` (${o.overlapSimilarity.toFixed(2)})`
-                        : ""}
-                    </span>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
+function preferredFeedSource(
+  row: FeedTickerRow,
+): import("@/lib/chartTrades").ChartTradeSource {
+  const types = new Set(row.activeSourceTypes);
+  const hasCongress = types.has("house") || types.has("senate");
+  const hasInsider = types.has("insider");
+  if (hasCongress && hasInsider) return "both";
+  if (hasInsider && !hasCongress) return "ceo";
+  if (types.has("house") && !types.has("senate")) return "house";
+  if (types.has("senate") && !types.has("house")) return "senate";
+  return "both";
 }
 
-function FeedRow({ row }: { row: FeedTickerRow }) {
-  const [open, setOpen] = useState(false);
-
+function FeedRow({
+  row,
+  open,
+  detail,
+  onToggle,
+  onTradeSource,
+  onClose,
+}: {
+  row: FeedTickerRow;
+  open: boolean;
+  detail: import("@/components/TickerDetailView").TickerDetailState | null;
+  onToggle: () => void;
+  onTradeSource: (source: import("@/lib/chartTrades").ChartTradeSource) => void;
+  onClose: () => void;
+}) {
   return (
     <>
       <tr
         data-testid={`feed-row-${row.ticker}`}
         className="cursor-pointer border-b border-[var(--line)] hover:bg-[var(--panel-muted)]"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
       >
         <td className="whitespace-nowrap py-2 pl-3 pr-2 text-[12px]">
           <span className="inline-flex items-center gap-1 font-mono font-semibold text-[var(--ink)]">
@@ -707,10 +487,24 @@ function FeedRow({ row }: { row: FeedTickerRow }) {
           {daysAgoLabel(row.latestBuyDisclosure ?? row.latestBuyTransaction)}
         </td>
       </tr>
-      {open ? (
+      {open && detail ? (
         <tr className="border-b border-[var(--line)]">
-          <td colSpan={10} className="p-0">
-            <TickerExpand row={row} />
+          <td colSpan={10} className="bg-[var(--panel-muted)] p-2 sm:p-3">
+            <TickerDetailView
+              context="feed"
+              state={detail}
+              feedRow={row}
+              onClose={onClose}
+              onTradeSource={onTradeSource}
+              preferredSources={["both", "congress", "house", "senate", "ceo"]}
+              initialFocusDate={
+                row.strongestBuyer?.occasions
+                  ?.slice()
+                  .sort((a, b) =>
+                    b.transactionDate.localeCompare(a.transactionDate),
+                  )[0]?.transactionDate ?? null
+              }
+            />
           </td>
         </tr>
       ) : null}
@@ -733,12 +527,63 @@ export function FeedActivityBoard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [openTicker, setOpenTicker] = useState<string | null>(null);
+  const [detail, setDetail] = useState<TickerDetailState | null>(null);
+  const requestId = useRef(0);
 
   function onNavigate(href: string) {
     startTransition(() => {
       router.push(href);
     });
   }
+
+  const openDetail = useCallback(
+    async (row: FeedTickerRow, tradeSource?: ChartTradeSource) => {
+      const source = tradeSource ?? preferredFeedSource(row);
+      const id = ++requestId.current;
+      setOpenTicker(row.ticker);
+      setDetail({
+        ticker: row.ticker,
+        tradeSource: source,
+        data: null,
+        loading: true,
+        error: null,
+      });
+      try {
+        const data = await loadStockPreview(row.ticker, source);
+        if (id !== requestId.current) return;
+        setDetail({
+          ticker: row.ticker,
+          tradeSource: source,
+          data,
+          loading: false,
+          error: null,
+        });
+      } catch (err) {
+        if (id !== requestId.current) return;
+        setDetail({
+          ticker: row.ticker,
+          tradeSource: source,
+          data: null,
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to load",
+        });
+      }
+    },
+    [],
+  );
+
+  const toggleRow = useCallback(
+    (row: FeedTickerRow) => {
+      if (openTicker === row.ticker) {
+        setOpenTicker(null);
+        setDetail(null);
+        return;
+      }
+      void openDetail(row);
+    },
+    [openDetail, openTicker],
+  );
 
   const visible = useMemo(() => rows, [rows]);
 
@@ -823,7 +668,22 @@ export function FeedActivityBoard({
                   </td>
                 </tr>
               ) : (
-                visible.map((row) => <FeedRow key={row.ticker} row={row} />)
+                visible.map((row) => (
+                  <FeedRow
+                    key={row.ticker}
+                    row={row}
+                    open={openTicker === row.ticker}
+                    detail={
+                      openTicker === row.ticker ? detail : null
+                    }
+                    onToggle={() => toggleRow(row)}
+                    onClose={() => {
+                      setOpenTicker(null);
+                      setDetail(null);
+                    }}
+                    onTradeSource={(s) => void openDetail(row, s)}
+                  />
+                ))
               )}
             </tbody>
           </table>

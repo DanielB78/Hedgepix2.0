@@ -55,13 +55,20 @@ async function main() {
   if (n > 0) {
     const firstRow = page.locator('tbody tr[data-testid^="feed-row-"]').first();
     await firstRow.click();
-    await page.waitForSelector("text=Why this appears", { timeout: 10000 });
-    const strongest = await page.getByText("Strongest signal").count();
-    assert.ok(strongest >= 1);
-    const patterns = await page.getByText("Buyer / ticker patterns").count();
-    assert.ok(patterns >= 1);
-    const rel = await page.getByText("Relative weakness").count();
-    assert.ok(rel >= 1);
+    await page.waitForSelector('[data-testid="feed-ticker-detail"]', {
+      timeout: 30000,
+    });
+    await page.waitForSelector('[data-testid="feed-strongest-signals"]', {
+      timeout: 15000,
+    });
+    const signals = await page.getByText("Strongest Signals").count();
+    assert.ok(signals >= 1);
+    // Chart should load (PriceChart uses SVG)
+    await page.waitForSelector('[data-testid="feed-ticker-detail"] svg', {
+      timeout: 30000,
+    });
+    const viewTrades = await page.getByTestId("feed-view-all-trades").count();
+    assert.ok(viewTrades >= 1);
     await page.screenshot({
       path: `${OUT}/feed_expanded_ticker.png`,
       fullPage: false,
