@@ -448,20 +448,21 @@ function FeedStrongestSignalsPanel({
           </p>
         )}
 
-        {row.relativeSectorReturn != null ||
-        row.relativeMarketReturn != null ||
-        row.currentTrendReturn != null ? (
+        {(row.relativeSectorReturn != null && row.relativeSectorReturn < 0) ||
+        (row.relativeMarketReturn != null && row.relativeMarketReturn < 0) ||
+        (row.currentTrendReturn != null && row.currentTrendReturn < 0) ? (
           <SignalSection title="Relative weakness">
             {row.currentTrendReturn != null ? (
               <p>20D: {pctLabel(row.currentTrendReturn)}</p>
             ) : null}
-            {row.relativeSectorReturn != null ? (
+            {row.relativeSectorReturn != null && row.relativeSectorReturn < 0 ? (
               <p className="text-[color:var(--fog-dim)]">
                 vs sector: {pctLabel(row.relativeSectorReturn)}
               </p>
             ) : null}
             {row.relativeMarketReturn != null &&
-            row.relativeSectorReturn == null ? (
+            row.relativeMarketReturn < 0 &&
+            !(row.relativeSectorReturn != null && row.relativeSectorReturn < 0) ? (
               <p className="text-[color:var(--fog-dim)]">
                 vs market: {pctLabel(row.relativeMarketReturn)}
               </p>
