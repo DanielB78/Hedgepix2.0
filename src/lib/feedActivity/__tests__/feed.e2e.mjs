@@ -1,0 +1,74 @@
+/**
+ * Playwright smoke test for Feed page.
+ * Run: node src/lib/feedActivity/__tests__/feed.e2e.mjs
+ */
+import { chromium } from "playwright";
+import assert from "node:assert/strict";
+import { mkdirSync } from "node:fs";
+
+const BASE = process.env.FEED_URL ?? "http://localhost:3000/feed";
+const OUT = "/opt/cursor/artifacts";
+mkdirSync(OUT, { recursive: true });
+
+async function main() {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  page.setDefaultTimeout(120000);
+
+  console.log("goto", BASE);
+  await page.goto(BASE, { waitUntil: "networkidle" });
+  await page.waitForSelector('[data-testid="feed-result-count"]');
+
+  const countText = await page.locator('[data-testid="feed-result-count"]').innerText();
+  console.log("count:", countText);
+  assert.match(countText, /\d[\d,]* ticker/);
+
+  // Nav active
+  const feedNav = page.locator('nav a', { hasText: "Feed" }).first();
+  await assert.ok(await feedNav.count());
+
+  await page.screenshot({ path: `${OUT}/feed_initial_3m.png`, fullPage: false });
+
+  // Switch to 6 months
+  await page.click('[data-testid="feed-tf-6m"]');
+  await page.waitForURL(/tf=6m/);
+  await page.waitForSelector('[data-testid="feed-result-count"]');
+  await page.waitForTimeout(500);
+  const sixText = await page.locator('[data-testid="feed-result-count"]').innerText();
+  console.log("6m:", sixText);
+  await page.screenshot({ path: `${OUT}/feed_6m.png`, fullPage: false });
+
+  // Filter downtrend
+  await page.selectOption('[data-testid="feed-trend"]', "down");
+  await page.waitForURL(/trend=down/);
+  await page.waitForTimeout(800);
+  const downText = await page.locator('[data-testid="feed-result-count"]').innerText();
+  console.log("downtrend filter:", downText);
+  await page.screenshot({ path: `${OUT}/feed_downtrend_filter.png`, fullPage: false });
+
+  const n = Number(downText.replace(/,/g, "").match(/(\d+)/)?.[1] ?? "0");
+  if (n > 0) {
+    await page.locator("tbody tr").first().click();
+    await page.waitForTimeout(500);
+    const why = await page.getByText("Why this ranked").count();
+    assert.ok(why >= 1, "expanded row should explain ranking");
+    const streak = await page.getByText("Buy streaks").count();
+    assert.ok(streak >= 1);
+    await page.screenshot({
+      path: `${OUT}/feed_expanded_ticker.png`,
+      fullPage: false,
+    });
+  }
+
+  // Back to 3m all
+  await page.click('[data-testid="feed-tf-3m"]');
+  await page.waitForTimeout(500);
+
+  console.log("feed e2e: ok");
+  await browser.close();
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
