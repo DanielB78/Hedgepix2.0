@@ -49,3 +49,16 @@ next-env.d.ts
 
 # Kadoa dataset cache
 backend/.cache/
+
+# Local offline DB runtime
+.local/
+local-db/postgrest.log
+local-db/gateway.log
+local-db/keys.env
+local-db/postgrest.conf
+local-db/seed-month.log
+
+# Generated / bulky congress sector artifacts (JSON exposure is kept)
+data/congress-sector/*.sqlite
+data/congress-sector/congress_member_sector_evidence.csv
+data/congress-sector/sector_label_embeddings.json

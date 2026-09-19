@@ -230,6 +230,48 @@ export async function collectEligibleTickers(supabase) {
     from += TRADE_PAGE_SIZE;
   }
 
+  // Also include Form 4 officer (Insiders) tickers so CEO/CFO charts + returns work.
+  from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("ceo_stock_purchases")
+      .select("ticker, issuer_name, transaction_date")
+      .not("ticker", "is", null)
+      .range(from, from + TRADE_PAGE_SIZE - 1);
+
+    if (error) {
+      // Table may be missing in older local DBs — skip quietly.
+      if (/does not exist|Could not find/i.test(error.message)) break;
+      throw new Error(error.message);
+    }
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      const ticker = normalizeTicker(row.ticker);
+      if (!ticker) continue;
+      if (!isLikelyListedEquity(ticker, row.issuer_name)) {
+        if (!seenAssets.has(ticker)) seenAssets.set(ticker, false);
+        continue;
+      }
+      seenAssets.set(ticker, true);
+      let acc = byTicker.get(ticker);
+      if (!acc) {
+        acc = { ticker, earliest: row.transaction_date };
+        byTicker.set(ticker, acc);
+      }
+      if (
+        row.transaction_date &&
+        (!acc.earliest || row.transaction_date < acc.earliest)
+      ) {
+        acc.earliest = row.transaction_date;
+      }
+    }
+
+    if (rows.length < TRADE_PAGE_SIZE) break;
+    from += TRADE_PAGE_SIZE;
+  }
+
   const skippedUnsupported = [...seenAssets.entries()]
     .filter(([, eligible]) => !eligible)
     .map(([ticker]) => ticker)

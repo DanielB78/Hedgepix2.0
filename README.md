@@ -27,6 +27,24 @@ during updates, then read from Supabase by the website.
 - **Stock detail** (`/stocks/[ticker]`) — cached daily closing-price chart with congressional purchase/sale markers on **transaction date**
 - **Member pages** (`/members/[slug]`) — activity feed and estimated current stock holdings since 2012
 
+## Local database (offline from cloud Supabase)
+
+When the hosted Supabase project is overloaded or over the free-tier disk limit,
+run a local Postgres + PostgREST stack instead (same JS client API):
+
+```bash
+sudo apt-get install -y postgresql postgresql-contrib
+npm run local:db:bootstrap   # roles, schema, .env.local + backend/.env
+npm run local:db:start       # Postgres + PostgREST + gateway
+npm run local:db:seed-month  # ~1 month of Congress / CEO / lighter SEC data
+npm run local:dev            # Next.js (clears inherited cloud env)
+npm run local:db:stop        # fully stop local stack when done
+```
+
+Details: `local-db/README.md`. Do **not** run full Form 13F / N-PORT backfills
+into the local DB without filtering — those datasets are multi‑GB. The stack
+does not stay running; use `local:db:stop` to shut Postgres/PostgREST/gateway down.
+
 ## Setup
 
 1. Copy `.env.example` to `.env.local` and fill in public Supabase keys, optional `SUPABASE_SERVICE_ROLE_KEY`, and `ALPACA_API_KEY` / `ALPACA_API_SECRET`.

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { LandingPage } from "@/components/LandingPage";
+import { AppShell } from "@/components/AppChrome";
+import { HomeLanding } from "@/components/HomeLanding";
 
 export const dynamic = "force-dynamic";
 
@@ -17,5 +18,10 @@ export default async function HomePage({ searchParams }: PageProps) {
     }
     redirect(`/app?${qs.toString()}`);
   }
-  return <LandingPage />;
+
+  return (
+    <AppShell active="home" title="Home">
+      <HomeLanding />
+    </AppShell>
+  );
 }

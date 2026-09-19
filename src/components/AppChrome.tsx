@@ -4,14 +4,12 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import {
-  Briefcase,
+  Bookmark,
   Building2,
-  FileText,
+  Home,
   Landmark,
-  LineChart,
   Menu,
-  Newspaper,
-  PieChart,
+  Search,
   TrendingUp,
   Users,
   X,
@@ -19,10 +17,14 @@ import {
 import { AuthControls } from "@/components/AuthControls";
 
 export type ChromeNavKey =
+  | "home"
+  | "watchlist"
   | "feed"
   | "trending"
   | "house"
   | "senate"
+  | "insiders"
+  | "find-trades"
   | "ceo-buys"
   | "investors"
   | "filings"
@@ -36,23 +38,32 @@ type NavItem = {
   key: ChromeNavKey;
   href: string;
   label: string;
-  icon: typeof LineChart;
+  icon: typeof TrendingUp;
 };
 
+/** Primary research navigation. */
 const NAV_ITEMS: NavItem[] = [
-  { key: "feed", href: "/app", label: "Overview", icon: LineChart },
-  { key: "news", href: "/news", label: "News", icon: Newspaper },
-  { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
-  { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
-  { key: "ceo-buys", href: "/ceo-buys", label: "Insiders", icon: Users },
-  { key: "investors", href: "/investors", label: "Investors", icon: Briefcase },
-  { key: "filings", href: "/filings", label: "Filings", icon: FileText },
-  { key: "funds", href: "/funds", label: "Funds", icon: PieChart },
+  { key: "home", href: "/", label: "Home", icon: Home },
+  { key: "watchlist", href: "/watchlist", label: "Watchlist", icon: Bookmark },
   {
     key: "trending",
     href: "/app?view=trending",
     label: "Trending",
     icon: TrendingUp,
+  },
+  { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
+  { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
+  {
+    key: "insiders",
+    href: "/app?view=insiders",
+    label: "Insiders",
+    icon: Users,
+  },
+  {
+    key: "find-trades",
+    href: "/find-trades",
+    label: "Find Trades",
+    icon: Search,
   },
 ];
 
@@ -61,25 +72,26 @@ function resolveActive(
   view: string | null,
   fallback?: ChromeNavKey,
 ): ChromeNavKey {
-  if (pathname.startsWith("/news")) return "news";
-  if (pathname.startsWith("/ceo-buys")) return "ceo-buys";
-  if (pathname.startsWith("/investors")) return "investors";
-  if (pathname.startsWith("/filings")) return "filings";
-  if (pathname.startsWith("/funds")) return "funds";
+  if (pathname === "/" || pathname === "") return "home";
+  if (pathname.startsWith("/watchlist")) return "watchlist";
+  if (pathname.startsWith("/feed")) return "watchlist";
+  if (pathname.startsWith("/find-trades")) return "find-trades";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
+  if (pathname.startsWith("/ceo-buys")) return "insiders";
   if (pathname === "/app" || pathname.startsWith("/app")) {
     if (view === "trending") return "trending";
-    if (view === "house") return "house";
     if (view === "senate") return "senate";
-    return "feed";
+    if (view === "insiders" || view === "ceo") return "insiders";
+    if (view === "house" || view === "feed" || !view) return "house";
+    return "house";
   }
-  return fallback ?? "feed";
+  return fallback ?? "home";
 }
 
 function SidebarBrand() {
   return (
-    <Link href="/app" className="flex items-center gap-2.5 px-3 py-1 no-underline">
+    <Link href="/" className="flex items-center gap-2.5 px-3 py-1 no-underline">
       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[11px] font-semibold tracking-wide text-white">
         HX
       </span>
@@ -101,7 +113,9 @@ function SidebarNav({
     <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const activeNow = active === item.key;
+        const activeNow =
+          active === item.key ||
+          (item.key === "watchlist" && active === "feed");
         return (
           <Link
             key={item.key}
@@ -261,7 +275,7 @@ export function AppShell({
     <Suspense
       fallback={
         <AppShellFrame
-          active={active ?? "feed"}
+          active={active ?? "home"}
           title={title}
           description={description}
           actions={actions}
@@ -301,7 +315,11 @@ export function SideNav({
 }) {
   return (
     <div className="mb-4 md:hidden">
-      <SidebarNav active={active === "landing" ? "feed" : active} />
+      <SidebarNav
+        active={
+          active === "landing" || active === "feed" ? "watchlist" : active
+        }
+      />
     </div>
   );
 }
@@ -316,7 +334,8 @@ export function TopTabs({ active }: { active: ChromeNavKey }) {
           href={item.href}
           className={[
             "rounded-md px-2.5 py-1.5 text-[12px] no-underline",
-            active === item.key
+            active === item.key ||
+            (item.key === "watchlist" && active === "feed")
               ? "bg-[var(--accent-soft)] text-[var(--accent)]"
               : "text-[var(--fog-dim)]",
           ].join(" ")}
