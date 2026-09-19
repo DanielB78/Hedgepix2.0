@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import {
+  Bookmark,
   Building2,
+  Home,
   Landmark,
   Menu,
-  Newspaper,
   Search,
   TrendingUp,
   Users,
@@ -16,6 +17,8 @@ import {
 import { AuthControls } from "@/components/AuthControls";
 
 export type ChromeNavKey =
+  | "home"
+  | "watchlist"
   | "feed"
   | "trending"
   | "house"
@@ -38,9 +41,16 @@ type NavItem = {
   icon: typeof TrendingUp;
 };
 
-/** House / Senate / Insiders focused navigation. */
+/** Primary research navigation. */
 const NAV_ITEMS: NavItem[] = [
-  { key: "feed", href: "/feed", label: "Feed", icon: Newspaper },
+  { key: "home", href: "/", label: "Home", icon: Home },
+  { key: "watchlist", href: "/watchlist", label: "Watchlist", icon: Bookmark },
+  {
+    key: "trending",
+    href: "/app?view=trending",
+    label: "Trending",
+    icon: TrendingUp,
+  },
   { key: "house", href: "/app?view=house", label: "House", icon: Building2 },
   { key: "senate", href: "/app?view=senate", label: "Senate", icon: Landmark },
   {
@@ -48,12 +58,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/app?view=insiders",
     label: "Insiders",
     icon: Users,
-  },
-  {
-    key: "trending",
-    href: "/app?view=trending",
-    label: "Trending",
-    icon: TrendingUp,
   },
   {
     key: "find-trades",
@@ -68,7 +72,9 @@ function resolveActive(
   view: string | null,
   fallback?: ChromeNavKey,
 ): ChromeNavKey {
-  if (pathname.startsWith("/feed")) return "feed";
+  if (pathname === "/" || pathname === "") return "home";
+  if (pathname.startsWith("/watchlist")) return "watchlist";
+  if (pathname.startsWith("/feed")) return "watchlist";
   if (pathname.startsWith("/find-trades")) return "find-trades";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/members")) return "members";
@@ -80,12 +86,12 @@ function resolveActive(
     if (view === "house" || view === "feed" || !view) return "house";
     return "house";
   }
-  return fallback ?? "house";
+  return fallback ?? "home";
 }
 
 function SidebarBrand() {
   return (
-    <Link href="/app?view=house" className="flex items-center gap-2.5 px-3 py-1 no-underline">
+    <Link href="/" className="flex items-center gap-2.5 px-3 py-1 no-underline">
       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--accent)] text-[11px] font-semibold tracking-wide text-white">
         HX
       </span>
@@ -107,7 +113,9 @@ function SidebarNav({
     <nav className="flex flex-1 flex-col gap-0.5 px-2 py-3" aria-label="Primary">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const activeNow = active === item.key;
+        const activeNow =
+          active === item.key ||
+          (item.key === "watchlist" && active === "feed");
         return (
           <Link
             key={item.key}
@@ -267,7 +275,7 @@ export function AppShell({
     <Suspense
       fallback={
         <AppShellFrame
-          active={active ?? "house"}
+          active={active ?? "home"}
           title={title}
           description={description}
           actions={actions}
@@ -307,7 +315,11 @@ export function SideNav({
 }) {
   return (
     <div className="mb-4 md:hidden">
-      <SidebarNav active={active === "landing" ? "feed" : active} />
+      <SidebarNav
+        active={
+          active === "landing" || active === "feed" ? "watchlist" : active
+        }
+      />
     </div>
   );
 }
@@ -322,7 +334,8 @@ export function TopTabs({ active }: { active: ChromeNavKey }) {
           href={item.href}
           className={[
             "rounded-md px-2.5 py-1.5 text-[12px] no-underline",
-            active === item.key
+            active === item.key ||
+            (item.key === "watchlist" && active === "feed")
               ? "bg-[var(--accent-soft)] text-[var(--accent)]"
               : "text-[var(--fog-dim)]",
           ].join(" ")}

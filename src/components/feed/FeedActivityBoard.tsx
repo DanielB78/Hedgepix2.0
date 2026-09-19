@@ -97,7 +97,7 @@ function buildHref(timeframe: FeedTimeframe, filters: FeedFilters): string {
     params.set("sectors", filters.nicheLabels.join("|"));
   }
   const qs = params.toString();
-  return qs ? `/feed?${qs}` : "/feed";
+  return qs ? `/watchlist?${qs}` : "/watchlist";
 }
 
 function NumInput({
@@ -625,7 +625,7 @@ export function FeedActivityBoard({
             {visible.length === 1 ? "" : "s"}
           </h2>
           <span className="text-[11px] text-[var(--fog-mute)]">
-            from {tradeCount.toLocaleString()} trades · sorted by Feed score
+            from {tradeCount.toLocaleString()} trades · sorted by Watchlist score
           </span>
         </div>
 
@@ -664,7 +664,7 @@ export function FeedActivityBoard({
                     colSpan={10}
                     className="px-3 py-8 text-center text-[13px] text-[var(--fog-dim)]"
                   >
-                    No tickers match the current Feed criteria.
+                    No tickers match the current Watchlist criteria.
                   </td>
                 </tr>
               ) : (

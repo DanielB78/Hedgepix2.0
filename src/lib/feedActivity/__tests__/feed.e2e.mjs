@@ -6,7 +6,7 @@ import { chromium } from "playwright";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
 
-const BASE = process.env.FEED_URL ?? "http://localhost:3000/feed";
+const BASE = process.env.FEED_URL ?? "http://localhost:3000/watchlist";
 const OUT = "/opt/cursor/artifacts";
 mkdirSync(OUT, { recursive: true });
 
@@ -23,8 +23,8 @@ async function main() {
   console.log("count:", countText);
   assert.match(countText, /\d[\d,]* ticker/);
 
-  // Nav active
-  const feedNav = page.locator('nav a', { hasText: "Feed" }).first();
+  // Nav active — Watchlist label
+  const feedNav = page.locator('nav a', { hasText: "Watchlist" }).first();
   await assert.ok(await feedNav.count());
 
   await page.screenshot({ path: `${OUT}/feed_initial_3m.png`, fullPage: false });

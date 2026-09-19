@@ -431,7 +431,7 @@ function FeedStrongestSignalsPanel({
           Strongest Signals
         </p>
         <p className="mt-0.5 text-[11px] text-[color:var(--fog-mute)]">
-          Feed score {row.score}
+          Watchlist score {row.score}
         </p>
       </div>
 
