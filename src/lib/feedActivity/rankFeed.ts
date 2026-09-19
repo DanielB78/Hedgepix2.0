@@ -488,22 +488,30 @@ export function scoreBuyerTicker(input: {
 }
 
 export function aggregateTickerScore(
-  buyerScores: number[],
+  buyers: Array<{ score: number; hasSectorOverlap: boolean }>,
   distinctBuyers: number,
 ): FeedScoreBreakdown {
-  const sorted = [...buyerScores].sort((a, b) => b - a);
-  const best = sorted[0] ?? 0;
-  const second = sorted[1] ?? 0;
-  const additional = sorted
-    .slice(2)
-    .filter((s) => s >= FEED_TICKER_AGGREGATION.additionalMinScore)
+  const sorted = [...buyers].sort((a, b) => b.score - a.score);
+  const best = sorted[0] ?? null;
+  const bestScore = best?.score ?? 0;
+
+  // Second + additional contributions come from other OVERLAP buyers only,
+  // so unrelated multi-buyer clusters cannot inflate the ticker score.
+  const otherOverlap = sorted
+    .slice(1)
+    .filter((b) => b.hasSectorOverlap);
+
+  const second = otherOverlap[0]?.score ?? 0;
+  const additional = otherOverlap
+    .slice(1)
+    .filter((b) => b.score >= FEED_TICKER_AGGREGATION.additionalMinScore)
     .slice(0, FEED_TICKER_AGGREGATION.maxAdditional);
 
-  const bestBuyerScore = best * FEED_TICKER_AGGREGATION.bestWeight;
+  const bestBuyerScore = bestScore * FEED_TICKER_AGGREGATION.bestWeight;
   const secondBuyerContribution =
     second * FEED_TICKER_AGGREGATION.secondWeight;
   const additionalBuyerContribution = additional.reduce(
-    (s, v) => s + v * FEED_TICKER_AGGREGATION.additionalWeight,
+    (s, v) => s + v.score * FEED_TICKER_AGGREGATION.additionalWeight,
     0,
   );
   const distinctBuyerContext =
@@ -1119,7 +1127,10 @@ export function rankFeedTickers(
     }
 
     const breakdown = aggregateTickerScore(
-      rescored.map((s) => s.score),
+      rescored.map((s) => ({
+        score: s.score,
+        hasSectorOverlap: s.hasSectorOverlap,
+      })),
       distinctBuyers,
     );
 

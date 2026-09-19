@@ -107,9 +107,15 @@ function testOverlapStrengthBands() {
 
 function testAggregationDoesNotSumAllBuyers() {
   // Eight weak one-buy scores must not beat one strong overlap pattern.
-  const strong = aggregateTickerScore([90], 1);
+  const strong = aggregateTickerScore(
+    [{ score: 90, hasSectorOverlap: true }],
+    1,
+  );
   const manyWeak = aggregateTickerScore(
-    [12, 11, 10, 9, 8, 7, 6, 5],
+    [12, 11, 10, 9, 8, 7, 6, 5].map((score) => ({
+      score,
+      hasSectorOverlap: false,
+    })),
     8,
   );
   assert.ok(
@@ -118,7 +124,20 @@ function testAggregationDoesNotSumAllBuyers() {
   );
   assert.ok(manyWeak.distinctBuyerContext < 2);
   assert.equal(strong.bestBuyerScore, 90);
-  assert.ok(manyWeak.secondBuyerContribution < manyWeak.bestBuyerScore);
+  // Non-overlap seconds must not contribute beyond tiny distinct-buyer context
+  assert.equal(manyWeak.secondBuyerContribution, 0);
+  assert.equal(manyWeak.additionalBuyerContribution, 0);
+
+  const withSecondOverlap = aggregateTickerScore(
+    [
+      { score: 80, hasSectorOverlap: true },
+      { score: 50, hasSectorOverlap: true },
+      { score: 40, hasSectorOverlap: false },
+    ],
+    3,
+  );
+  assert.equal(withSecondOverlap.secondBuyerContribution, 20); // 50 * 0.4
+  assert.equal(withSecondOverlap.additionalBuyerContribution, 0); // non-overlap ignored
 }
 
 function makeBuy(

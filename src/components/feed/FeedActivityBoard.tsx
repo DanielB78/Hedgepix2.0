@@ -507,10 +507,11 @@ function TickerExpand({ row }: { row: FeedTickerRow }) {
               Best buyer/ticker signal → {b.bestBuyerScore.toFixed(1)}
             </li>
             <li>
-              Second strongest (40%) → {b.secondBuyerContribution.toFixed(1)}
+              Second strongest overlap buyer (40%) →{" "}
+              {b.secondBuyerContribution.toFixed(1)}
             </li>
             <li>
-              Additional strong buyers (20%) →{" "}
+              Additional overlap buyers (20%) →{" "}
               {b.additionalBuyerContribution.toFixed(1)}
             </li>
             <li>
