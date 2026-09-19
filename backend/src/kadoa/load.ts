@@ -40,12 +40,18 @@ export type LoadKadoaResult = {
 export async function loadKadoaCongressStockTrades(options?: {
   dataDir?: string;
   refresh?: boolean;
+  /** Keep trades with disclosure_date (or filing/notification) >= this YYYY-MM-DD. */
+  minDisclosureDate?: string;
+  /** When set, only keep filers in this chamber. */
+  chamber?: "house" | "senate";
 }): Promise<LoadKadoaResult> {
   const paths = await ensureKadoaDataset({
     dataDir: options?.dataDir,
     refresh: options?.refresh,
   });
   const isLikelyListedEquity = await loadEquityFn();
+  const minDisclosure = options?.minDisclosureDate?.trim() || null;
+  const chamberFilter = options?.chamber ?? null;
 
   const files = (await readdir(paths.filerDir)).filter((f) =>
     f.endsWith(".json"),
@@ -57,6 +63,7 @@ export async function loadKadoaCongressStockTrades(options?: {
   let stockRowsRetained = 0;
   let nonStockRowsDiscarded = 0;
   let purchaseSaleSkipped = 0;
+  let beforeDateSkipped = 0;
 
   const members = new Set<string>();
   const tickers = new Set<string>();
@@ -90,6 +97,10 @@ export async function loadKadoaCongressStockTrades(options?: {
       executiveRowsSkipped += filerTrades.length;
       continue;
     }
+    if (chamberFilter && chamber !== chamberFilter) {
+      executiveRowsSkipped += filerTrades.length;
+      continue;
+    }
 
     houseSenateRows += filerTrades.length;
 
@@ -113,21 +124,28 @@ export async function loadKadoaCongressStockTrades(options?: {
 
       try {
         const trade = toCongressTradeFromKadoa(row, filer, chamber);
+        if (
+          minDisclosure &&
+          (!trade.disclosureDate || trade.disclosureDate < minDisclosure)
+        ) {
+          beforeDateSkipped += 1;
+          continue;
+        }
         trades.push(trade);
         stockRowsRetained += 1;
         members.add(trade.member);
         if (trade.ticker) tickers.add(trade.ticker);
         if (
-          trade.transactionDate &&
-          (!dateFrom || trade.transactionDate < dateFrom)
+          trade.disclosureDate &&
+          (!dateFrom || trade.disclosureDate < dateFrom)
         ) {
-          dateFrom = trade.transactionDate;
+          dateFrom = trade.disclosureDate;
         }
         if (
-          trade.transactionDate &&
-          (!dateTo || trade.transactionDate > dateTo)
+          trade.disclosureDate &&
+          (!dateTo || trade.disclosureDate > dateTo)
         ) {
-          dateTo = trade.transactionDate;
+          dateTo = trade.disclosureDate;
         }
       } catch (err) {
         nonStockRowsDiscarded += 1;

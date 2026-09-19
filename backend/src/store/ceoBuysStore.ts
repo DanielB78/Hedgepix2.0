@@ -30,6 +30,25 @@ const UPSERT_CHUNK = 200;
 const BUCKET = "ceo-buys";
 const QUARTERS_OBJECT = "quarters.json";
 
+/** Local PostgREST gateway has no Storage API. */
+function isLocalBackend(supabase?: SupabaseClient): boolean {
+  const fromEnv = process.env.SUPABASE_URL?.trim() ?? "";
+  const fromClient =
+    supabase && "supabaseUrl" in supabase
+      ? String((supabase as { supabaseUrl?: string }).supabaseUrl ?? "")
+      : "";
+  for (const url of [fromEnv, fromClient]) {
+    if (!url) continue;
+    try {
+      const host = new URL(url).hostname;
+      if (host === "127.0.0.1" || host === "localhost") return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
 function quarterObject(quarter: string) {
   return `by-quarter/${quarter}.json`;
 }
@@ -93,6 +112,7 @@ export async function ceoTableAvailable(
 }
 
 async function ensureBucket(supabase: SupabaseClient): Promise<void> {
+  if (isLocalBackend(supabase)) return;
   const { data } = await supabase.storage.listBuckets();
   if (data?.some((b) => b.name === BUCKET)) return;
   const { error } = await supabase.storage.createBucket(BUCKET, {
@@ -145,10 +165,17 @@ export async function upsertCeoPurchases(
   }
   const rows = [...byId.values()];
 
-  // Always mirror to storage (includes transaction_code even if Postgres lags).
-  await writeQuarterStorage(supabase, rows);
+  // Mirror to Storage when available (skipped on local PostgREST gateway).
+  if (!isLocalBackend(supabase)) {
+    await writeQuarterStorage(supabase, rows);
+  }
 
   if (!(await ceoTableAvailable(supabase))) {
+    if (isLocalBackend(supabase)) {
+      throw new Error(
+        "ceo_stock_purchases table unavailable and local backend has no Storage fallback",
+      );
+    }
     return { upserted: rows.length, errors: 0, via: "storage" };
   }
 

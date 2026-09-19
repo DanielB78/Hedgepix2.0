@@ -1,8 +1,6 @@
 import type { CongressTrade, ChartRange, StockPriceBar } from "./types";
-import type { CeoStockPurchaseRow } from "./types";
 import {
   asCongressChartTrade,
-  ceoRowToChartTrade,
   type ChartTrade,
 } from "./chartTrades";
 import { createBrowserSupabase, hasPublicSupabaseConfig } from "./supabase";
@@ -39,7 +37,7 @@ export type StockPageData = {
   ticker: string;
   asset: string | null;
   bars: StockPriceBar[];
-  /** Congress + CEO markers for the chart. */
+  /** Congressional trade markers for the chart (House/Senate focus). */
   trades: ChartTrade[];
   congressTrades: CongressTrade[];
   configured: boolean;
@@ -148,37 +146,16 @@ export async function fetchStockPage(
 
   const congressTrades = (tradesResult.data ?? []) as unknown as CongressTrade[];
 
-  const { data: ceoData } = await supabase
-    .from("ceo_stock_purchases")
-    .select(
-      "id, source_id, accession_number, ceo_name, officer_title, issuer_name, ticker, security_title, transaction_date, filing_date, shares_purchased, price_per_share, shares_owned_after, ownership_type, filing_url, form_type, quarter, created_at, raw_source, transaction_code",
-    )
-    .eq("ticker", symbol)
-    .order("transaction_date", { ascending: false, nullsFirst: false })
-    .limit(400);
-
-  const ceoTrades: ChartTrade[] = [];
-  for (const row of (ceoData as CeoStockPurchaseRow[] | null) ?? []) {
-    const trade = ceoRowToChartTrade(row);
-    if (trade) ceoTrades.push(trade);
-  }
-
-  const trades: ChartTrade[] = [
-    ...congressTrades
-      .filter(
-        (t) =>
-          t.transaction_type === "purchase" || t.transaction_type === "sale",
-      )
-      .map(asCongressChartTrade),
-    ...ceoTrades.filter(
+  const trades: ChartTrade[] = congressTrades
+    .filter(
       (t) =>
         t.transaction_type === "purchase" || t.transaction_type === "sale",
-    ),
-  ];
+    )
+    .map(asCongressChartTrade);
 
   return {
     ticker: symbol,
-    asset: congressTrades[0]?.asset ?? ceoTrades[0]?.asset ?? null,
+    asset: congressTrades[0]?.asset ?? null,
     bars: (barsResult.data ?? []) as StockPriceBar[],
     trades,
     congressTrades,

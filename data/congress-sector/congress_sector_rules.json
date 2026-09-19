@@ -1,0 +1,1752 @@
+{
+  "version": "2026-09-16",
+  "description": "Committee/subcommittee jurisdiction -> specific industry labels and separate policy topics. Labels are designed to align with the user's ticker industry-label vocabulary without forcing weak matches.",
+  "important_note": "This dataset represents public committee/oversight exposure. It does not assert that a member possesses material nonpublic company information, has influence over any specific company, or has engaged in misconduct.",
+  "rules": [
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Agriculture"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Packaged foods",
+        "Animal nutrition",
+        "Farm supplies",
+        "Broad commodities"
+      ],
+      "policy_topics": [
+        "Agricultural policy",
+        "Food policy",
+        "Rural development"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Forestry and Horticulture"
+      },
+      "industry_labels": [
+        "Forestry",
+        "Agriculture"
+      ],
+      "policy_topics": [
+        "Forestry policy",
+        "Horticulture policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Commodity Markets, Digital Assets, and Rural Development"
+      },
+      "industry_labels": [
+        "Broad commodities",
+        "Futures-based commodity exposure",
+        "Derivatives",
+        "Digital assets",
+        "Cryptocurrency exchange"
+      ],
+      "policy_topics": [
+        "Commodity markets",
+        "Digital asset policy",
+        "Rural development"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "General Farm Commodities, Risk Management, and Credit"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Broad commodities",
+        "Risk management",
+        "Commercial banking"
+      ],
+      "policy_topics": [
+        "Farm credit",
+        "Agricultural risk management"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Livestock, Dairy, and Poultry"
+      },
+      "industry_labels": [
+        "Animal nutrition",
+        "Livestock health",
+        "Packaged foods"
+      ],
+      "policy_topics": [
+        "Livestock policy",
+        "Dairy policy",
+        "Poultry policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Conservation, Research, and Biotechnology"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Biotechnology",
+        "Animal health"
+      ],
+      "policy_topics": [
+        "Agricultural research",
+        "Agricultural biotechnology",
+        "Conservation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Nutrition and Foreign Agriculture"
+      },
+      "industry_labels": [
+        "Packaged foods",
+        "Food brands",
+        "Agriculture"
+      ],
+      "policy_topics": [
+        "Nutrition policy",
+        "Agricultural trade"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Appropriations"
+      },
+      "industry_labels": [],
+      "policy_topics": [
+        "Federal appropriations"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Agriculture, Rural Development, Food and Drug Administration, and Related Agencies"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Packaged foods",
+        "Pharmaceuticals",
+        "Biotechnology",
+        "Medical devices",
+        "Medical diagnostics"
+      ],
+      "policy_topics": [
+        "Agricultural appropriations",
+        "FDA appropriations"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Commerce, Justice, Science, and Related Agencies"
+      },
+      "industry_labels": [
+        "Commercial aerospace",
+        "Space systems",
+        "Space launch",
+        "Artificial intelligence"
+      ],
+      "policy_topics": [
+        "Science funding",
+        "Space policy",
+        "Technology policy",
+        "Commerce policy"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Defense"
+      },
+      "industry_labels": [
+        "Defense aerospace",
+        "Defense electronics",
+        "Defense systems",
+        "Defense technology",
+        "Military drones",
+        "Missile systems"
+      ],
+      "policy_topics": [
+        "Defense appropriations",
+        "Military procurement"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Energy and Water Development and Related Agencies"
+      },
+      "industry_labels": [
+        "Nuclear power",
+        "Nuclear technology",
+        "Electric-grid infrastructure",
+        "Electric utilities",
+        "Water infrastructure",
+        "Water utilities",
+        "Solar energy",
+        "Wind energy",
+        "Hydrogen energy"
+      ],
+      "policy_topics": [
+        "Energy appropriations",
+        "Water infrastructure funding"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Financial Services and General Government"
+      },
+      "industry_labels": [
+        "Banking",
+        "Securities exchanges",
+        "Asset management",
+        "Insurance",
+        "Consumer finance",
+        "Fintech"
+      ],
+      "policy_topics": [
+        "Financial regulation appropriations"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Homeland Security"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Defense technology",
+        "Defense communications"
+      ],
+      "policy_topics": [
+        "Homeland security appropriations",
+        "Border security"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Interior, Environment, and Related Agencies"
+      },
+      "industry_labels": [
+        "Environmental services",
+        "Industrial pollution control",
+        "Water treatment",
+        "Specialty chemicals",
+        "Mining royalties",
+        "Specialty minerals"
+      ],
+      "policy_topics": [
+        "Environmental appropriations",
+        "Public lands"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Labor, Health and Human Services, Education, and Related Agencies"
+      },
+      "industry_labels": [
+        "Pharmaceuticals",
+        "Biotechnology",
+        "Medical devices",
+        "Medical diagnostics",
+        "Healthcare services",
+        "Health insurance",
+        "Education services"
+      ],
+      "policy_topics": [
+        "Health appropriations",
+        "Labor policy",
+        "Education appropriations"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Military Construction, Veterans Affairs, and Related Agencies"
+      },
+      "industry_labels": [
+        "Infrastructure construction",
+        "Healthcare services",
+        "Medical devices"
+      ],
+      "policy_topics": [
+        "Military construction",
+        "Veterans affairs"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Transportation, Housing and Urban Development, and Related Agencies"
+      },
+      "industry_labels": [
+        "Transportation infrastructure",
+        "Infrastructure construction",
+        "Rail equipment",
+        "Commercial aerospace",
+        "Residential real estate",
+        "Multifamily residential REIT"
+      ],
+      "policy_topics": [
+        "Transportation funding",
+        "Housing policy"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Armed Services"
+      },
+      "industry_labels": [
+        "Aerospace & defense",
+        "Defense technology",
+        "Defense systems"
+      ],
+      "policy_topics": [
+        "National defense",
+        "Military procurement"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Tactical Air and Land Forces"
+      },
+      "industry_labels": [
+        "Defense aerospace",
+        "Military drones",
+        "Aircraft manufacturing",
+        "Defense systems",
+        "Military systems"
+      ],
+      "policy_topics": [
+        "Tactical aviation",
+        "Ground combat systems"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Cyber, Information Technologies, and Innovation"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Defense software",
+        "Artificial intelligence",
+        "Cloud computing",
+        "Defense electronics"
+      ],
+      "policy_topics": [
+        "Defense cybersecurity",
+        "Military AI",
+        "Defense IT"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Intelligence and Special Operations"
+      },
+      "industry_labels": [
+        "Defense electronics",
+        "Defense communications",
+        "Cybersecurity",
+        "Satellite communications",
+        "Space systems"
+      ],
+      "policy_topics": [
+        "Military intelligence",
+        "Special operations",
+        "Classified intelligence"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Readiness"
+      },
+      "industry_labels": [
+        "Defense systems",
+        "Military systems",
+        "Logistics",
+        "Aerospace & defense"
+      ],
+      "policy_topics": [
+        "Military readiness",
+        "Defense logistics"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Seapower and Projection Forces"
+      },
+      "industry_labels": [
+        "Naval nuclear propulsion",
+        "Defense systems",
+        "Defense aerospace",
+        "Aerospace & defense"
+      ],
+      "policy_topics": [
+        "Naval procurement",
+        "Shipbuilding",
+        "Power projection"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Strategic Forces"
+      },
+      "industry_labels": [
+        "Missile systems",
+        "Space systems",
+        "Nuclear technology",
+        "Defense systems",
+        "Defense electronics"
+      ],
+      "policy_topics": [
+        "Nuclear deterrence",
+        "Missile defense",
+        "Military space"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Financial Services"
+      },
+      "industry_labels": [
+        "Banking",
+        "Asset management",
+        "Insurance",
+        "Securities exchanges",
+        "Consumer finance",
+        "Fintech"
+      ],
+      "policy_topics": [
+        "Financial regulation"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Capital Markets"
+      },
+      "industry_labels": [
+        "Investment banking",
+        "Asset management",
+        "Securities exchanges",
+        "Brokerage",
+        "Market data",
+        "Institutional investing"
+      ],
+      "policy_topics": [
+        "Capital markets regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Financial Institutions"
+      },
+      "industry_labels": [
+        "Banking",
+        "Regional banking",
+        "Commercial banking",
+        "Consumer banking",
+        "Consumer finance",
+        "Credit cards"
+      ],
+      "policy_topics": [
+        "Bank regulation",
+        "Consumer financial protection"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Housing and Insurance"
+      },
+      "industry_labels": [
+        "Insurance",
+        "Property & casualty insurance",
+        "Residential real estate",
+        "Multifamily residential REIT",
+        "Mortgage technology"
+      ],
+      "policy_topics": [
+        "Housing finance",
+        "Insurance regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Digital Assets, Financial Technology, and Artificial Intelligence"
+      },
+      "industry_labels": [
+        "Digital assets",
+        "Cryptocurrency exchange",
+        "Blockchain financial services",
+        "Fintech",
+        "Digital payments",
+        "Artificial intelligence"
+      ],
+      "policy_topics": [
+        "Digital asset regulation",
+        "Fintech policy",
+        "AI in financial services"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Energy and Commerce"
+      },
+      "industry_labels": [],
+      "policy_topics": [
+        "Interstate commerce",
+        "Consumer protection",
+        "Energy policy",
+        "Public health",
+        "Telecommunications policy"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Energy"
+      },
+      "industry_labels": [
+        "Electric utilities",
+        "Power generation",
+        "Power transmission",
+        "Nuclear power",
+        "Solar energy",
+        "Wind energy",
+        "Natural-gas exploration & production",
+        "Integrated oil & gas",
+        "Oil & gas pipelines",
+        "Battery storage",
+        "Hydrogen energy"
+      ],
+      "policy_topics": [
+        "Energy regulation",
+        "Grid reliability",
+        "Energy infrastructure"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Communications and Technology"
+      },
+      "industry_labels": [
+        "Telecommunications",
+        "Wireless telecommunications",
+        "Fiber broadband",
+        "Broadband & cable",
+        "Networking equipment",
+        "Satellite communications",
+        "Digital media"
+      ],
+      "policy_topics": [
+        "Telecommunications regulation",
+        "Spectrum policy",
+        "Broadband policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Health"
+      },
+      "industry_labels": [
+        "Pharmaceuticals",
+        "Biotechnology",
+        "Medical devices",
+        "Medical diagnostics",
+        "Healthcare services",
+        "Health insurance",
+        "Healthcare software"
+      ],
+      "policy_topics": [
+        "FDA policy",
+        "Public health policy",
+        "Health insurance policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Environment"
+      },
+      "industry_labels": [
+        "Environmental services",
+        "Industrial pollution control",
+        "Water treatment",
+        "Specialty chemicals",
+        "Waste disposal",
+        "Hazardous-waste services"
+      ],
+      "policy_topics": [
+        "Environmental regulation",
+        "Air quality",
+        "Chemical regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Commerce, Manufacturing, and Trade"
+      },
+      "industry_labels": [
+        "Industrial manufacturing",
+        "Automotive components",
+        "Consumer electronics",
+        "E-commerce",
+        "Retail technology"
+      ],
+      "policy_topics": [
+        "Manufacturing policy",
+        "Consumer protection",
+        "Trade policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Science, Space, and Technology"
+      },
+      "industry_labels": [
+        "Artificial intelligence",
+        "Semiconductors",
+        "Space systems",
+        "Space launch",
+        "Commercial aerospace"
+      ],
+      "policy_topics": [
+        "Science policy",
+        "Technology policy",
+        "Space policy"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Space and Aeronautics"
+      },
+      "industry_labels": [
+        "Space systems",
+        "Space launch",
+        "Commercial aerospace",
+        "Satellite communications",
+        "Aerospace systems"
+      ],
+      "policy_topics": [
+        "NASA",
+        "Commercial space policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Energy"
+      },
+      "parent_contains": "Science",
+      "industry_labels": [
+        "Nuclear power",
+        "Solar energy",
+        "Wind energy",
+        "Hydrogen energy",
+        "Battery storage",
+        "Clean energy"
+      ],
+      "policy_topics": [
+        "Energy research"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Research and Technology"
+      },
+      "industry_labels": [
+        "Artificial intelligence",
+        "Semiconductors",
+        "Robotics & AI",
+        "Advanced materials",
+        "Quantum technology"
+      ],
+      "policy_topics": [
+        "Federal R&D",
+        "Emerging technology"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Transportation and Infrastructure"
+      },
+      "industry_labels": [
+        "Transportation infrastructure",
+        "Infrastructure construction"
+      ],
+      "policy_topics": [
+        "Transportation policy",
+        "Infrastructure policy"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Aviation"
+      },
+      "industry_labels": [
+        "Commercial aerospace",
+        "Aircraft manufacturing",
+        "Passenger airlines",
+        "Air freight",
+        "Aerospace systems"
+      ],
+      "policy_topics": [
+        "Aviation safety",
+        "FAA policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Highways and Transit"
+      },
+      "industry_labels": [
+        "Transportation infrastructure",
+        "Infrastructure construction",
+        "Transit systems"
+      ],
+      "policy_topics": [
+        "Highway policy",
+        "Public transit"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Railroads, Pipelines, and Hazardous Materials"
+      },
+      "industry_labels": [
+        "Rail equipment",
+        "Rail technology",
+        "Oil & gas pipelines",
+        "Pipeline construction",
+        "Hazardous-waste services"
+      ],
+      "policy_topics": [
+        "Rail safety",
+        "Pipeline safety",
+        "Hazardous materials"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Coast Guard and Maritime Transportation"
+      },
+      "industry_labels": [
+        "Maritime transportation",
+        "Logistics"
+      ],
+      "policy_topics": [
+        "Maritime policy",
+        "Coast Guard"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Water Resources and Environment"
+      },
+      "industry_labels": [
+        "Water infrastructure",
+        "Water treatment",
+        "Wastewater services",
+        "Environmental services"
+      ],
+      "policy_topics": [
+        "Water resources",
+        "Environmental infrastructure"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Committee on Natural Resources"
+      },
+      "industry_labels": [
+        "Mining royalties",
+        "Specialty minerals",
+        "Oil exploration & production",
+        "Natural-gas exploration & production",
+        "Forestry"
+      ],
+      "policy_topics": [
+        "Public lands",
+        "Natural resources policy"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Energy and Mineral Resources"
+      },
+      "industry_labels": [
+        "Oil exploration & production",
+        "Natural-gas exploration & production",
+        "Iron ore",
+        "Gold",
+        "Silver",
+        "Specialty minerals",
+        "Mining royalties"
+      ],
+      "policy_topics": [
+        "Mining policy",
+        "Federal energy resources"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Water, Wildlife and Fisheries"
+      },
+      "industry_labels": [
+        "Water utilities",
+        "Water infrastructure"
+      ],
+      "policy_topics": [
+        "Water policy",
+        "Fisheries",
+        "Wildlife"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Cybersecurity and Infrastructure Protection"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Cloud security",
+        "Identity security",
+        "Telecom infrastructure",
+        "Electric-grid infrastructure"
+      ],
+      "policy_topics": [
+        "Critical infrastructure cybersecurity",
+        "Homeland security"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Transportation and Maritime Security"
+      },
+      "industry_labels": [
+        "Commercial aerospace",
+        "Passenger airlines",
+        "Maritime transportation",
+        "Logistics"
+      ],
+      "policy_topics": [
+        "Transportation security",
+        "Maritime security"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Health"
+      },
+      "parent_contains": "Ways and Means",
+      "industry_labels": [
+        "Health insurance",
+        "Managed care",
+        "Pharmaceuticals",
+        "Healthcare services",
+        "Medical devices"
+      ],
+      "policy_topics": [
+        "Medicare policy",
+        "Health tax policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Trade"
+      },
+      "parent_contains": "Ways and Means",
+      "industry_labels": [],
+      "policy_topics": [
+        "Trade policy",
+        "Tariffs",
+        "Customs"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Courts, Intellectual Property, Artificial Intelligence, and the Internet"
+      },
+      "industry_labels": [
+        "Artificial intelligence",
+        "Enterprise software",
+        "Semiconductors",
+        "Digital advertising",
+        "Social media",
+        "Cloud computing"
+      ],
+      "policy_topics": [
+        "Intellectual property",
+        "AI policy",
+        "Internet policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "subcommittee": "Administrative State, Regulatory Reform, and Antitrust"
+      },
+      "industry_labels": [],
+      "policy_topics": [
+        "Antitrust",
+        "Competition policy",
+        "Administrative regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "house",
+        "committee": "House Permanent Select Committee on Intelligence"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Defense communications",
+        "Defense electronics",
+        "Satellite communications",
+        "Space systems"
+      ],
+      "policy_topics": [
+        "Classified intelligence",
+        "National security",
+        "Cyber intelligence"
+      ],
+      "basis": "intelligence_oversight"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "committee": "Senate Committee on Agriculture, Nutrition, and Forestry"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Packaged foods",
+        "Animal nutrition",
+        "Farm supplies",
+        "Broad commodities"
+      ],
+      "policy_topics": [
+        "Agricultural policy",
+        "Food policy",
+        "Rural development"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Commodities, Derivatives, Risk Management, and Trade"
+      },
+      "industry_labels": [
+        "Broad commodities",
+        "Derivatives",
+        "Futures-based commodity exposure",
+        "Risk management"
+      ],
+      "policy_topics": [
+        "Commodity markets",
+        "Agricultural trade"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Conservation, Forestry, Natural Resources, and Biotechnology"
+      },
+      "industry_labels": [
+        "Agriculture",
+        "Forestry",
+        "Biotechnology",
+        "Specialty minerals"
+      ],
+      "policy_topics": [
+        "Conservation",
+        "Forestry policy",
+        "Agricultural biotechnology"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Food and Nutrition, Specialty Crops, Organics, and Research"
+      },
+      "industry_labels": [
+        "Packaged foods",
+        "Food brands",
+        "Agriculture",
+        "Natural & organic foods"
+      ],
+      "policy_topics": [
+        "Nutrition policy",
+        "Agricultural research"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Livestock, Dairy, Poultry, Local Food Systems, and Food Safety and Security"
+      },
+      "industry_labels": [
+        "Animal nutrition",
+        "Livestock health",
+        "Packaged foods"
+      ],
+      "policy_topics": [
+        "Livestock policy",
+        "Food safety"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Rural Development, Energy, and Credit"
+      },
+      "industry_labels": [
+        "Commercial banking",
+        "Electric utilities",
+        "Solar energy",
+        "Wind energy",
+        "Bioenergy"
+      ],
+      "policy_topics": [
+        "Rural development",
+        "Rural credit",
+        "Rural energy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "committee": "Senate Committee on Armed Services"
+      },
+      "industry_labels": [
+        "Aerospace & defense",
+        "Defense technology",
+        "Defense systems"
+      ],
+      "policy_topics": [
+        "National defense",
+        "Military procurement"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Airland"
+      },
+      "industry_labels": [
+        "Defense aerospace",
+        "Military drones",
+        "Aircraft manufacturing",
+        "Military systems"
+      ],
+      "policy_topics": [
+        "Tactical aviation",
+        "Ground combat systems"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Cybersecurity"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Defense software",
+        "Cloud security",
+        "Artificial intelligence"
+      ],
+      "policy_topics": [
+        "Defense cybersecurity",
+        "Cyber operations"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Emerging Threats and Capabilities"
+      },
+      "industry_labels": [
+        "Defense technology",
+        "Artificial intelligence",
+        "Military drones",
+        "Cybersecurity",
+        "Robotics & AI"
+      ],
+      "policy_topics": [
+        "Emerging defense technology",
+        "Special operations"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Seapower"
+      },
+      "industry_labels": [
+        "Naval nuclear propulsion",
+        "Defense systems",
+        "Aerospace & defense"
+      ],
+      "policy_topics": [
+        "Naval procurement",
+        "Shipbuilding"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Strategic Forces"
+      },
+      "industry_labels": [
+        "Missile systems",
+        "Space systems",
+        "Nuclear technology",
+        "Defense systems"
+      ],
+      "policy_topics": [
+        "Nuclear deterrence",
+        "Missile defense",
+        "Military space"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "committee": "Senate Committee on Banking, Housing, and Urban Affairs"
+      },
+      "industry_labels": [
+        "Banking",
+        "Asset management",
+        "Insurance",
+        "Securities exchanges",
+        "Consumer finance",
+        "Fintech"
+      ],
+      "policy_topics": [
+        "Financial regulation",
+        "Housing finance"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Financial Institutions and Consumer Protection"
+      },
+      "industry_labels": [
+        "Banking",
+        "Regional banking",
+        "Commercial banking",
+        "Consumer banking",
+        "Consumer finance",
+        "Credit cards"
+      ],
+      "policy_topics": [
+        "Bank regulation",
+        "Consumer financial protection"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Housing, Transportation, and Community Development"
+      },
+      "industry_labels": [
+        "Residential real estate",
+        "Multifamily residential REIT",
+        "Mortgage technology",
+        "Transportation infrastructure"
+      ],
+      "policy_topics": [
+        "Housing policy",
+        "Community development"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Securities, Insurance, and Investment"
+      },
+      "industry_labels": [
+        "Securities exchanges",
+        "Investment banking",
+        "Asset management",
+        "Brokerage",
+        "Insurance",
+        "Institutional investing"
+      ],
+      "policy_topics": [
+        "Securities regulation",
+        "Insurance policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Digital Assets"
+      },
+      "industry_labels": [
+        "Digital assets",
+        "Cryptocurrency exchange",
+        "Blockchain financial services",
+        "Fintech",
+        "Digital payments"
+      ],
+      "policy_topics": [
+        "Digital asset regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "National Security and International Trade and Finance"
+      },
+      "industry_labels": [
+        "Banking",
+        "Cross-border payments",
+        "Investment banking"
+      ],
+      "policy_topics": [
+        "Sanctions",
+        "International finance",
+        "Trade finance"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Aviation, Space, and Innovation"
+      },
+      "industry_labels": [
+        "Commercial aerospace",
+        "Aircraft manufacturing",
+        "Passenger airlines",
+        "Space systems",
+        "Space launch",
+        "Satellite communications"
+      ],
+      "policy_topics": [
+        "Aviation policy",
+        "Commercial space policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Coast Guard, Maritime, and Fisheries"
+      },
+      "industry_labels": [
+        "Maritime transportation",
+        "Logistics"
+      ],
+      "policy_topics": [
+        "Maritime policy",
+        "Coast Guard",
+        "Fisheries"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Consumer Protection, Product Safety, and Data Security"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Consumer electronics",
+        "E-commerce",
+        "Digital advertising"
+      ],
+      "policy_topics": [
+        "Data privacy",
+        "Consumer protection",
+        "Product safety"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Consumer Protection, Technology, and Data Privacy"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Consumer electronics",
+        "E-commerce",
+        "Digital advertising",
+        "Artificial intelligence"
+      ],
+      "policy_topics": [
+        "Data privacy",
+        "Consumer protection",
+        "Technology policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Science, Manufacturing, and Competitiveness"
+      },
+      "industry_labels": [
+        "Semiconductors",
+        "Artificial intelligence",
+        "Industrial manufacturing",
+        "Advanced materials",
+        "Robotics & AI"
+      ],
+      "policy_topics": [
+        "Science policy",
+        "Manufacturing policy",
+        "Technology competitiveness"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Surface Transportation, Freight, Pipelines, and Safety"
+      },
+      "industry_labels": [
+        "Transportation infrastructure",
+        "Rail equipment",
+        "Freight logistics",
+        "Oil & gas pipelines",
+        "Pipeline construction"
+      ],
+      "policy_topics": [
+        "Surface transportation",
+        "Freight policy",
+        "Pipeline safety"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Telecommunications and Media"
+      },
+      "industry_labels": [
+        "Telecommunications",
+        "Wireless telecommunications",
+        "Fiber broadband",
+        "Broadband & cable",
+        "Satellite communications",
+        "Media & entertainment",
+        "Digital media"
+      ],
+      "policy_topics": [
+        "Telecommunications regulation",
+        "Media policy",
+        "Spectrum policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "committee": "Senate Committee on Energy and Natural Resources"
+      },
+      "industry_labels": [
+        "Electric utilities",
+        "Power generation",
+        "Nuclear power",
+        "Solar energy",
+        "Wind energy",
+        "Natural-gas exploration & production",
+        "Oil exploration & production",
+        "Specialty minerals"
+      ],
+      "policy_topics": [
+        "Energy policy",
+        "Natural resources"
+      ],
+      "basis": "broad_committee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Energy"
+      },
+      "parent_contains": "Energy and Natural Resources",
+      "industry_labels": [
+        "Electric utilities",
+        "Power generation",
+        "Power transmission",
+        "Nuclear power",
+        "Solar energy",
+        "Wind energy",
+        "Battery storage",
+        "Hydrogen energy",
+        "Natural-gas exploration & production",
+        "Integrated oil & gas"
+      ],
+      "policy_topics": [
+        "Energy technology",
+        "Grid policy",
+        "Energy security"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Public Lands, Forests, and Mining"
+      },
+      "industry_labels": [
+        "Forestry",
+        "Iron ore",
+        "Gold",
+        "Silver",
+        "Specialty minerals",
+        "Mining royalties"
+      ],
+      "policy_topics": [
+        "Mining policy",
+        "Public lands",
+        "Forestry policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Water and Power"
+      },
+      "industry_labels": [
+        "Water utilities",
+        "Water infrastructure",
+        "Electric utilities",
+        "Power generation",
+        "Power transmission"
+      ],
+      "policy_topics": [
+        "Water policy",
+        "Hydropower",
+        "Federal power"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Chemical Safety, Waste Management, Environmental Justice, and Regulatory Oversight"
+      },
+      "industry_labels": [
+        "Specialty chemicals",
+        "Hazardous-waste services",
+        "Waste disposal",
+        "Environmental services",
+        "Industrial pollution control"
+      ],
+      "policy_topics": [
+        "Chemical regulation",
+        "Waste policy",
+        "Environmental regulation"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Clean Air, Climate, and Nuclear Innovation and Safety"
+      },
+      "industry_labels": [
+        "Nuclear power",
+        "Nuclear technology",
+        "Clean energy",
+        "Industrial pollution control",
+        "Solar energy",
+        "Wind energy",
+        "Hydrogen energy"
+      ],
+      "policy_topics": [
+        "Nuclear safety",
+        "Air quality",
+        "Climate policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Transportation and Infrastructure"
+      },
+      "parent_contains": "Environment and Public Works",
+      "industry_labels": [
+        "Transportation infrastructure",
+        "Infrastructure construction",
+        "Electric-grid infrastructure"
+      ],
+      "policy_topics": [
+        "Infrastructure policy",
+        "Transportation policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Energy, Natural Resources, and Infrastructure"
+      },
+      "industry_labels": [
+        "Electric utilities",
+        "Integrated oil & gas",
+        "Natural-gas exploration & production",
+        "Solar energy",
+        "Wind energy",
+        "Nuclear power",
+        "Infrastructure construction"
+      ],
+      "policy_topics": [
+        "Energy tax policy",
+        "Infrastructure finance"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Health Care"
+      },
+      "parent_contains": "Finance",
+      "industry_labels": [
+        "Health insurance",
+        "Managed care",
+        "Pharmaceuticals",
+        "Biotechnology",
+        "Medical devices",
+        "Healthcare services"
+      ],
+      "policy_topics": [
+        "Medicare",
+        "Medicaid",
+        "Health tax policy"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "International Trade, Customs, and Global Competitiveness"
+      },
+      "industry_labels": [],
+      "policy_topics": [
+        "Trade policy",
+        "Tariffs",
+        "Customs",
+        "International competitiveness"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Primary Health and Retirement Security"
+      },
+      "industry_labels": [
+        "Pharmaceuticals",
+        "Biotechnology",
+        "Medical devices",
+        "Healthcare services",
+        "Health insurance",
+        "Asset management"
+      ],
+      "policy_topics": [
+        "Public health",
+        "Retirement policy",
+        "Pensions"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Employment and Workplace Safety"
+      },
+      "industry_labels": [
+        "HR software",
+        "Payroll services",
+        "Benefits administration"
+      ],
+      "policy_topics": [
+        "Labor policy",
+        "Workplace safety"
+      ],
+      "basis": "direct_subcommittee_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "committee": "Senate Select Committee on Intelligence"
+      },
+      "industry_labels": [
+        "Cybersecurity",
+        "Defense communications",
+        "Defense electronics",
+        "Satellite communications",
+        "Space systems"
+      ],
+      "policy_topics": [
+        "Classified intelligence",
+        "National security",
+        "Cyber intelligence"
+      ],
+      "basis": "intelligence_oversight"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Department of Defense"
+      },
+      "industry_labels": [
+        "Defense aerospace",
+        "Defense electronics",
+        "Defense systems",
+        "Defense technology",
+        "Military drones",
+        "Missile systems"
+      ],
+      "policy_topics": [
+        "Defense appropriations",
+        "Military procurement"
+      ],
+      "basis": "appropriations_jurisdiction"
+    },
+    {
+      "match": {
+        "chamber": "senate",
+        "subcommittee": "Energy and Water Development"
+      },
+      "industry_labels": [
+        "Nuclear power",
+        "Nuclear technology",
+        "Electric-grid infrastructure",
+        "Electric utilities",
+        "Water infrastructure",
+        "Solar energy",
+        "Wind energy"
+      ],
+      "policy_topics": [
+        "Energy appropriations",
+        "Water infrastructure funding"
+      ],
+      "basis": "appropriations_jurisdiction"
+    }
+  ]
+}
